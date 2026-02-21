@@ -3,7 +3,7 @@
 <head>
   <title>Admin Dashboard</title>
   <link rel="stylesheet" href="./styles.css">
-  </head>
+</head>
 <body>
 
 <div class="container">
@@ -105,8 +105,14 @@ window.saveWorker = async function () {
 
   if (editId) {
     await updateDoc(doc(db, "gig_workers", editId), {
-      name, contact, aadhaar, gigType, address, emergencyPhone
+      name,
+      contact,
+      aadhaar,
+      gigType,
+      address,
+      emergencyPhone
     });
+
     alert("Worker Updated!");
   } else {
     await addDoc(collection(db, "gig_workers"), {
@@ -116,10 +122,15 @@ window.saveWorker = async function () {
       gigType,
       address,
       emergencyPhone,
+
+      // ✅ STEP 1 ADDITION
+      status: "active",
+
       adminId: currentUser.uid,
       createdByEmail: currentUser.email,
       createdAt: new Date()
     });
+
     alert("Worker Created!");
   }
 

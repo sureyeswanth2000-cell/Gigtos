@@ -13,7 +13,7 @@
 
   <hr>
 
-  <h3>Create Gig Worker</h3>
+  <h3 id="formTitle">Create Gig Worker</h3>
 
   <input type="text" id="name" placeholder="Name"><br><br>
   <input type="text" id="contact" placeholder="Contact"><br><br>
@@ -29,73 +29,114 @@
 
   <button onclick="saveWorker()">Save Worker</button>
 
-  <script type="module">
-    import { auth, db } from "./firebase.js";
-    import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import { doc, getDoc, addDoc, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+<script type="module">
+import { auth, db } from "./firebase.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { doc, getDoc, addDoc, updateDoc, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-    let currentUser;
-    let currentRole;
+let currentUser;
+let currentRole;
 
-    onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        window.location.href = "login.html";
+const urlParams = new URLSearchParams(window.location.search);
+const editId = urlParams.get("edit");
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    window.location.href = "index.html";
+    return;
+  }
+
+  currentUser = user;
+
+  const adminDoc = await getDoc(doc(db, "admins", user.uid));
+
+  if (!adminDoc.exists()) {
+    alert("Not authorized");
+    await signOut(auth);
+    window.location.href = "index.html";
+    return;
+  }
+
+  currentRole = adminDoc.data().role;
+  document.getElementById("roleInfo").innerText = "Role: " + currentRole;
+
+  // If editing worker
+  if (editId) {
+    const workerSnap = await getDoc(doc(db, "gig_workers", editId));
+
+    if (workerSnap.exists()) {
+      const data = workerSnap.data();
+
+      // Admin can edit only own worker
+      if (currentRole === "admin" && data.adminId !== currentUser.uid) {
+        alert("Not allowed to edit this worker");
+        window.location.href = "view.html";
         return;
       }
 
-      currentUser = user;
+      document.getElementById("formTitle").innerText = "Edit Gig Worker";
+      document.getElementById("name").value = data.name;
+      document.getElementById("contact").value = data.contact;
+      document.getElementById("aadhaar").value = data.aadhaar || "";
+      document.getElementById("gigType").value = data.gigType;
+      document.getElementById("address").value = data.address;
+      document.getElementById("emergencyPhone").value = data.emergencyPhone || "";
+    }
+  }
+});
 
-      const adminDoc = await getDoc(doc(db, "admins", user.uid));
+window.saveWorker = async function () {
+  const name = document.getElementById("name").value;
+  const contact = document.getElementById("contact").value;
+  const aadhaar = document.getElementById("aadhaar").value;
+  const gigType = document.getElementById("gigType").value;
+  const address = document.getElementById("address").value;
+  const emergencyPhone = document.getElementById("emergencyPhone").value;
 
-      if (!adminDoc.exists()) {
-        alert("Not authorized");
-        await signOut(auth);
-        window.location.href = "login.html";
-        return;
-      }
+  if (!name || !contact || !address) {
+    alert("Fill required fields");
+    return;
+  }
 
-      currentRole = adminDoc.data().role;
-      document.getElementById("roleInfo").innerText = "Role: " + currentRole;
+  if (editId) {
+    await updateDoc(doc(db, "gig_workers", editId), {
+      name,
+      contact,
+      aadhaar,
+      gigType,
+      address,
+      emergencyPhone
     });
 
-    window.saveWorker = async function () {
-      if (!currentUser) return;
+    alert("Worker Updated!");
+  } else {
+    await addDoc(collection(db, "gig_workers"), {
+      name,
+      contact,
+      aadhaar,
+      gigType,
+      address,
+      emergencyPhone,
+      adminId: currentUser.uid,
+      createdByEmail: currentUser.email,
+      createdAt: new Date()
+    });
 
-      const name = document.getElementById("name").value;
-      const contact = document.getElementById("contact").value;
-      const aadhaar = document.getElementById("aadhaar").value;
-      const gigType = document.getElementById("gigType").value;
-      const address = document.getElementById("address").value;
-      const emergencyPhone = document.getElementById("emergencyPhone").value;
+    alert("Worker Created!");
+  }
 
-      if (!name || !contact || !address) {
-        alert("Fill required fields");
-        return;
-      }
-
-      await addDoc(collection(db, "gig_workers"), {
-        name,
-        contact,
-        aadhaar,
-        gigType,
-        address,
-        emergencyPhone,
-        adminId: currentUser.uid,
-        createdByEmail: currentUser.email,
-        createdAt: new Date()
-      });
-
-      alert("Worker Created!");
-    };
-
-    window.logout = async function () {
-      await signOut(auth);
-      window.location.href = "login.html";
-    };
-    window.goView = function() {
   window.location.href = "view.html";
 };
-  </script>
+
+window.logout = async function () {
+  await signOut(auth);
+  window.location.href = "index.html";
+};
+
+window.goView = function () {
+  window.location.href = "view.html";
+};
+</script>
 
 </body>
 </html>

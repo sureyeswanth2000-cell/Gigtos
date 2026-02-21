@@ -85,3 +85,21 @@ button.danger {
 .worker-actions button {
   margin-right: 8px;
 }
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.status-badge.active {
+  background-color: #e6f4ea;
+  color: #1e7e34;
+}
+
+.status-badge.inactive {
+  background-color: #fdecea;
+  color: #b02a37;
+}

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard</title>
+</head>
+<body>
+
+  <h2>Admin Dashboard</h2>
+  <p id="roleInfo"></p>
+
+  <button onclick="logout()">Logout</button>
+
+  <hr>
+
+  <h3>Create Gig Worker</h3>
+
+  <input type="text" id="name" placeholder="Name"><br><br>
+  <input type="text" id="contact" placeholder="Contact"><br><br>
+  <input type="text" id="aadhaar" placeholder="Aadhaar (Optional)"><br><br>
+
+  <select id="gigType">
+    <option value="Plumber">Plumber</option>
+    <option value="Electrician">Electrician</option>
+  </select><br><br>
+
+  <input type="text" id="address" placeholder="Address"><br><br>
+  <input type="text" id="emergencyPhone" placeholder="Emergency Phone (Optional)"><br><br>
+
+  <button onclick="saveWorker()">Save Worker</button>
+
+  <script type="module">
+    import { auth, db } from "./firebase.js";
+    import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { doc, getDoc, addDoc, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    let currentUser;
+    let currentRole;
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        window.location.href = "login.html";
+        return;
+      }
+
+      currentUser = user;
+
+      const adminDoc = await getDoc(doc(db, "admins", user.uid));
+
+      if (!adminDoc.exists()) {
+        alert("Not authorized");
+        await signOut(auth);
+        window.location.href = "login.html";
+        return;
+      }
+
+      currentRole = adminDoc.data().role;
+      document.getElementById("roleInfo").innerText = "Role: " + currentRole;
+    });
+
+    window.saveWorker = async function () {
+      if (!currentUser) return;
+
+      const name = document.getElementById("name").value;
+      const contact = document.getElementById("contact").value;
+      const aadhaar = document.getElementById("aadhaar").value;
+      const gigType = document.getElementById("gigType").value;
+      const address = document.getElementById("address").value;
+      const emergencyPhone = document.getElementById("emergencyPhone").value;
+
+      if (!name || !contact || !address) {
+        alert("Fill required fields");
+        return;
+      }
+
+      await addDoc(collection(db, "gig_workers"), {
+        name,
+        contact,
+        aadhaar,
+        gigType,
+        address,
+        emergencyPhone,
+        adminId: currentUser.uid,
+        createdByEmail: currentUser.email,
+        createdAt: new Date()
+      });
+
+      alert("Worker Created!");
+    };
+
+    window.logout = async function () {
+      await signOut(auth);
+      window.location.href = "login.html";
+    };
+  </script>
+
+</body>
+</html>

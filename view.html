@@ -2,29 +2,36 @@
 <html>
 <head>
   <title>View Workers</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<h2>View Gig Workers</h2>
-<p id="roleInfo"></p>
+<div class="container">
 
-<select id="filterType" onchange="loadWorkers()">
-  <option value="all">All</option>
-  <option value="Plumber">Plumber</option>
-  <option value="Electrician">Electrician</option>
-</select>
+  <h2>Gig Workers</h2>
+  <p class="subtitle" id="roleInfo"></p>
 
-<ul id="workerList"></ul>
+  <div class="section">
+    <select id="filterType" onchange="loadWorkers()">
+      <option value="all">All</option>
+      <option value="Plumber">Plumber</option>
+      <option value="Electrician">Electrician</option>
+    </select>
+  </div>
 
-<br>
-<button onclick="goDashboard()">Back to Dashboard</button>
+  <div id="workerList"></div>
+
+  <div class="section">
+    <button class="secondary" onclick="goDashboard()">Back to Dashboard</button>
+  </div>
+
+</div>
 
 <script type="module">
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, getDocs, deleteDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  
+import { collection, getDocs, deleteDoc, doc, getDoc, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
 let currentUser;
 let currentRole;
 
@@ -55,65 +62,65 @@ window.loadWorkers = async function () {
   list.innerHTML = "";
 
   const filter = document.getElementById("filterType").value;
-  
-let q;
 
-if (currentRole === "superadmin") {
-  q = collection(db, "gig_workers");
-} else {
-  q = query(
-    collection(db, "gig_workers"),
-    where("adminId", "==", currentUser.uid)
-  );
-}
+  let q;
 
-const snapshot = await getDocs(q);
+  if (currentRole === "superadmin") {
+    q = collection(db, "gig_workers");
+  } else {
+    q = query(
+      collection(db, "gig_workers"),
+      where("adminId", "==", currentUser.uid)
+    );
+  }
+
+  const snapshot = await getDocs(q);
 
   snapshot.forEach((docSnap) => {
     const data = docSnap.data();
 
-    // Filter by gig type
     if (filter !== "all" && data.gigType !== filter) return;
 
-    // Admin sees only own workers
-    if (currentRole === "admin" && data.adminId !== currentUser.uid) {
-      return;
-    }
+    const card = document.createElement("div");
+    card.classList.add("worker-card");
 
-    const li = document.createElement("li");
-
-    li.innerHTML = `
-      <b>${data.name}</b> - ${data.gigType}
-      <br>Contact: ${data.contact}
-      <br>Created By: ${data.createdByEmail}
-      <br><br>
+    card.innerHTML = `
+      <div class="worker-name">${data.name}</div>
+      <div class="worker-meta">
+        ${data.gigType} | 📞 ${data.contact}<br>
+        Created By: ${data.createdByEmail}
+      </div>
     `;
 
-    // Edit Button
+    const actions = document.createElement("div");
+    actions.classList.add("worker-actions");
+
     if (
       currentRole === "superadmin" ||
       (currentRole === "admin" && data.adminId === currentUser.uid)
     ) {
       const editBtn = document.createElement("button");
+      editBtn.classList.add("secondary");
       editBtn.innerText = "Edit";
       editBtn.onclick = () => {
         window.location.href = "dashboard.html?edit=" + docSnap.id;
       };
-      li.appendChild(editBtn);
+      actions.appendChild(editBtn);
     }
 
-    // Delete Button (Superadmin only)
     if (currentRole === "superadmin") {
       const delBtn = document.createElement("button");
+      delBtn.classList.add("danger");
       delBtn.innerText = "Delete";
       delBtn.onclick = async () => {
         await deleteDoc(doc(db, "gig_workers", docSnap.id));
         loadWorkers();
       };
-      li.appendChild(delBtn);
+      actions.appendChild(delBtn);
     }
 
-    list.appendChild(li);
+    card.appendChild(actions);
+    list.appendChild(card);
   });
 };
 

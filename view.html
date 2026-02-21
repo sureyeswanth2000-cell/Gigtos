@@ -1,36 +1,7 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>View Workers</title>
-  <link rel="stylesheet" href="./styles.css">
-</head>
-<body>
-
-<div class="container">
-
-  <h2>Gig Workers</h2>
-  <p class="subtitle" id="roleInfo"></p>
-
-  <div class="section">
-    <select id="filterType" onchange="loadWorkers()">
-      <option value="all">All</option>
-      <option value="Plumber">Plumber</option>
-      <option value="Electrician">Electrician</option>
-    </select>
-  </div>
-
-  <div id="workerList"></div>
-
-  <div class="section">
-    <button class="secondary" onclick="goDashboard()">Back to Dashboard</button>
-  </div>
-
-</div>
-
 <script type="module">
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, getDocs, deleteDoc, doc, getDoc, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { collection, getDocs, doc, getDoc, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let currentUser;
 let currentRole;
@@ -84,8 +55,8 @@ window.loadWorkers = async function () {
     const card = document.createElement("div");
     card.classList.add("worker-card");
 
-    // ✅ STATUS BADGE
-    const status = data.status || "active";
+    // SAFE STATUS
+    const status = (data.status || "active").toLowerCase();
     const badgeClass = status === "active" ? "active" : "inactive";
 
     card.innerHTML = `
@@ -102,6 +73,7 @@ window.loadWorkers = async function () {
     const actions = document.createElement("div");
     actions.classList.add("worker-actions");
 
+    // Edit Button
     if (
       currentRole === "superadmin" ||
       (currentRole === "admin" && data.adminId === currentUser.uid)
@@ -115,15 +87,21 @@ window.loadWorkers = async function () {
       actions.appendChild(editBtn);
     }
 
+    // Disable / Enable (Superadmin only)
     if (currentRole === "superadmin") {
-      const delBtn = document.createElement("button");
-      delBtn.classList.add("danger");
-      delBtn.innerText = "Delete";
-      delBtn.onclick = async () => {
-        await deleteDoc(doc(db, "gig_workers", docSnap.id));
+      const toggleBtn = document.createElement("button");
+      toggleBtn.classList.add("danger");
+
+      toggleBtn.innerText = status === "active" ? "Disable" : "Enable";
+
+      toggleBtn.onclick = async () => {
+        await updateDoc(doc(db, "gig_workers", docSnap.id), {
+          status: status === "active" ? "inactive" : "active"
+        });
         loadWorkers();
       };
-      actions.appendChild(delBtn);
+
+      actions.appendChild(toggleBtn);
     }
 
     card.appendChild(actions);
@@ -135,6 +113,3 @@ window.goDashboard = function () {
   window.location.href = "dashboard.html";
 };
 </script>
-
-</body>
-</html>

@@ -1,10 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gigtos</title>
+  <title>Gigtos App</title>
 </head>
 <body>
-  <h1>🚀 Gigtos Website</h1>
-  <p>This site is connected using GitHub + Netlify.</p>
+  <h1>🚀 Gigtos Firebase Test</h1>
+
+  <input type="text" id="username" placeholder="Enter your name">
+  <button onclick="saveData()">Save</button>
+
+  <p id="status"></p>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDMJvNKvgwfEvymuLaXhGQwJr-Id4yExYU",
+      authDomain: "gigto-c0c83.firebaseapp.com",
+      projectId: "gigto-c0c83",
+      storageBucket: "gigto-c0c83.firebasestorage.app",
+      messagingSenderId: "190454381677",
+      appId: "1:190454381677:web:458b1638c984ababcdd364",
+      measurementId: "G-3WQKM1M1F9"
+    };
+    
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    window.saveData = async function() {
+      const name = document.getElementById("username").value;
+
+      if(name === "") {
+        alert("Please enter name");
+        return;
+      }
+
+      await addDoc(collection(db, "users"), {
+        name: name,
+        createdAt: new Date()
+      });
+
+      document.getElementById("status").innerText = "Saved to Firestore!";
+      document.getElementById("username").value = "";
+    };
+  </script>
+
 </body>
 </html>

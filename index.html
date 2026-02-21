@@ -4,16 +4,24 @@
   <title>Gigtos App</title>
 </head>
 <body>
-  <h1>🚀 Gigtos Firebase Test</h1>
+  <h1>🚀 Gigtos Firebase App</h1>
 
   <input type="text" id="username" placeholder="Enter your name">
   <button onclick="saveData()">Save</button>
+
+  <h3>Users List:</h3>
+  <ul id="userList"></ul>
 
   <p id="status"></p>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { 
+      getFirestore, 
+      collection, 
+      addDoc, 
+      getDocs 
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDMJvNKvgwfEvymuLaXhGQwJr-Id4yExYU",
@@ -29,6 +37,18 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    const userList = document.getElementById("userList");
+
+    async function loadUsers() {
+      userList.innerHTML = "";
+      const querySnapshot = await getDocs(collection(db, "users"));
+      querySnapshot.forEach((doc) => {
+        const li = document.createElement("li");
+        li.textContent = doc.data().name;
+        userList.appendChild(li);
+      });
+    }
+
     window.saveData = async function() {
       const name = document.getElementById("username").value;
 
@@ -42,9 +62,12 @@
         createdAt: new Date()
       });
 
-      document.getElementById("status").innerText = "Saved to Firestore!";
       document.getElementById("username").value = "";
+      document.getElementById("status").innerText = "Saved!";
+      loadUsers();
     };
+
+    loadUsers();
   </script>
 
 </body>

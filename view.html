@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>View Workers</title>
+</head>
+<body>
+
+<h2>View Gig Workers</h2>
+<p id="roleInfo"></p>
+
+<select id="filterType" onchange="loadWorkers()">
+  <option value="all">All</option>
+  <option value="Plumber">Plumber</option>
+  <option value="Electrician">Electrician</option>
+</select>
+
+<ul id="workerList"></ul>
+
+<button onclick="goDashboard()">Back to Dashboard</button>
+
+<script type="module">
+import { auth, db } from "./firebase.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { collection, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+let currentUser;
+let currentRole;
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    window.location.href = "index.html";
+    return;
+  }
+
+  currentUser = user;
+
+  const adminDoc = await fetchAdminRole(user.uid);
+  if (!adminDoc) return;
+
+  currentRole = adminDoc.role;
+  document.getElementById("roleInfo").innerText = "Role: " + currentRole;
+
+  loadWorkers();
+});
+
+async function fetchAdminRole(uid) {
+  const adminSnap = await fetch(`https://firestore.googleapis.com/v1/projects/gigto-c0c83/databases/(default)/documents/admins/${uid}`);
+  if (adminSnap.status !== 200) {
+    alert("Not authorized");
+    window.location.href = "index.html";
+    return null;
+  }
+  const data = await adminSnap.json();
+  return {
+    role: data.fields.role.stringValue
+  };
+}
+
+window.loadWorkers = async function () {
+  const list = document.getElementById("workerList");
+  list.innerHTML = "";
+
+  const filter = document.getElementById("filterType").value;
+  const snapshot = await getDocs(collection(db, "gig_workers"));
+
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+
+    if (filter !== "all" && data.gigType !== filter) return;
+
+    const li = document.createElement("li");
+
+    li.innerHTML = `
+      <b>${data.name}</b> - ${data.gigType}
+      <br>Contact: ${data.contact}
+      <br>Created By: ${data.createdByEmail}
+    `;
+
+    if (currentRole === "superadmin") {
+      const delBtn = document.createElement("button");
+      delBtn.innerText = "Delete";
+      delBtn.onclick = async () => {
+        await deleteDoc(doc(db, "gig_workers", docSnap.id));
+        loadWorkers();
+      };
+      li.appendChild(delBtn);
+    }
+
+    list.appendChild(li);
+  });
+};
+
+window.goDashboard = function() {
+  window.location.href = "dashboard.html";
+};
+</script>
+
+</body>
+</html>

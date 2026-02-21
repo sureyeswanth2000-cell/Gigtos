@@ -12,11 +12,15 @@
   <p class="subtitle" id="roleInfo"></p>
 
   <div class="section">
-    <select id="filterType">
+  <input type="text" id="searchInput" placeholder="Search by name or phone">
+  
+  <select id="filterType">
       <option value="all">All</option>
       <option value="Plumber">Plumber</option>
       <option value="Electrician">Electrician</option>
     </select>
+
+    <input type="text" id="searchInput" placeholder="Search by name or phone" oninput="loadWorkers()">
   </div>
 
   <div id="workerList"></div>
@@ -72,6 +76,7 @@ async function loadWorkers() {
   list.innerHTML = "";
 
   const filter = document.getElementById("filterType").value;
+  const searchText = document.getElementById("searchInput").value.toLowerCase();
 
   let q;
 
@@ -98,6 +103,12 @@ async function loadWorkers() {
     const status = (data.status || "active").toLowerCase();
     const badgeClass = status === "active" ? "active" : "inactive";
 
+    if (
+  searchText &&
+  !data.name.toLowerCase().includes(searchText) &&
+  !data.contact.includes(searchText)
+) return;
+    
     card.innerHTML = `
       <div class="worker-name">${data.name}</div>
       <div class="worker-meta">

@@ -68,6 +68,10 @@ window.loadWorkers = async function () {
 
     if (filter !== "all" && data.gigType !== filter) return;
 
+// Restrict view
+if (currentRole === "admin" && data.adminId !== currentUser.uid) {
+  return;
+}
     const li = document.createElement("li");
 
     li.innerHTML = `

@@ -12,7 +12,6 @@
   <p class="subtitle" id="roleInfo"></p>
 
   <div class="section">
-    <!-- Search -->
     <input 
       type="text" 
       id="searchInput" 
@@ -20,7 +19,6 @@
       oninput="loadWorkers()"
     >
 
-    <!-- Filter -->
     <select id="filterType" onchange="loadWorkers()">
       <option value="all">All</option>
       <option value="Plumber">Plumber</option>
@@ -46,7 +44,8 @@ import {
   getDoc, 
   query, 
   where, 
-  updateDoc 
+  updateDoc,
+  orderBy 
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let currentUser;
@@ -61,69 +60,80 @@ onAuthStateChanged(auth, async (user) => {
 
   currentUser = user;
 
-  const adminDoc = await getDoc(doc(db, "admins", user.uid));
+  const adminSnap = await getDoc(doc(db, "admins", user.uid));
 
-  if (!adminDoc.exists()) {
+  if (!adminSnap.exists()) {
     alert("Not authorized");
     window.location.href = "index.html";
     return;
   }
 
-  currentRole = adminDoc.data().role;
+  currentRole = adminSnap.data().role;
   document.getElementById("roleInfo").innerText = "Role: " + currentRole;
 
   loadWorkers();
 });
 
-async function loadWorkers() {
+window.loadWorkers = async function () {
 
   const list = document.getElementById("workerList");
   list.innerHTML = "";
 
   const filter = document.getElementById("filterType").value;
-  const searchText = document.getElementById("searchInput").value.toLowerCase();
+  const searchText = document.getElementById("searchInput").value.trim().toLowerCase();
 
   let q;
 
   if (currentRole === "superadmin") {
-    q = collection(db, "gig_workers");
+    q = query(collection(db, "gig_workers"), orderBy("createdAt", "desc"));
   } else {
     q = query(
       collection(db, "gig_workers"),
-      where("adminId", "==", currentUser.uid)
+      where("adminId", "==", currentUser.uid),
+      orderBy("createdAt", "desc")
     );
   }
 
   const snapshot = await getDocs(q);
 
+  if (snapshot.empty) {
+    list.innerHTML = "<p>No workers found.</p>";
+    return;
+  }
+
   snapshot.forEach((docSnap) => {
 
     const data = docSnap.data();
 
-    // Filter by gig type
-    if (filter !== "all" && data.gigType !== filter) return;
+    const name = data.name || "";
+    const contact = data.contact || "";
+    const gigType = data.gigType || "";
+    const createdByEmail = data.createdByEmail || "";
+    const status = (data.status || "active").toLowerCase();
 
-    // Search by name or contact
+    // Filter by gig type
+    if (filter !== "all" && gigType !== filter) return;
+
+    // Search filter
     if (
       searchText &&
-      !data.name.toLowerCase().includes(searchText) &&
-      !data.contact.includes(searchText)
+      !name.toLowerCase().includes(searchText) &&
+      !contact.includes(searchText)
     ) return;
+
+    const badgeClass = status === "active" ? "active" : "inactive";
 
     const card = document.createElement("div");
     card.classList.add("worker-card");
 
-    const status = (data.status || "active").toLowerCase();
-    const badgeClass = status === "active" ? "active" : "inactive";
-
     card.innerHTML = `
-      <div class="worker-name">${data.name}</div>
+      <div class="worker-name">${name}</div>
       <div class="worker-meta">
         <span class="status-badge ${badgeClass}">
           ${status.toUpperCase()}
         </span><br>
-        ${data.gigType} | 📞 ${data.contact}<br>
-        Created By: ${data.createdByEmail}
+        ${gigType} | 📞 ${contact}<br>
+        Created By: ${createdByEmail}
       </div>
     `;
 
@@ -144,10 +154,10 @@ async function loadWorkers() {
       actions.appendChild(editBtn);
     }
 
-    // Enable / Disable button (Superadmin only)
+    // Enable / Disable (Superadmin only)
     if (currentRole === "superadmin") {
       const toggleBtn = document.createElement("button");
-      toggleBtn.classList.add("danger");
+      toggleBtn.classList.add(status === "active" ? "danger" : "primary");
       toggleBtn.innerText = status === "active" ? "Disable" : "Enable";
 
       toggleBtn.onclick = async () => {
@@ -163,7 +173,7 @@ async function loadWorkers() {
     card.appendChild(actions);
     list.appendChild(card);
   });
-}
+};
 
 window.goDashboard = function () {
   window.location.href = "dashboard.html";

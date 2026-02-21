@@ -1,18 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gigtos App</title>
+  <title>Gigtos Admin Dashboard</title>
 </head>
 <body>
-  <h1>🚀 Gigtos Firebase App</h1>
 
-  <input type="text" id="username" placeholder="Enter your name">
-  <button onclick="saveData()">Save</button>
+  <h1>🚀 Gigtos Admin Dashboard</h1>
 
-  <h3>Users List:</h3>
-  <ul id="userList"></ul>
+  <h3>Add / Edit Gig Worker</h3>
 
-  <p id="status"></p>
+  <input type="hidden" id="workerId">
+
+  <input type="text" id="name" placeholder="Name"><br><br>
+  <input type="text" id="contact" placeholder="Contact"><br><br>
+  <input type="text" id="aadhaar" placeholder="Aadhaar (Optional)"><br><br>
+
+  <select id="gigType">
+    <option value="Plumber">Plumber</option>
+    <option value="Electrician">Electrician</option>
+  </select><br><br>
+
+  <input type="text" id="address" placeholder="Address"><br><br>
+  <input type="text" id="emergencyPhone" placeholder="Emergency Phone (Optional)"><br><br>
+
+  <button onclick="saveWorker()">Save Worker</button>
+
+  <h3>Gig Workers List</h3>
+  <ul id="workerList"></ul>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -20,7 +34,9 @@
       getFirestore, 
       collection, 
       addDoc, 
-      getDocs 
+      getDocs, 
+      updateDoc,
+      doc
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -32,42 +48,79 @@
       appId: "1:190454381677:web:458b1638c984ababcdd364",
       measurementId: "G-3WQKM1M1F9"
     };
-    
+
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const userList = document.getElementById("userList");
+    const workerList = document.getElementById("workerList");
 
-    async function loadUsers() {
-      userList.innerHTML = "";
-      const querySnapshot = await getDocs(collection(db, "users"));
-      querySnapshot.forEach((doc) => {
+    async function loadWorkers() {
+      workerList.innerHTML = "";
+      const snapshot = await getDocs(collection(db, "gig_workers"));
+
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
         const li = document.createElement("li");
-        li.textContent = doc.data().name;
-        userList.appendChild(li);
+
+        li.innerHTML = `
+          <b>${data.name}</b> - ${data.gigType} - ${data.contact}
+          <button onclick="editWorker('${docSnap.id}', '${data.name}', '${data.contact}', '${data.aadhaar || ""}', '${data.gigType}', '${data.address}', '${data.emergencyPhone || ""}')">Edit</button>
+        `;
+
+        workerList.appendChild(li);
       });
     }
 
-    window.saveData = async function() {
-      const name = document.getElementById("username").value;
+    window.saveWorker = async function() {
+      const id = document.getElementById("workerId").value;
+      const name = document.getElementById("name").value;
+      const contact = document.getElementById("contact").value;
+      const aadhaar = document.getElementById("aadhaar").value;
+      const gigType = document.getElementById("gigType").value;
+      const address = document.getElementById("address").value;
+      const emergencyPhone = document.getElementById("emergencyPhone").value;
 
-      if(name === "") {
-        alert("Please enter name");
+      if(!name || !contact || !address) {
+        alert("Please fill required fields");
         return;
       }
 
-      await addDoc(collection(db, "users"), {
-        name: name,
-        createdAt: new Date()
-      });
+      if(id) {
+        await updateDoc(doc(db, "gig_workers", id), {
+          name, contact, aadhaar, gigType, address, emergencyPhone
+        });
+      } else {
+        await addDoc(collection(db, "gig_workers"), {
+          name, contact, aadhaar, gigType, address, emergencyPhone,
+          createdAt: new Date()
+        });
+      }
 
-      document.getElementById("username").value = "";
-      document.getElementById("status").innerText = "Saved!";
-      loadUsers();
+      clearForm();
+      loadWorkers();
     };
 
-    loadUsers();
+    window.editWorker = function(id, name, contact, aadhaar, gigType, address, emergencyPhone) {
+      document.getElementById("workerId").value = id;
+      document.getElementById("name").value = name;
+      document.getElementById("contact").value = contact;
+      document.getElementById("aadhaar").value = aadhaar;
+      document.getElementById("gigType").value = gigType;
+      document.getElementById("address").value = address;
+      document.getElementById("emergencyPhone").value = emergencyPhone;
+    };
+
+    function clearForm() {
+      document.getElementById("workerId").value = "";
+      document.getElementById("name").value = "";
+      document.getElementById("contact").value = "";
+      document.getElementById("aadhaar").value = "";
+      document.getElementById("address").value = "";
+      document.getElementById("emergencyPhone").value = "";
+    }
+
+    loadWorkers();
   </script>
 
 </body>

@@ -16,12 +16,13 @@
 
 <ul id="workerList"></ul>
 
+<br>
 <button onclick="goDashboard()">Back to Dashboard</button>
 
 <script type="module">
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { collection, getDocs, deleteDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let currentUser;
 let currentRole;
@@ -34,27 +35,19 @@ onAuthStateChanged(auth, async (user) => {
 
   currentUser = user;
 
-  const adminDoc = await fetchAdminRole(user.uid);
-  if (!adminDoc) return;
+  const adminSnap = await getDoc(doc(db, "admins", user.uid));
 
-  currentRole = adminDoc.role;
+  if (!adminSnap.exists()) {
+    alert("Not authorized");
+    window.location.href = "index.html";
+    return;
+  }
+
+  currentRole = adminSnap.data().role;
   document.getElementById("roleInfo").innerText = "Role: " + currentRole;
 
   loadWorkers();
 });
-
-async function fetchAdminRole(uid) {
-  const adminSnap = await fetch(`https://firestore.googleapis.com/v1/projects/gigto-c0c83/databases/(default)/documents/admins/${uid}`);
-  if (adminSnap.status !== 200) {
-    alert("Not authorized");
-    window.location.href = "index.html";
-    return null;
-  }
-  const data = await adminSnap.json();
-  return {
-    role: data.fields.role.stringValue
-  };
-}
 
 window.loadWorkers = async function () {
   const list = document.getElementById("workerList");
@@ -66,51 +59,52 @@ window.loadWorkers = async function () {
   snapshot.forEach((docSnap) => {
     const data = docSnap.data();
 
+    // Filter by gig type
     if (filter !== "all" && data.gigType !== filter) return;
 
-// Restrict view
-if (currentRole === "admin" && data.adminId !== currentUser.uid) {
-  return;
-}
+    // Admin sees only own workers
+    if (currentRole === "admin" && data.adminId !== currentUser.uid) {
+      return;
+    }
+
     const li = document.createElement("li");
 
     li.innerHTML = `
-  <b>${data.name}</b> - ${data.gigType}
-  <br>Contact: ${data.contact}
-  <br>Created By: ${data.createdByEmail}
-`;
+      <b>${data.name}</b> - ${data.gigType}
+      <br>Contact: ${data.contact}
+      <br>Created By: ${data.createdByEmail}
+      <br><br>
+    `;
 
+    // Edit Button
+    if (
+      currentRole === "superadmin" ||
+      (currentRole === "admin" && data.adminId === currentUser.uid)
+    ) {
+      const editBtn = document.createElement("button");
+      editBtn.innerText = "Edit";
+      editBtn.onclick = () => {
+        window.location.href = "dashboard.html?edit=" + docSnap.id;
+      };
+      li.appendChild(editBtn);
+    }
 
-// Edit Button Logic
-if (
-  currentRole === "superadmin" ||
-  (currentRole === "admin" && data.adminId === currentUser.uid)
-) {
-  const editBtn = document.createElement("button");
-  editBtn.innerText = "Edit";
-  editBtn.onclick = () => {
-    window.location.href = `dashboard.html?edit=${docSnap.id}`;
-  };
-  li.appendChild(editBtn);
-}
-
-
-// Delete Button Logic
-if (currentRole === "superadmin") {
-  const delBtn = document.createElement("button");
-  delBtn.innerText = "Delete";
-  delBtn.onclick = async () => {
-    await deleteDoc(doc(db, "gig_workers", docSnap.id));
-    loadWorkers();
-  };
-  li.appendChild(delBtn);
-}
+    // Delete Button (Superadmin only)
+    if (currentRole === "superadmin") {
+      const delBtn = document.createElement("button");
+      delBtn.innerText = "Delete";
+      delBtn.onclick = async () => {
+        await deleteDoc(doc(db, "gig_workers", docSnap.id));
+        loadWorkers();
+      };
+      li.appendChild(delBtn);
+    }
 
     list.appendChild(li);
   });
 };
 
-window.goDashboard = function() {
+window.goDashboard = function () {
   window.location.href = "dashboard.html";
 };
 </script>

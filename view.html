@@ -75,20 +75,36 @@ if (currentRole === "admin" && data.adminId !== currentUser.uid) {
     const li = document.createElement("li");
 
     li.innerHTML = `
-      <b>${data.name}</b> - ${data.gigType}
-      <br>Contact: ${data.contact}
-      <br>Created By: ${data.createdByEmail}
-    `;
+  <b>${data.name}</b> - ${data.gigType}
+  <br>Contact: ${data.contact}
+  <br>Created By: ${data.createdByEmail}
+`;
 
-    if (currentRole === "superadmin") {
-      const delBtn = document.createElement("button");
-      delBtn.innerText = "Delete";
-      delBtn.onclick = async () => {
-        await deleteDoc(doc(db, "gig_workers", docSnap.id));
-        loadWorkers();
-      };
-      li.appendChild(delBtn);
-    }
+
+// Edit Button Logic
+if (
+  currentRole === "superadmin" ||
+  (currentRole === "admin" && data.adminId === currentUser.uid)
+) {
+  const editBtn = document.createElement("button");
+  editBtn.innerText = "Edit";
+  editBtn.onclick = () => {
+    window.location.href = `dashboard.html?edit=${docSnap.id}`;
+  };
+  li.appendChild(editBtn);
+}
+
+
+// Delete Button Logic
+if (currentRole === "superadmin") {
+  const delBtn = document.createElement("button");
+  delBtn.innerText = "Delete";
+  delBtn.onclick = async () => {
+    await deleteDoc(doc(db, "gig_workers", docSnap.id));
+    loadWorkers();
+  };
+  li.appendChild(delBtn);
+}
 
     list.appendChild(li);
   });

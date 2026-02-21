@@ -1,7 +1,15 @@
 <script type="module">
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, getDocs, doc, getDoc, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { 
+  collection, 
+  getDocs, 
+  doc, 
+  getDoc, 
+  query, 
+  where, 
+  updateDoc 
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let currentUser;
 let currentRole;
@@ -28,7 +36,7 @@ onAuthStateChanged(auth, async (user) => {
   loadWorkers();
 });
 
-window.loadWorkers = async function () {
+async function loadWorkers() {
   const list = document.getElementById("workerList");
   list.innerHTML = "";
 
@@ -55,7 +63,6 @@ window.loadWorkers = async function () {
     const card = document.createElement("div");
     card.classList.add("worker-card");
 
-    // SAFE STATUS
     const status = (data.status || "active").toLowerCase();
     const badgeClass = status === "active" ? "active" : "inactive";
 
@@ -73,7 +80,7 @@ window.loadWorkers = async function () {
     const actions = document.createElement("div");
     actions.classList.add("worker-actions");
 
-    // Edit Button
+    // Edit
     if (
       currentRole === "superadmin" ||
       (currentRole === "admin" && data.adminId === currentUser.uid)
@@ -87,7 +94,7 @@ window.loadWorkers = async function () {
       actions.appendChild(editBtn);
     }
 
-    // Disable / Enable (Superadmin only)
+    // Enable / Disable
     if (currentRole === "superadmin") {
       const toggleBtn = document.createElement("button");
       toggleBtn.classList.add("danger");
@@ -107,7 +114,7 @@ window.loadWorkers = async function () {
     card.appendChild(actions);
     list.appendChild(card);
   });
-};
+}
 
 window.goDashboard = function () {
   window.location.href = "dashboard.html";

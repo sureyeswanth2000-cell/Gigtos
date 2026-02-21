@@ -23,7 +23,8 @@
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { collection, getDocs, deleteDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
+import { query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  
 let currentUser;
 let currentRole;
 
@@ -54,7 +55,19 @@ window.loadWorkers = async function () {
   list.innerHTML = "";
 
   const filter = document.getElementById("filterType").value;
-  const snapshot = await getDocs(collection(db, "gig_workers"));
+  
+let q;
+
+if (currentRole === "superadmin") {
+  q = collection(db, "gig_workers");
+} else {
+  q = query(
+    collection(db, "gig_workers"),
+    where("adminId", "==", currentUser.uid)
+  );
+}
+
+const snapshot = await getDocs(q);
 
   snapshot.forEach((docSnap) => {
     const data = docSnap.data();

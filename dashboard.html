@@ -32,8 +32,9 @@
 <script type="module">
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { doc, getDoc, addDoc, updateDoc, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
+import { doc, getDoc, addDoc, updateDoc, collection, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  
 let currentUser;
 let currentRole;
 
@@ -60,6 +61,19 @@ onAuthStateChanged(auth, async (user) => {
   currentRole = adminDoc.data().role;
   document.getElementById("roleInfo").innerText = "Role: " + currentRole;
 
+  if (currentRole === "superadmin") {
+  const adminSection = document.createElement("div");
+
+  adminSection.innerHTML = `
+    <hr>
+    <h3>Create New Admin</h3>
+    <input type="email" id="newAdminEmail" placeholder="Admin Email"><br><br>
+    <input type="password" id="newAdminPassword" placeholder="Admin Password"><br><br>
+    <button onclick="createAdmin()">Create Admin</button>
+  `;
+
+  document.body.appendChild(adminSection);
+  }
   // If editing worker
   if (editId) {
     const workerSnap = await getDoc(doc(db, "gig_workers", editId));
@@ -128,6 +142,33 @@ window.saveWorker = async function () {
   window.location.href = "view.html";
 };
 
+  
+
+window.createAdmin = async function () {
+  const email = document.getElementById("newAdminEmail").value;
+  const password = document.getElementById("newAdminPassword").value;
+
+  if (!email || !password) {
+    alert("Fill all fields");
+    return;
+  }
+
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const newUser = userCredential.user;
+
+    await setDoc(doc(db, "admins", newUser.uid), {
+      email: email,
+      role: "admin",
+      createdAt: new Date()
+    });
+
+    alert("Admin Created Successfully");
+  } catch (error) {
+    alert("Error creating admin: " + error.message);
+  }
+};
+  
 window.logout = async function () {
   await signOut(auth);
   window.location.href = "index.html";

@@ -12,15 +12,20 @@
   <p class="subtitle" id="roleInfo"></p>
 
   <div class="section">
-  <input type="text" id="searchInput" placeholder="Search by name or phone">
-  
-  <select id="filterType">
+    <!-- Search -->
+    <input 
+      type="text" 
+      id="searchInput" 
+      placeholder="Search by name or phone"
+      oninput="loadWorkers()"
+    >
+
+    <!-- Filter -->
+    <select id="filterType" onchange="loadWorkers()">
       <option value="all">All</option>
       <option value="Plumber">Plumber</option>
       <option value="Electrician">Electrician</option>
     </select>
-
-    <input type="text" id="searchInput" placeholder="Search by name or phone" oninput="loadWorkers()">
   </div>
 
   <div id="workerList"></div>
@@ -95,7 +100,15 @@ async function loadWorkers() {
 
     const data = docSnap.data();
 
+    // Filter by gig type
     if (filter !== "all" && data.gigType !== filter) return;
+
+    // Search by name or contact
+    if (
+      searchText &&
+      !data.name.toLowerCase().includes(searchText) &&
+      !data.contact.includes(searchText)
+    ) return;
 
     const card = document.createElement("div");
     card.classList.add("worker-card");
@@ -103,12 +116,6 @@ async function loadWorkers() {
     const status = (data.status || "active").toLowerCase();
     const badgeClass = status === "active" ? "active" : "inactive";
 
-    if (
-  searchText &&
-  !data.name.toLowerCase().includes(searchText) &&
-  !data.contact.includes(searchText)
-) return;
-    
     card.innerHTML = `
       <div class="worker-name">${data.name}</div>
       <div class="worker-meta">

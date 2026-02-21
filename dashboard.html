@@ -8,6 +8,7 @@
   <h2>Admin Dashboard</h2>
   <p id="roleInfo"></p>
 
+  <button onclick="goView()">View Workers</button>
   <button onclick="logout()">Logout</button>
 
   <hr>
@@ -91,6 +92,9 @@
       await signOut(auth);
       window.location.href = "login.html";
     };
+    window.goView = function() {
+  window.location.href = "view.html";
+};
   </script>
 
 </body>

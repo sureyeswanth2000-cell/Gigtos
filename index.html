@@ -1,31 +1,140 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin Login</title>
-</head>
-<body>
-  <h2>Admin Login</h2>
+  <title>Gigto – Home Services in Kavali</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <input type="email" id="email" placeholder="Email"><br><br>
-  <input type="password" id="password" placeholder="Password"><br><br>
-
-  <button onclick="login()">Login</button>
-
-  <script type="module">
-    import { auth } from "./firebase.js";
-    import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-    window.login = async function() {
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
-
-      try {
-        await signInWithEmailAndPassword(auth, email, password);
-        window.location.href = "dashboard.html";
-      } catch (error) {
-        alert("Invalid login");
-      }
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: #f8fafc;
+      color: #222;
     }
-  </script>
+
+    header {
+      background: linear-gradient(90deg, #4f46e5, #06b6d4);
+      padding: 18px 20px;
+      color: white;
+      font-size: 22px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 40px 20px 20px;
+    }
+
+    .hero h1 {
+      font-size: 26px;
+      margin-bottom: 10px;
+    }
+
+    .hero p {
+      color: #555;
+      font-size: 15px;
+    }
+
+    .services {
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+    }
+
+    .card {
+      background: white;
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      text-align: center;
+      transition: transform 0.2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+    }
+
+    .icon {
+      font-size: 40px;
+      margin-bottom: 10px;
+    }
+
+    .price {
+      display: inline-block;
+      background: #e0f2fe;
+      color: #0284c7;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      margin: 10px 0;
+    }
+
+    .book-btn {
+      display: inline-block;
+      background: #4f46e5;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 500;
+      margin-top: 10px;
+    }
+
+    .book-btn:hover {
+      background: #4338ca;
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 13px;
+      color: #666;
+      margin-top: 40px;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  Gigto – Services in Kavali
+</header>
+
+<div class="hero">
+  <h1>Home Services in Kavali</h1>
+  <p>Book trusted professionals at just ₹200 visiting charge</p>
+</div>
+
+<div class="services">
+
+  <div class="card">
+    <div class="icon">🧰</div>
+    <h3>Plumber</h3>
+    <div class="price">₹200 Visiting Charge</div>
+    <br>
+    <a href="service.html?type=Plumber" class="book-btn">
+      Book Plumber
+    </a>
+  </div>
+
+  <div class="card">
+    <div class="icon">⚡</div>
+    <h3>Electrician</h3>
+    <div class="price">₹200 Visiting Charge</div>
+    <br>
+    <a href="service.html?type=Electrician" class="book-btn">
+      Book Electrician
+    </a>
+  </div>
+
+</div>
+
+<footer>
+  © 2026 Gigto – Home Services in Kavali <br>
+  Trusted local professionals
+</footer>
+
 </body>
 </html>

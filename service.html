@@ -7,7 +7,7 @@
   <style>
     body {
       margin:0;
-      font-family:'Segoe UI';
+      font-family:'Segoe UI', sans-serif;
       background:#f4f7fb;
     }
 
@@ -24,27 +24,31 @@
     .logo { font-size:20px; font-weight:bold; cursor:pointer; }
     .profile { font-size:13px; cursor:pointer; }
 
-    .hidden { display:none; }
-
+    /* SIDE MENU */
     .side-menu {
-      position:fixed;
-      top:0;
-      left:0;
-      width:230px;
-      height:100%;
-      background:white;
-      box-shadow:4px 0 12px rgba(0,0,0,0.1);
-      padding-top:60px;
-      display:flex;
-      flex-direction:column;
-      z-index:1000;
+      position: fixed;
+      top: 0;
+      left: -250px;
+      width: 230px;
+      height: 100%;
+      background: white;
+      box-shadow: 4px 0 12px rgba(0,0,0,0.1);
+      padding-top: 60px;
+      display: flex;
+      flex-direction: column;
+      z-index: 1000;
+      transition: left 0.3s ease;
+    }
+
+    .side-menu.open {
+      left: 0;
     }
 
     .side-menu a {
-      padding:15px 20px;
-      text-decoration:none;
-      color:#333;
-      border-bottom:1px solid #eee;
+      padding: 15px 20px;
+      text-decoration: none;
+      color: #333;
+      border-bottom: 1px solid #eee;
     }
 
     #overlay {
@@ -54,7 +58,12 @@
       width: 100%;
       height: 100%;
       background: rgba(0,0,0,0.3);
+      display: none;
       z-index: 999;
+    }
+
+    #overlay.show {
+      display: block;
     }
 
     .container { max-width:500px; margin:auto; padding:20px; }
@@ -91,6 +100,8 @@
       font-weight:bold;
       margin-top:15px;
     }
+
+    .hidden { display:none; }
   </style>
 </head>
 
@@ -102,9 +113,9 @@
   <div id="profileSection" class="profile hidden"></div>
 </header>
 
-<div id="overlay" class="hidden" onclick="closeMenu()"></div>
+<div id="overlay" onclick="closeMenu()"></div>
 
-<div id="sideMenu" class="side-menu hidden">
+<div id="sideMenu" class="side-menu">
   <a href="index.html">Home</a>
   <a href="profile.html">Profile</a>
   <a href="my-bookings.html">My Bookings</a>
@@ -165,15 +176,15 @@ const params = new URLSearchParams(window.location.search);
 const serviceType = params.get("type") || "Service";
 document.getElementById("serviceTitle").innerText = serviceType;
 
-/* MENU FUNCTIONS */
+/* MENU */
 window.toggleMenu = function() {
-  document.getElementById("sideMenu").classList.toggle("hidden");
-  document.getElementById("overlay").classList.toggle("hidden");
+  document.getElementById("sideMenu").classList.add("open");
+  document.getElementById("overlay").classList.add("show");
 };
 
 window.closeMenu = function() {
-  document.getElementById("sideMenu").classList.add("hidden");
-  document.getElementById("overlay").classList.add("hidden");
+  document.getElementById("sideMenu").classList.remove("open");
+  document.getElementById("overlay").classList.remove("show");
 };
 
 window.goHome = function() {
@@ -187,7 +198,6 @@ window.logout = async function() {
 
 /* AUTH */
 onAuthStateChanged(auth, async (user) => {
-
   if (user) {
     currentUser = user;
 
@@ -228,24 +238,29 @@ window.sendOTP = async function() {
 
   phone = "+91" + phone;
 
-  confirmationResult = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
-
-  document.getElementById("phoneSection").classList.add("hidden");
-  document.getElementById("otpSection").classList.remove("hidden");
+  try {
+    confirmationResult = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
+    document.getElementById("phoneSection").classList.add("hidden");
+    document.getElementById("otpSection").classList.remove("hidden");
+  } catch (error) {
+    alert(error.message);
+  }
 };
 
 window.verifyOTP = async function() {
   const otp = document.getElementById("otp").value;
-  const result = await confirmationResult.confirm(otp);
-  currentUser = result.user;
-
-  document.getElementById("otpSection").classList.add("hidden");
-  document.getElementById("bookingSection").classList.remove("hidden");
+  try {
+    const result = await confirmationResult.confirm(otp);
+    currentUser = result.user;
+    document.getElementById("otpSection").classList.add("hidden");
+    document.getElementById("bookingSection").classList.remove("hidden");
+  } catch {
+    alert("Invalid OTP");
+  }
 };
 
 /* BOOKING */
 window.confirmBooking = async function() {
-
   const name = document.getElementById("customerName").value.trim();
   const address = document.getElementById("address").value.trim();
 
@@ -255,7 +270,6 @@ window.confirmBooking = async function() {
   }
 
   try {
-
     await setDoc(doc(db, "users", currentUser.uid), {
       phone: currentUser.phoneNumber,
       name,

@@ -21,21 +21,9 @@
       align-items: center;
     }
 
-    .menu-icon {
-      font-size: 22px;
-      cursor: pointer;
-    }
-
-    .logo {
-      font-size: 20px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    .profile {
-      font-size: 13px;
-      cursor: pointer;
-    }
+    .menu-icon { font-size: 22px; cursor: pointer; }
+    .logo { font-size: 20px; font-weight: bold; cursor: pointer; }
+    .profile { font-size: 13px; cursor: pointer; }
 
     .side-menu {
       position: fixed;
@@ -58,9 +46,7 @@
       border-bottom: 1px solid #eee;
     }
 
-    .hidden {
-      display: none;
-    }
+    .hidden { display: none; }
 
     .hero {
       text-align: center;
@@ -135,7 +121,6 @@
   <a href="index.html">Home</a>
   <a href="#">My Bookings</a>
   <a href="#">Contact</a>
-  <a href="#">Workers</a>
 </div>
 
 <div class="hero">
@@ -147,7 +132,7 @@
   <input type="text" id="searchInput" placeholder="Search service" oninput="filterServices()">
 </div>
 
-<div class="services" id="servicesContainer">
+<div class="services">
 
   <div class="card" data-name="plumber">
     <h3>🧰 Plumber</h3>
@@ -168,12 +153,10 @@
 </footer>
 
 <script type="module">
-import { auth } from "./firebase.js";
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { auth, db } from "./firebase.js";
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  
+
 window.toggleMenu = function() {
   document.getElementById("sideMenu").classList.toggle("hidden");
 };
@@ -191,7 +174,6 @@ window.filterServices = function() {
     card.style.display = name.includes(input) ? "block" : "none";
   });
 };
-
 
 onAuthStateChanged(auth, async (user) => {
 
@@ -214,9 +196,6 @@ onAuthStateChanged(auth, async (user) => {
     profile.onclick = () => {
       window.location.href = "profile.html";
     };
-
-  }
-});
   }
 });
 </script>

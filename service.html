@@ -155,28 +155,28 @@ onAuthStateChanged(auth, async (user) => {
     currentUser = user;
 
     const profile = document.getElementById("profileSection");
-    profile.innerText = user.phoneNumber;
+
+    const userRef = doc(db, "users", user.uid);
+    const snap = await getDoc(userRef);
+
+    let displayName = user.phoneNumber;
+
+    if (snap.exists() && snap.data().name) {
+      displayName = snap.data().name;
+      document.getElementById("customerName").value = snap.data().name || "";
+      document.getElementById("address").value = snap.data().address || "";
+    }
+
+    profile.innerText = "👤 " + displayName;
     profile.classList.remove("hidden");
 
-    profile.onclick = async () => {
-      if (confirm("Logout?")) {
-        await signOut(auth);
-        location.reload();
-      }
+    profile.onclick = () => {
+      window.location.href = "profile.html";
     };
 
     document.getElementById("phoneSection").classList.add("hidden");
     document.getElementById("otpSection").classList.add("hidden");
     document.getElementById("bookingSection").classList.remove("hidden");
-
-    // Auto-fill user
-    const userRef = doc(db, "users", user.uid);
-    const snap = await getDoc(userRef);
-
-    if (snap.exists()) {
-      document.getElementById("customerName").value = snap.data().name || "";
-      document.getElementById("address").value = snap.data().address || "";
-    }
 
   }
 });

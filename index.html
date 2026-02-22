@@ -14,7 +14,7 @@
 
     header {
       background: linear-gradient(90deg, #4f46e5, #06b6d4);
-      padding: 18px 20px;
+      padding: 18px;
       color: white;
       font-size: 22px;
       font-weight: bold;
@@ -28,12 +28,19 @@
 
     .hero h1 {
       font-size: 26px;
-      margin-bottom: 10px;
     }
 
-    .hero p {
-      color: #555;
-      font-size: 15px;
+    .search-box {
+      margin: 20px auto;
+      max-width: 400px;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #ddd;
+      font-size: 14px;
     }
 
     .services {
@@ -49,11 +56,6 @@
       margin-bottom: 20px;
       box-shadow: 0 6px 18px rgba(0,0,0,0.08);
       text-align: center;
-      transition: transform 0.2s ease;
-    }
-
-    .card:hover {
-      transform: translateY(-5px);
     }
 
     .icon {
@@ -62,28 +64,22 @@
     }
 
     .price {
-      display: inline-block;
       background: #e0f2fe;
       color: #0284c7;
       padding: 6px 14px;
       border-radius: 20px;
       font-size: 13px;
+      display: inline-block;
       margin: 10px 0;
     }
 
     .book-btn {
-      display: inline-block;
       background: #4f46e5;
       color: white;
       padding: 10px 20px;
       border-radius: 10px;
       text-decoration: none;
-      font-weight: 500;
-      margin-top: 10px;
-    }
-
-    .book-btn:hover {
-      background: #4338ca;
+      display: inline-block;
     }
 
     footer {
@@ -107,34 +103,47 @@
   <p>Book trusted professionals at just ₹200 visiting charge</p>
 </div>
 
-<div class="services">
+<div class="search-box">
+  <input type="text" id="searchInput" placeholder="Search service (Plumber, Electrician)" oninput="filterServices()">
+</div>
 
-  <div class="card">
+<div class="services" id="servicesContainer">
+
+  <div class="card" data-name="plumber">
     <div class="icon">🧰</div>
     <h3>Plumber</h3>
-    <div class="price">₹200 Visiting Charge</div>
-    <br>
-    <a href="service.html?type=Plumber" class="book-btn">
-      Book Plumber
-    </a>
+    <div class="price">₹200 Visiting Charge</div><br>
+    <a href="service.html?type=Plumber" class="book-btn">Book Plumber</a>
   </div>
 
-  <div class="card">
+  <div class="card" data-name="electrician">
     <div class="icon">⚡</div>
     <h3>Electrician</h3>
-    <div class="price">₹200 Visiting Charge</div>
-    <br>
-    <a href="service.html?type=Electrician" class="book-btn">
-      Book Electrician
-    </a>
+    <div class="price">₹200 Visiting Charge</div><br>
+    <a href="service.html?type=Electrician" class="book-btn">Book Electrician</a>
   </div>
 
 </div>
 
 <footer>
-  © 2026 Gigto – Home Services in Kavali <br>
-  Trusted local professionals
+  © 2026 Gigto – Home Services in Kavali
 </footer>
+
+<script>
+function filterServices() {
+  const input = document.getElementById("searchInput").value.toLowerCase();
+  const cards = document.querySelectorAll(".card");
+
+  cards.forEach(card => {
+    const name = card.getAttribute("data-name");
+    if (name.includes(input)) {
+      card.style.display = "block";
+    } else {
+      card.style.display = "none";
+    }
+  });
+}
+</script>
 
 </body>
 </html>

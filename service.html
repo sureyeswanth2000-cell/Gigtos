@@ -11,20 +11,62 @@
       background: #f4f7fb;
     }
 
+    /* HEADER */
     header {
       background: linear-gradient(90deg, #4f46e5, #06b6d4);
-      padding: 18px;
+      padding: 15px;
       color: white;
-      font-size: 20px;
-      font-weight: bold;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      position: relative;
+    }
+
+    .menu-icon {
+      font-size: 22px;
+      cursor: pointer;
+    }
+
+    .logo {
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
     }
 
     .profile {
       font-size: 13px;
       cursor: pointer;
+    }
+
+    /* SIDE MENU */
+    .side-menu {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 230px;
+      height: 100%;
+      background: white;
+      box-shadow: 4px 0 12px rgba(0,0,0,0.1);
+      padding-top: 60px;
+      display: flex;
+      flex-direction: column;
+      z-index: 1000;
+    }
+
+    .side-menu a {
+      padding: 15px 20px;
+      text-decoration: none;
+      color: #333;
+      font-weight: 500;
+      border-bottom: 1px solid #eee;
+    }
+
+    .side-menu a:hover {
+      background: #f0f4ff;
+    }
+
+    .hidden {
+      display: none;
     }
 
     .container {
@@ -71,10 +113,6 @@
       cursor: pointer;
     }
 
-    .hidden {
-      display: none;
-    }
-
     .success {
       color: green;
       text-align: center;
@@ -87,9 +125,18 @@
 <body>
 
 <header>
-  <div>Gigto Booking</div>
+  <div class="menu-icon" onclick="toggleMenu()">☰</div>
+  <div class="logo" onclick="goHome()">Gigto</div>
   <div id="profileSection" class="profile hidden"></div>
 </header>
+
+<!-- SIDE NAVIGATION -->
+<div id="sideMenu" class="side-menu hidden">
+  <a href="index.html">Home</a>
+  <a href="#">My Bookings</a>
+  <a href="#">Contact</a>
+  <a href="#">Workers</a>
+</div>
 
 <div class="container">
 
@@ -150,13 +197,21 @@ const params = new URLSearchParams(window.location.search);
 serviceType = params.get("type") || "Service";
 document.getElementById("serviceTitle").innerText = serviceType;
 
-// Auth listener (🔥 important)
+// Toggle menu
+window.toggleMenu = function() {
+  document.getElementById("sideMenu").classList.toggle("hidden");
+};
+
+window.goHome = function() {
+  window.location.href = "index.html";
+};
+
+// Auth listener
 onAuthStateChanged(auth, (user) => {
 
   if (user) {
     currentUser = user;
 
-    // Show profile
     const profile = document.getElementById("profileSection");
     profile.innerText = user.phoneNumber;
     profile.classList.remove("hidden");
@@ -168,7 +223,6 @@ onAuthStateChanged(auth, (user) => {
       }
     };
 
-    // Skip login steps
     document.getElementById("phoneSection").classList.add("hidden");
     document.getElementById("otpSection").classList.add("hidden");
     document.getElementById("bookingSection").classList.remove("hidden");
@@ -198,10 +252,8 @@ window.sendOTP = async function() {
 
   try {
     confirmationResult = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
-
     document.getElementById("phoneSection").classList.add("hidden");
     document.getElementById("otpSection").classList.remove("hidden");
-
   } catch (error) {
     alert(error.message);
   }
@@ -215,10 +267,8 @@ window.verifyOTP = async function() {
   try {
     const result = await confirmationResult.confirm(otp);
     currentUser = result.user;
-
     document.getElementById("otpSection").classList.add("hidden");
     document.getElementById("bookingSection").classList.remove("hidden");
-
   } catch (error) {
     alert("Invalid OTP");
   }

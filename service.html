@@ -5,12 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
-    body { margin:0; font-family:'Segoe UI'; background:#f4f7fb; }
+    body {
+      margin:0;
+      font-family:'Segoe UI';
+      background:#f4f7fb;
+    }
 
     header {
       background: linear-gradient(90deg, #4f46e5, #06b6d4);
-      padding: 15px;
-      color: white;
+      padding:15px;
+      color:white;
       display:flex;
       justify-content:space-between;
       align-items:center;
@@ -43,6 +47,16 @@
       border-bottom:1px solid #eee;
     }
 
+    #overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.3);
+      z-index: 999;
+    }
+
     .container { max-width:500px; margin:auto; padding:20px; }
 
     .card {
@@ -71,7 +85,12 @@
       cursor:pointer;
     }
 
-    .success { color:green; text-align:center; font-weight:bold; }
+    .success {
+      color:green;
+      text-align:center;
+      font-weight:bold;
+      margin-top:15px;
+    }
   </style>
 </head>
 
@@ -83,8 +102,13 @@
   <div id="profileSection" class="profile hidden"></div>
 </header>
 
+<div id="overlay" class="hidden" onclick="closeMenu()"></div>
+
 <div id="sideMenu" class="side-menu hidden">
   <a href="index.html">Home</a>
+  <a href="profile.html">Profile</a>
+  <a href="my-bookings.html">My Bookings</a>
+  <a href="#" onclick="logout()">Logout</a>
 </div>
 
 <div class="container">
@@ -112,7 +136,7 @@
   </div>
 
   <div id="successMsg" class="success hidden">
-    Booking Submitted Successfully!
+    ✅ Booking Submitted Successfully!
   </div>
 
 </div>
@@ -141,21 +165,33 @@ const params = new URLSearchParams(window.location.search);
 const serviceType = params.get("type") || "Service";
 document.getElementById("serviceTitle").innerText = serviceType;
 
+/* MENU FUNCTIONS */
 window.toggleMenu = function() {
   document.getElementById("sideMenu").classList.toggle("hidden");
+  document.getElementById("overlay").classList.toggle("hidden");
+};
+
+window.closeMenu = function() {
+  document.getElementById("sideMenu").classList.add("hidden");
+  document.getElementById("overlay").classList.add("hidden");
 };
 
 window.goHome = function() {
   window.location.href = "index.html";
 };
 
+window.logout = async function() {
+  await signOut(auth);
+  window.location.href = "index.html";
+};
+
+/* AUTH */
 onAuthStateChanged(auth, async (user) => {
 
   if (user) {
     currentUser = user;
 
     const profile = document.getElementById("profileSection");
-
     const userRef = doc(db, "users", user.uid);
     const snap = await getDoc(userRef);
 
@@ -169,27 +205,31 @@ onAuthStateChanged(auth, async (user) => {
 
     profile.innerText = "👤 " + displayName;
     profile.classList.remove("hidden");
-
-    profile.onclick = () => {
-      window.location.href = "profile.html";
-    };
+    profile.onclick = () => window.location.href = "profile.html";
 
     document.getElementById("phoneSection").classList.add("hidden");
     document.getElementById("otpSection").classList.add("hidden");
     document.getElementById("bookingSection").classList.remove("hidden");
-
   }
 });
 
+/* RECAPTCHA */
 window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
   size: 'normal'
 });
 
+/* OTP */
 window.sendOTP = async function() {
   let phone = document.getElementById("phone").value.trim();
-  if (phone.length !== 10) return alert("Invalid number");
+  if (phone.length !== 10 || isNaN(phone)) {
+    alert("Enter valid 10 digit mobile number");
+    return;
+  }
+
   phone = "+91" + phone;
+
   confirmationResult = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
+
   document.getElementById("phoneSection").classList.add("hidden");
   document.getElementById("otpSection").classList.remove("hidden");
 };
@@ -198,32 +238,45 @@ window.verifyOTP = async function() {
   const otp = document.getElementById("otp").value;
   const result = await confirmationResult.confirm(otp);
   currentUser = result.user;
+
   document.getElementById("otpSection").classList.add("hidden");
   document.getElementById("bookingSection").classList.remove("hidden");
 };
 
+/* BOOKING */
 window.confirmBooking = async function() {
 
   const name = document.getElementById("customerName").value.trim();
   const address = document.getElementById("address").value.trim();
 
-  await setDoc(doc(db, "users", currentUser.uid), {
-    phone: currentUser.phoneNumber,
-    name,
-    address
-  });
+  if (!name || !address) {
+    alert("Please fill all details");
+    return;
+  }
 
-  await addDoc(collection(db, "bookings"), {
-    serviceType,
-    customerName: name,
-    address,
-    phone: currentUser.phoneNumber,
-    status: "pending",
-    createdAt: new Date()
-  });
+  try {
 
-  document.getElementById("bookingSection").classList.add("hidden");
-  document.getElementById("successMsg").classList.remove("hidden");
+    await setDoc(doc(db, "users", currentUser.uid), {
+      phone: currentUser.phoneNumber,
+      name,
+      address
+    });
+
+    await addDoc(collection(db, "bookings"), {
+      serviceType,
+      customerName: name,
+      address,
+      phone: currentUser.phoneNumber,
+      status: "pending",
+      createdAt: new Date()
+    });
+
+    document.getElementById("bookingSection").classList.add("hidden");
+    document.getElementById("successMsg").classList.remove("hidden");
+
+  } catch (error) {
+    alert("Booking failed: " + error.message);
+  }
 };
 </script>
 

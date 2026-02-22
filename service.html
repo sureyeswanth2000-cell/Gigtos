@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Book Service - Gigto</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: #f8fafc;
+    }
+
+    header {
+      background: linear-gradient(90deg, #4f46e5, #06b6d4);
+      padding: 18px;
+      color: white;
+      text-align: center;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: auto;
+      padding: 20px;
+    }
+
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+    }
+
+    h2 {
+      margin-top: 0;
+    }
+
+    .price {
+      background: #e0f2fe;
+      color: #0284c7;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      display: inline-block;
+      margin-bottom: 15px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      background: #4f46e5;
+      color: white;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: #6c757d;
+      margin-top: 10px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .success {
+      color: green;
+      text-align: center;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  Gigto Booking
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <h2 id="serviceTitle"></h2>
+    <div class="price">₹200 Visiting Charge</div>
+  </div>
+
+  <!-- STEP 1 PHONE -->
+  <div class="card" id="phoneSection">
+    <h3>Enter Phone Number</h3>
+    <input type="text" id="phone" placeholder="+91XXXXXXXXXX">
+    <div id="recaptcha-container"></div>
+    <button onclick="sendOTP()">Send OTP</button>
+  </div>
+
+  <!-- STEP 2 OTP -->
+  <div class="card hidden" id="otpSection">
+    <h3>Enter OTP</h3>
+    <input type="text" id="otp" placeholder="Enter OTP">
+    <button onclick="verifyOTP()">Verify OTP</button>
+  </div>
+
+  <!-- STEP 3 BOOKING FORM -->
+  <div class="card hidden" id="bookingSection">
+    <h3>Booking Details</h3>
+    <input type="text" id="customerName" placeholder="Your Name">
+    <input type="text" id="address" placeholder="Your Address in Kavali">
+    <button onclick="confirmBooking()">Confirm Booking</button>
+  </div>
+
+  <div class="success hidden" id="successMsg">
+    ✅ Booking Submitted Successfully!  
+    Our local admin will assign a worker shortly.
+  </div>
+
+</div>
+
+<script type="module">
+import { auth, db } from "./firebase.js";
+import { 
+  RecaptchaVerifier,
+  signInWithPhoneNumber 
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { 
+  collection, 
+  addDoc 
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+let confirmationResult;
+let currentUser;
+let serviceType;
+
+// GET SERVICE TYPE FROM URL
+const params = new URLSearchParams(window.location.search);
+serviceType = params.get("type") || "Service";
+document.getElementById("serviceTitle").innerText = serviceType;
+
+// INIT RECAPTCHA
+window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+  size: 'normal',
+  callback: () => {}
+});
+
+// SEND OTP
+window.sendOTP = async function() {
+
+  const phone = document.getElementById("phone").value;
+
+  if (!phone.startsWith("+91")) {
+    alert("Enter phone with country code. Example: +91XXXXXXXXXX");
+    return;
+  }
+
+  try {
+    confirmationResult = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
+    document.getElementById("phoneSection").classList.add("hidden");
+    document.getElementById("otpSection").classList.remove("hidden");
+  } catch (error) {
+    alert("Error sending OTP: " + error.message);
+  }
+};
+
+// VERIFY OTP
+window.verifyOTP = async function() {
+
+  const otp = document.getElementById("otp").value;
+
+  try {
+    const result = await confirmationResult.confirm(otp);
+    currentUser = result.user;
+
+    document.getElementById("otpSection").classList.add("hidden");
+    document.getElementById("bookingSection").classList.remove("hidden");
+
+  } catch (error) {
+    alert("Invalid OTP");
+  }
+};
+
+// CONFIRM BOOKING
+window.confirmBooking = async function() {
+
+  const name = document.getElementById("customerName").value;
+  const address = document.getElementById("address").value;
+
+  if (!name || !address) {
+    alert("Fill all details");
+    return;
+  }
+
+  try {
+    await addDoc(collection(db, "bookings"), {
+      serviceType: serviceType,
+      customerName: name,
+      address: address,
+      phone: currentUser.phoneNumber,
+      status: "pending",
+      createdAt: new Date()
+    });
+
+    document.getElementById("bookingSection").classList.add("hidden");
+    document.getElementById("successMsg").classList.remove("hidden");
+
+  } catch (error) {
+    alert("Error booking service");
+  }
+};
+</script>
+
+</body>
+</html>

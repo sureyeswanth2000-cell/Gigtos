@@ -14,20 +14,57 @@
 
     header {
       background: linear-gradient(90deg, #4f46e5, #06b6d4);
-      padding: 18px;
+      padding: 15px;
       color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .menu-icon {
       font-size: 22px;
+      cursor: pointer;
+    }
+
+    .logo {
+      font-size: 20px;
       font-weight: bold;
-      text-align: center;
+      cursor: pointer;
+    }
+
+    .profile {
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .side-menu {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 230px;
+      height: 100%;
+      background: white;
+      box-shadow: 4px 0 12px rgba(0,0,0,0.1);
+      padding-top: 60px;
+      display: flex;
+      flex-direction: column;
+      z-index: 1000;
+    }
+
+    .side-menu a {
+      padding: 15px 20px;
+      text-decoration: none;
+      color: #333;
+      border-bottom: 1px solid #eee;
+    }
+
+    .hidden {
+      display: none;
     }
 
     .hero {
       text-align: center;
       padding: 40px 20px 20px;
-    }
-
-    .hero h1 {
-      font-size: 26px;
     }
 
     .search-box {
@@ -40,7 +77,6 @@
       padding: 12px;
       border-radius: 12px;
       border: 1px solid #ddd;
-      font-size: 14px;
     }
 
     .services {
@@ -56,11 +92,6 @@
       margin-bottom: 20px;
       box-shadow: 0 6px 18px rgba(0,0,0,0.08);
       text-align: center;
-    }
-
-    .icon {
-      font-size: 40px;
-      margin-bottom: 10px;
     }
 
     .price {
@@ -95,8 +126,17 @@
 <body>
 
 <header>
-  Gigto – Services in Kavali
+  <div class="menu-icon" onclick="toggleMenu()">☰</div>
+  <div class="logo" onclick="goHome()">Gigto</div>
+  <div id="profileSection" class="profile hidden"></div>
 </header>
+
+<div id="sideMenu" class="side-menu hidden">
+  <a href="index.html">Home</a>
+  <a href="#">My Bookings</a>
+  <a href="#">Contact</a>
+  <a href="#">Workers</a>
+</div>
 
 <div class="hero">
   <h1>Home Services in Kavali</h1>
@@ -104,23 +144,21 @@
 </div>
 
 <div class="search-box">
-  <input type="text" id="searchInput" placeholder="Search service (Plumber, Electrician)" oninput="filterServices()">
+  <input type="text" id="searchInput" placeholder="Search service" oninput="filterServices()">
 </div>
 
 <div class="services" id="servicesContainer">
 
   <div class="card" data-name="plumber">
-    <div class="icon">🧰</div>
-    <h3>Plumber</h3>
+    <h3>🧰 Plumber</h3>
     <div class="price">₹200 Visiting Charge</div><br>
-    <a href="service.html?type=Plumber" class="book-btn">Book Plumber</a>
+    <a href="service.html?type=Plumber" class="book-btn">Book</a>
   </div>
 
   <div class="card" data-name="electrician">
-    <div class="icon">⚡</div>
-    <h3>Electrician</h3>
+    <h3>⚡ Electrician</h3>
     <div class="price">₹200 Visiting Charge</div><br>
-    <a href="service.html?type=Electrician" class="book-btn">Book Electrician</a>
+    <a href="service.html?type=Electrician" class="book-btn">Book</a>
   </div>
 
 </div>
@@ -129,20 +167,43 @@
   © 2026 Gigto – Home Services in Kavali
 </footer>
 
-<script>
-function filterServices() {
+<script type="module">
+import { auth } from "./firebase.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+window.toggleMenu = function() {
+  document.getElementById("sideMenu").classList.toggle("hidden");
+};
+
+window.goHome = function() {
+  window.location.href = "index.html";
+};
+
+window.filterServices = function() {
   const input = document.getElementById("searchInput").value.toLowerCase();
   const cards = document.querySelectorAll(".card");
 
   cards.forEach(card => {
     const name = card.getAttribute("data-name");
-    if (name.includes(input)) {
-      card.style.display = "block";
-    } else {
-      card.style.display = "none";
-    }
+    card.style.display = name.includes(input) ? "block" : "none";
   });
-}
+};
+
+onAuthStateChanged(auth, (user) => {
+  const profile = document.getElementById("profileSection");
+
+  if (user) {
+    profile.innerText = user.phoneNumber;
+    profile.classList.remove("hidden");
+
+    profile.onclick = async () => {
+      if (confirm("Logout?")) {
+        await signOut(auth);
+        location.reload();
+      }
+    };
+  }
+});
 </script>
 
 </body>

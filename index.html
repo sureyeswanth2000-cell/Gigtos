@@ -170,7 +170,10 @@
 <script type="module">
 import { auth } from "./firebase.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
+import { auth, db } from "./firebase.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  
 window.toggleMenu = function() {
   document.getElementById("sideMenu").classList.toggle("hidden");
 };
@@ -189,19 +192,31 @@ window.filterServices = function() {
   });
 };
 
-onAuthStateChanged(auth, (user) => {
+
+onAuthStateChanged(auth, async (user) => {
+
   const profile = document.getElementById("profileSection");
 
   if (user) {
-    profile.innerText = user.phoneNumber;
+
+    const userRef = doc(db, "users", user.uid);
+    const snap = await getDoc(userRef);
+
+    let displayName = user.phoneNumber;
+
+    if (snap.exists() && snap.data().name) {
+      displayName = snap.data().name;
+    }
+
+    profile.innerText = "👤 " + displayName;
     profile.classList.remove("hidden");
 
-    profile.onclick = async () => {
-      if (confirm("Logout?")) {
-        await signOut(auth);
-        location.reload();
-      }
+    profile.onclick = () => {
+      window.location.href = "profile.html";
     };
+
+  }
+});
   }
 });
 </script>

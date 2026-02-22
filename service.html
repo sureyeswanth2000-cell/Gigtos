@@ -15,9 +15,16 @@
       background: linear-gradient(90deg, #4f46e5, #06b6d4);
       padding: 18px;
       color: white;
-      text-align: center;
       font-size: 20px;
       font-weight: bold;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .profile {
+      font-size: 13px;
+      cursor: pointer;
     }
 
     .container {
@@ -32,10 +39,6 @@
       border-radius: 16px;
       box-shadow: 0 6px 18px rgba(0,0,0,0.08);
       margin-bottom: 20px;
-    }
-
-    h2 {
-      margin-top: 0;
     }
 
     .price {
@@ -65,13 +68,7 @@
       background: #4f46e5;
       color: white;
       font-size: 15px;
-      font-weight: 500;
       cursor: pointer;
-    }
-
-    button.secondary {
-      background: #6c757d;
-      margin-top: 10px;
     }
 
     .hidden {
@@ -81,8 +78,8 @@
     .success {
       color: green;
       text-align: center;
-      margin-top: 15px;
       font-weight: bold;
+      margin-top: 15px;
     }
   </style>
 </head>
@@ -90,18 +87,18 @@
 <body>
 
 <header>
-  Gigto Booking
+  <div>Gigto Booking</div>
+  <div id="profileSection" class="profile hidden"></div>
 </header>
 
 <div class="container">
 
-  <!-- Service Info -->
   <div class="card">
     <h2 id="serviceTitle"></h2>
     <div class="price">₹200 Visiting Charge</div>
   </div>
 
-  <!-- STEP 1: PHONE -->
+  <!-- PHONE -->
   <div class="card" id="phoneSection">
     <h3>Enter Mobile Number</h3>
     <input type="text" id="phone" placeholder="Enter 10 digit mobile number">
@@ -109,14 +106,14 @@
     <button onclick="sendOTP()">Send OTP</button>
   </div>
 
-  <!-- STEP 2: OTP -->
+  <!-- OTP -->
   <div class="card hidden" id="otpSection">
     <h3>Enter OTP</h3>
     <input type="text" id="otp" placeholder="Enter OTP">
     <button onclick="verifyOTP()">Verify OTP</button>
   </div>
 
-  <!-- STEP 3: BOOKING -->
+  <!-- BOOKING -->
   <div class="card hidden" id="bookingSection">
     <h3>Booking Details</h3>
     <input type="text" id="customerName" placeholder="Your Name">
@@ -125,38 +122,69 @@
   </div>
 
   <div class="success hidden" id="successMsg">
-    ✅ Booking Submitted Successfully!  
-    Local admin will assign worker soon.
+    ✅ Booking Submitted Successfully!
   </div>
 
 </div>
 
 <script type="module">
 import { auth, db } from "./firebase.js";
-import { 
+import {
   RecaptchaVerifier,
-  signInWithPhoneNumber 
+  signInWithPhoneNumber,
+  onAuthStateChanged,
+  signOut
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { 
-  collection, 
-  addDoc 
+
+import {
+  collection,
+  addDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let confirmationResult;
 let currentUser;
 let serviceType;
 
-// Get service type from URL
+// Get service type
 const params = new URLSearchParams(window.location.search);
 serviceType = params.get("type") || "Service";
 document.getElementById("serviceTitle").innerText = serviceType;
 
-// Initialize reCAPTCHA
+// Auth listener (🔥 important)
+onAuthStateChanged(auth, (user) => {
+
+  if (user) {
+    currentUser = user;
+
+    // Show profile
+    const profile = document.getElementById("profileSection");
+    profile.innerText = user.phoneNumber;
+    profile.classList.remove("hidden");
+
+    profile.onclick = async () => {
+      if (confirm("Logout?")) {
+        await signOut(auth);
+        location.reload();
+      }
+    };
+
+    // Skip login steps
+    document.getElementById("phoneSection").classList.add("hidden");
+    document.getElementById("otpSection").classList.add("hidden");
+    document.getElementById("bookingSection").classList.remove("hidden");
+
+  } else {
+    document.getElementById("profileSection").classList.add("hidden");
+    document.getElementById("phoneSection").classList.remove("hidden");
+  }
+});
+
+// Init Recaptcha
 window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
   size: 'normal'
 });
 
-// SEND OTP
+// Send OTP
 window.sendOTP = async function() {
 
   let phone = document.getElementById("phone").value.trim();
@@ -175,19 +203,14 @@ window.sendOTP = async function() {
     document.getElementById("otpSection").classList.remove("hidden");
 
   } catch (error) {
-    alert("Error sending OTP: " + error.message);
+    alert(error.message);
   }
 };
 
-// VERIFY OTP
+// Verify OTP
 window.verifyOTP = async function() {
 
   const otp = document.getElementById("otp").value;
-
-  if (!otp) {
-    alert("Enter OTP");
-    return;
-  }
 
   try {
     const result = await confirmationResult.confirm(otp);
@@ -201,7 +224,7 @@ window.verifyOTP = async function() {
   }
 };
 
-// CONFIRM BOOKING
+// Confirm Booking
 window.confirmBooking = async function() {
 
   const name = document.getElementById("customerName").value.trim();
@@ -214,9 +237,9 @@ window.confirmBooking = async function() {
 
   try {
     await addDoc(collection(db, "bookings"), {
-      serviceType: serviceType,
+      serviceType,
       customerName: name,
-      address: address,
+      address,
       phone: currentUser.phoneNumber,
       status: "pending",
       createdAt: new Date()
@@ -226,7 +249,7 @@ window.confirmBooking = async function() {
     document.getElementById("successMsg").classList.remove("hidden");
 
   } catch (error) {
-    alert("Error saving booking");
+    alert(error.message);
   }
 };
 </script>

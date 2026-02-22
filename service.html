@@ -5,120 +5,73 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background: #f4f7fb;
-    }
+    body { margin:0; font-family:'Segoe UI'; background:#f4f7fb; }
 
-    /* HEADER */
     header {
       background: linear-gradient(90deg, #4f46e5, #06b6d4);
       padding: 15px;
       color: white;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: relative;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
     }
 
-    .menu-icon {
-      font-size: 22px;
-      cursor: pointer;
-    }
+    .menu-icon { font-size:22px; cursor:pointer; }
+    .logo { font-size:20px; font-weight:bold; cursor:pointer; }
+    .profile { font-size:13px; cursor:pointer; }
 
-    .logo {
-      font-size: 20px;
-      font-weight: bold;
-      cursor: pointer;
-    }
+    .hidden { display:none; }
 
-    .profile {
-      font-size: 13px;
-      cursor: pointer;
-    }
-
-    /* SIDE MENU */
     .side-menu {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 230px;
-      height: 100%;
-      background: white;
-      box-shadow: 4px 0 12px rgba(0,0,0,0.1);
-      padding-top: 60px;
-      display: flex;
-      flex-direction: column;
-      z-index: 1000;
+      position:fixed;
+      top:0;
+      left:0;
+      width:230px;
+      height:100%;
+      background:white;
+      box-shadow:4px 0 12px rgba(0,0,0,0.1);
+      padding-top:60px;
+      display:flex;
+      flex-direction:column;
+      z-index:1000;
     }
 
     .side-menu a {
-      padding: 15px 20px;
-      text-decoration: none;
-      color: #333;
-      font-weight: 500;
-      border-bottom: 1px solid #eee;
+      padding:15px 20px;
+      text-decoration:none;
+      color:#333;
+      border-bottom:1px solid #eee;
     }
 
-    .side-menu a:hover {
-      background: #f0f4ff;
-    }
-
-    .hidden {
-      display: none;
-    }
-
-    .container {
-      max-width: 500px;
-      margin: auto;
-      padding: 20px;
-    }
+    .container { max-width:500px; margin:auto; padding:20px; }
 
     .card {
-      background: white;
-      padding: 20px;
-      border-radius: 16px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
-      margin-bottom: 20px;
-    }
-
-    .price {
-      background: #e0f2fe;
-      color: #0284c7;
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 13px;
-      display: inline-block;
-      margin-bottom: 15px;
+      background:white;
+      padding:20px;
+      border-radius:16px;
+      box-shadow:0 6px 18px rgba(0,0,0,0.08);
+      margin-bottom:20px;
     }
 
     input {
-      width: 100%;
-      padding: 12px;
-      border-radius: 10px;
-      border: 1px solid #ddd;
-      margin-bottom: 12px;
-      font-size: 14px;
+      width:100%;
+      padding:12px;
+      border-radius:10px;
+      border:1px solid #ddd;
+      margin-bottom:12px;
     }
 
     button {
-      width: 100%;
-      padding: 12px;
-      border-radius: 10px;
-      border: none;
-      background: #4f46e5;
-      color: white;
-      font-size: 15px;
-      cursor: pointer;
+      width:100%;
+      padding:12px;
+      border:none;
+      border-radius:10px;
+      background:#4f46e5;
+      color:white;
+      cursor:pointer;
     }
 
-    .success {
-      color: green;
-      text-align: center;
-      font-weight: bold;
-      margin-top: 15px;
-    }
+    .success { color:green; text-align:center; font-weight:bold; }
   </style>
 </head>
 
@@ -130,46 +83,36 @@
   <div id="profileSection" class="profile hidden"></div>
 </header>
 
-<!-- SIDE NAVIGATION -->
 <div id="sideMenu" class="side-menu hidden">
   <a href="index.html">Home</a>
-  <a href="#">My Bookings</a>
-  <a href="#">Contact</a>
-  <a href="#">Workers</a>
 </div>
 
 <div class="container">
 
   <div class="card">
     <h2 id="serviceTitle"></h2>
-    <div class="price">₹200 Visiting Charge</div>
+    <p>₹200 Visiting Charge</p>
   </div>
 
-  <!-- PHONE -->
   <div class="card" id="phoneSection">
-    <h3>Enter Mobile Number</h3>
-    <input type="text" id="phone" placeholder="Enter 10 digit mobile number">
+    <input type="text" id="phone" placeholder="10 digit mobile number">
     <div id="recaptcha-container"></div>
     <button onclick="sendOTP()">Send OTP</button>
   </div>
 
-  <!-- OTP -->
   <div class="card hidden" id="otpSection">
-    <h3>Enter OTP</h3>
     <input type="text" id="otp" placeholder="Enter OTP">
     <button onclick="verifyOTP()">Verify OTP</button>
   </div>
 
-  <!-- BOOKING -->
   <div class="card hidden" id="bookingSection">
-    <h3>Booking Details</h3>
     <input type="text" id="customerName" placeholder="Your Name">
-    <input type="text" id="address" placeholder="Your Address in Kavali">
+    <input type="text" id="address" placeholder="Your Address">
     <button onclick="confirmBooking()">Confirm Booking</button>
   </div>
 
-  <div class="success hidden" id="successMsg">
-    ✅ Booking Submitted Successfully!
+  <div id="successMsg" class="success hidden">
+    Booking Submitted Successfully!
   </div>
 
 </div>
@@ -185,19 +128,19 @@ import {
 
 import {
   collection,
-  addDoc
+  addDoc,
+  doc,
+  getDoc,
+  setDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let confirmationResult;
 let currentUser;
-let serviceType;
 
-// Get service type
 const params = new URLSearchParams(window.location.search);
-serviceType = params.get("type") || "Service";
+const serviceType = params.get("type") || "Service";
 document.getElementById("serviceTitle").innerText = serviceType;
 
-// Toggle menu
 window.toggleMenu = function() {
   document.getElementById("sideMenu").classList.toggle("hidden");
 };
@@ -206,8 +149,7 @@ window.goHome = function() {
   window.location.href = "index.html";
 };
 
-// Auth listener
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
 
   if (user) {
     currentUser = user;
@@ -227,80 +169,61 @@ onAuthStateChanged(auth, (user) => {
     document.getElementById("otpSection").classList.add("hidden");
     document.getElementById("bookingSection").classList.remove("hidden");
 
-  } else {
-    document.getElementById("profileSection").classList.add("hidden");
-    document.getElementById("phoneSection").classList.remove("hidden");
+    // Auto-fill user
+    const userRef = doc(db, "users", user.uid);
+    const snap = await getDoc(userRef);
+
+    if (snap.exists()) {
+      document.getElementById("customerName").value = snap.data().name || "";
+      document.getElementById("address").value = snap.data().address || "";
+    }
+
   }
 });
 
-// Init Recaptcha
 window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
   size: 'normal'
 });
 
-// Send OTP
 window.sendOTP = async function() {
-
   let phone = document.getElementById("phone").value.trim();
-
-  if (phone.length !== 10 || isNaN(phone)) {
-    alert("Enter valid 10 digit mobile number");
-    return;
-  }
-
+  if (phone.length !== 10) return alert("Invalid number");
   phone = "+91" + phone;
-
-  try {
-    confirmationResult = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
-    document.getElementById("phoneSection").classList.add("hidden");
-    document.getElementById("otpSection").classList.remove("hidden");
-  } catch (error) {
-    alert(error.message);
-  }
+  confirmationResult = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
+  document.getElementById("phoneSection").classList.add("hidden");
+  document.getElementById("otpSection").classList.remove("hidden");
 };
 
-// Verify OTP
 window.verifyOTP = async function() {
-
   const otp = document.getElementById("otp").value;
-
-  try {
-    const result = await confirmationResult.confirm(otp);
-    currentUser = result.user;
-    document.getElementById("otpSection").classList.add("hidden");
-    document.getElementById("bookingSection").classList.remove("hidden");
-  } catch (error) {
-    alert("Invalid OTP");
-  }
+  const result = await confirmationResult.confirm(otp);
+  currentUser = result.user;
+  document.getElementById("otpSection").classList.add("hidden");
+  document.getElementById("bookingSection").classList.remove("hidden");
 };
 
-// Confirm Booking
 window.confirmBooking = async function() {
 
   const name = document.getElementById("customerName").value.trim();
   const address = document.getElementById("address").value.trim();
 
-  if (!name || !address) {
-    alert("Fill all details");
-    return;
-  }
+  await setDoc(doc(db, "users", currentUser.uid), {
+    phone: currentUser.phoneNumber,
+    name,
+    address
+  });
 
-  try {
-    await addDoc(collection(db, "bookings"), {
-      serviceType,
-      customerName: name,
-      address,
-      phone: currentUser.phoneNumber,
-      status: "pending",
-      createdAt: new Date()
-    });
+  await addDoc(collection(db, "bookings"), {
+    serviceType,
+    customerName: name,
+    address,
+    phone: currentUser.phoneNumber,
+    status: "pending",
+    createdAt: new Date()
+  });
 
-    document.getElementById("bookingSection").classList.add("hidden");
-    document.getElementById("successMsg").classList.remove("hidden");
-
-  } catch (error) {
-    alert(error.message);
-  }
+  document.getElementById("bookingSection").classList.add("hidden");
+  document.getElementById("successMsg").classList.remove("hidden");
 };
 </script>
 

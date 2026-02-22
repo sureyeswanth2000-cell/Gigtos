@@ -8,7 +8,7 @@
     body {
       margin: 0;
       font-family: 'Segoe UI', sans-serif;
-      background: #f8fafc;
+      background: #f4f7fb;
     }
 
     header {
@@ -82,6 +82,7 @@
       color: green;
       text-align: center;
       margin-top: 15px;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -94,27 +95,28 @@
 
 <div class="container">
 
+  <!-- Service Info -->
   <div class="card">
     <h2 id="serviceTitle"></h2>
     <div class="price">₹200 Visiting Charge</div>
   </div>
 
-  <!-- STEP 1 PHONE -->
+  <!-- STEP 1: PHONE -->
   <div class="card" id="phoneSection">
-    <h3>Enter Phone Number</h3>
-    <input type="text" id="phone" placeholder="+91XXXXXXXXXX">
+    <h3>Enter Mobile Number</h3>
+    <input type="text" id="phone" placeholder="Enter 10 digit mobile number">
     <div id="recaptcha-container"></div>
     <button onclick="sendOTP()">Send OTP</button>
   </div>
 
-  <!-- STEP 2 OTP -->
+  <!-- STEP 2: OTP -->
   <div class="card hidden" id="otpSection">
     <h3>Enter OTP</h3>
     <input type="text" id="otp" placeholder="Enter OTP">
     <button onclick="verifyOTP()">Verify OTP</button>
   </div>
 
-  <!-- STEP 3 BOOKING FORM -->
+  <!-- STEP 3: BOOKING -->
   <div class="card hidden" id="bookingSection">
     <h3>Booking Details</h3>
     <input type="text" id="customerName" placeholder="Your Name">
@@ -124,7 +126,7 @@
 
   <div class="success hidden" id="successMsg">
     ✅ Booking Submitted Successfully!  
-    Our local admin will assign a worker shortly.
+    Local admin will assign worker soon.
   </div>
 
 </div>
@@ -144,31 +146,34 @@ let confirmationResult;
 let currentUser;
 let serviceType;
 
-// GET SERVICE TYPE FROM URL
+// Get service type from URL
 const params = new URLSearchParams(window.location.search);
 serviceType = params.get("type") || "Service";
 document.getElementById("serviceTitle").innerText = serviceType;
 
-// INIT RECAPTCHA
+// Initialize reCAPTCHA
 window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-  size: 'normal',
-  callback: () => {}
+  size: 'normal'
 });
 
 // SEND OTP
 window.sendOTP = async function() {
 
-  const phone = document.getElementById("phone").value;
+  let phone = document.getElementById("phone").value.trim();
 
-  if (!phone.startsWith("+91")) {
-    alert("Enter phone with country code. Example: +91XXXXXXXXXX");
+  if (phone.length !== 10 || isNaN(phone)) {
+    alert("Enter valid 10 digit mobile number");
     return;
   }
 
+  phone = "+91" + phone;
+
   try {
     confirmationResult = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
+
     document.getElementById("phoneSection").classList.add("hidden");
     document.getElementById("otpSection").classList.remove("hidden");
+
   } catch (error) {
     alert("Error sending OTP: " + error.message);
   }
@@ -178,6 +183,11 @@ window.sendOTP = async function() {
 window.verifyOTP = async function() {
 
   const otp = document.getElementById("otp").value;
+
+  if (!otp) {
+    alert("Enter OTP");
+    return;
+  }
 
   try {
     const result = await confirmationResult.confirm(otp);
@@ -194,8 +204,8 @@ window.verifyOTP = async function() {
 // CONFIRM BOOKING
 window.confirmBooking = async function() {
 
-  const name = document.getElementById("customerName").value;
-  const address = document.getElementById("address").value;
+  const name = document.getElementById("customerName").value.trim();
+  const address = document.getElementById("address").value.trim();
 
   if (!name || !address) {
     alert("Fill all details");
@@ -216,7 +226,7 @@ window.confirmBooking = async function() {
     document.getElementById("successMsg").classList.remove("hidden");
 
   } catch (error) {
-    alert("Error booking service");
+    alert("Error saving booking");
   }
 };
 </script>

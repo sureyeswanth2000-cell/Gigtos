@@ -5,8 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
-    body { margin:0; font-family:'Segoe UI'; background:#f4f7fb; }
+    body {
+      margin:0;
+      font-family:'Segoe UI', sans-serif;
+      background:#f4f7fb;
+    }
 
+    /* HEADER */
     header {
       background: linear-gradient(90deg,#4f46e5,#06b6d4);
       padding:15px;
@@ -17,9 +22,10 @@
     }
 
     .menu-icon { font-size:22px; cursor:pointer; }
-    .logo { font-weight:bold; cursor:pointer; }
+    .logo { font-weight:bold; font-size:18px; cursor:pointer; }
     .profile { font-size:13px; }
 
+    /* MENU */
     .side-menu {
       position:fixed;
       top:0;
@@ -27,7 +33,7 @@
       width:230px;
       height:100%;
       background:white;
-      box-shadow:4px 0 12px rgba(0,0,0,0.1);
+      box-shadow:4px 0 12px rgba(0,0,0,0.15);
       padding-top:60px;
       display:flex;
       flex-direction:column;
@@ -42,6 +48,7 @@
       text-decoration:none;
       color:#333;
       border-bottom:1px solid #eee;
+      font-weight:500;
     }
 
     #overlay {
@@ -57,57 +64,97 @@
 
     #overlay.show { display:block; }
 
-    .container { max-width:600px; margin:auto; padding:20px; }
+    .container {
+      max-width:600px;
+      margin:auto;
+      padding:20px;
+    }
 
     .section-title {
+      font-size:20px;
       font-weight:bold;
-      font-size:18px;
-      margin-top:20px;
-      margin-bottom:10px;
+      margin-top:25px;
+      margin-bottom:5px;
     }
 
     .count {
       font-size:13px;
       color:#666;
-      margin-bottom:10px;
+      margin-bottom:15px;
     }
 
+    /* CARD */
     .card {
       background:white;
-      padding:15px;
-      border-radius:12px;
-      box-shadow:0 4px 12px rgba(0,0,0,0.08);
-      margin-bottom:15px;
+      padding:18px;
+      border-radius:16px;
+      box-shadow:0 8px 20px rgba(0,0,0,0.08);
+      margin-bottom:18px;
       cursor:pointer;
+      transition:0.2s;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+    }
+
+    .badge {
+      display:inline-block;
+      padding:4px 10px;
+      border-radius:20px;
+      font-size:12px;
+      font-weight:bold;
+      margin-bottom:8px;
+    }
+
+    .pending { background:#fff4e5; color:#e67e22; }
+    .assigned { background:#e0f2fe; color:#0284c7; }
+    .in_progress { background:#f3e8ff; color:#9333ea; }
+    .completed { background:#e6f4ea; color:#1e7e34; }
+    .cancelled { background:#fdecea; color:#b02a37; }
+
+    .service {
+      font-size:16px;
+      font-weight:600;
+      margin-bottom:5px;
+    }
+
+    .address {
+      font-size:13px;
+      color:#555;
+    }
+
+    .time {
+      font-size:12px;
+      color:#777;
+      margin-top:6px;
     }
 
     .details {
+      margin-top:10px;
       font-size:13px;
       color:#555;
-      margin-top:8px;
       display:none;
+      border-top:1px solid #eee;
+      padding-top:10px;
     }
 
-    .status { font-weight:bold; margin-bottom:5px; }
-
-    .pending { color:orange; }
-    .assigned { color:#0284c7; }
-    .in_progress { color:#9333ea; }
-    .completed { color:green; }
-    .cancelled { color:red; }
-
-    button {
-      margin-top:8px;
-      padding:6px 10px;
+    .cancel-btn {
+      margin-top:10px;
+      padding:6px 12px;
       border:none;
-      border-radius:6px;
+      border-radius:8px;
       background:#dc2626;
       color:white;
       font-size:12px;
       cursor:pointer;
     }
 
-    .empty { text-align:center; color:#777; margin-top:15px; }
+    .empty {
+      text-align:center;
+      color:#777;
+      margin-top:20px;
+    }
   </style>
 </head>
 
@@ -200,16 +247,18 @@ async function loadBookings() {
     const data = docSnap.data();
     const status = data.status;
 
+    const createdTime = data.createdAt?.seconds
+      ? new Date(data.createdAt.seconds * 1000).toLocaleString()
+      : "Time unavailable";
+
     const card = document.createElement("div");
     card.classList.add("card");
 
     card.innerHTML = `
-      <div class="status ${status}">${status.toUpperCase()}</div>
-      <div><b>${data.serviceType}</b></div>
-      <div>${data.address}</div>
-      <div style="font-size:12px;color:#777;">
-        ${new Date(data.createdAt.seconds * 1000).toLocaleString()}
-      </div>
+      <div class="badge ${status}">${formatStatus(status)}</div>
+      <div class="service">${data.serviceType}</div>
+      <div class="address">${data.address}</div>
+      <div class="time">${createdTime}</div>
       <div class="details">
         Phone: ${data.phone}<br>
         Booking ID: ${docSnap.id}
@@ -225,6 +274,7 @@ async function loadBookings() {
     // Cancel button
     if (status === "pending") {
       const cancelBtn = document.createElement("button");
+      cancelBtn.classList.add("cancel-btn");
       cancelBtn.innerText = "Cancel Booking";
       cancelBtn.onclick = async (e) => {
         e.stopPropagation();
@@ -248,6 +298,17 @@ async function loadBookings() {
 
   document.getElementById("activeCount").innerText = activeCount + " active booking(s)";
   document.getElementById("historyCount").innerText = historyCount + " completed / cancelled";
+}
+
+function formatStatus(status) {
+  switch(status) {
+    case "pending": return "🟡 Waiting for Assignment";
+    case "assigned": return "🔵 Worker Assigned";
+    case "in_progress": return "🟣 Work In Progress";
+    case "completed": return "🟢 Completed";
+    case "cancelled": return "🔴 Cancelled";
+    default: return status;
+  }
 }
 </script>
 

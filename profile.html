@@ -1,87 +1,15 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>Profile - Gigto</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <style>
-    body {
-      margin:0;
-      font-family:'Segoe UI', sans-serif;
-      background:#f3f6fb;
-    }
-
-    header {
-      background: linear-gradient(90deg,#4f46e5,#06b6d4);
-      padding:15px;
-      color:white;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-    }
-
-    .menu-icon { font-size:22px; cursor:pointer; }
-    .logo { font-weight:bold; font-size:18px; cursor:pointer; }
-    .profile { font-size:13px; }
-
-    .container {
-      max-width:500px;
-      margin:auto;
-      padding:20px;
-    }
-
-    .card {
-      background:white;
-      padding:20px;
-      border-radius:16px;
-      box-shadow:0 6px 16px rgba(0,0,0,0.08);
-      margin-bottom:20px;
-    }
-
-    h2 {
-      margin-bottom:15px;
-    }
-
-    input {
-      width:100%;
-      padding:12px;
-      border-radius:10px;
-      border:1px solid #ddd;
-      margin-bottom:12px;
-      font-size:14px;
-    }
-
-    button {
-      width:100%;
-      padding:12px;
-      border:none;
-      border-radius:10px;
-      background:#4f46e5;
-      color:white;
-      font-size:15px;
-      cursor:pointer;
-    }
-
-    button:hover {
-      background:#4338ca;
-    }
-
-    .success {
-      margin-top:10px;
-      color:#16a34a;
-      font-size:14px;
-    }
-
-  </style>
+  <link rel="stylesheet" href="./styles/global.css">
 </head>
 
 <body>
 
-<header>
-  <div class="menu-icon" onclick="openMenu()">☰</div>
-  <div class="logo" onclick="goHome()">Gigto</div>
-  <div id="profileSection" class="profile"></div>
-</header>
+<div id="header-placeholder"></div>
 
 <div class="container">
 
@@ -102,6 +30,18 @@
 
 </div>
 
+<div id="footer-placeholder"></div>
+
+<script type="module">
+import { renderHeader } from "./components/header.js";
+import { renderFooter } from "./components/footer.js";
+import { initModal } from "./components/modal.js";
+
+renderHeader();
+renderFooter();
+initModal();
+</script>
+
 <script type="module">
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -109,15 +49,12 @@ import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/
 
 let currentUser;
 
-window.goHome = () => window.location.href = "index.html";
-
 onAuthStateChanged(auth, async (user) => {
 
   if (!user) return window.location.href = "index.html";
 
   currentUser = user;
 
-  document.getElementById("profileSection").innerText = user.phoneNumber;
   document.getElementById("phone").value = user.phoneNumber;
 
   const userRef = doc(db, "users", user.uid);
@@ -156,10 +93,7 @@ window.saveProfile = async function() {
     document.getElementById("successMsg").classList.add("hidden");
   }, 2000);
 };
-
 </script>
-
-<script type="module" src="./components/menu.js"></script>
 
 </body>
 </html>

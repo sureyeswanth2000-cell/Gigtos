@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
-    body { margin:0; font-family:'Segoe UI', sans-serif; background:#f4f7fb; }
+    body { margin:0; font-family:'Segoe UI'; background:#f4f7fb; }
 
     header {
-      background: linear-gradient(90deg, #4f46e5, #06b6d4);
+      background: linear-gradient(90deg,#4f46e5,#06b6d4);
       padding:15px;
       color:white;
       display:flex;
@@ -16,16 +16,60 @@
       align-items:center;
     }
 
-    .logo { font-size:20px; font-weight:bold; cursor:pointer; }
-    .profile { font-size:13px; cursor:pointer; }
+    .menu-icon { font-size:22px; cursor:pointer; }
+    .logo { font-weight:bold; cursor:pointer; }
+    .profile { font-size:13px; }
+
+    .side-menu {
+      position:fixed;
+      top:0;
+      left:-250px;
+      width:230px;
+      height:100%;
+      background:white;
+      box-shadow:4px 0 12px rgba(0,0,0,0.1);
+      padding-top:60px;
+      display:flex;
+      flex-direction:column;
+      transition:left 0.3s ease;
+      z-index:1000;
+    }
+
+    .side-menu.open { left:0; }
+
+    .side-menu a {
+      padding:15px 20px;
+      text-decoration:none;
+      color:#333;
+      border-bottom:1px solid #eee;
+    }
+
+    #overlay {
+      position:fixed;
+      top:0;
+      left:0;
+      width:100%;
+      height:100%;
+      background:rgba(0,0,0,0.3);
+      display:none;
+      z-index:999;
+    }
+
+    #overlay.show { display:block; }
 
     .container { max-width:600px; margin:auto; padding:20px; }
 
     .section-title {
-      margin-top:20px;
-      margin-bottom:10px;
       font-weight:bold;
       font-size:18px;
+      margin-top:20px;
+      margin-bottom:10px;
+    }
+
+    .count {
+      font-size:13px;
+      color:#666;
+      margin-bottom:10px;
     }
 
     .card {
@@ -34,13 +78,17 @@
       border-radius:12px;
       box-shadow:0 4px 12px rgba(0,0,0,0.08);
       margin-bottom:15px;
+      cursor:pointer;
     }
 
-    .status {
+    .details {
       font-size:13px;
-      font-weight:bold;
-      margin-bottom:5px;
+      color:#555;
+      margin-top:8px;
+      display:none;
     }
+
+    .status { font-weight:bold; margin-bottom:5px; }
 
     .pending { color:orange; }
     .assigned { color:#0284c7; }
@@ -49,37 +97,44 @@
     .cancelled { color:red; }
 
     button {
-      margin-top:10px;
-      padding:8px 12px;
+      margin-top:8px;
+      padding:6px 10px;
       border:none;
-      border-radius:8px;
+      border-radius:6px;
       background:#dc2626;
       color:white;
+      font-size:12px;
       cursor:pointer;
-      font-size:13px;
     }
 
-    .empty {
-      text-align:center;
-      color:#666;
-      margin-top:20px;
-    }
+    .empty { text-align:center; color:#777; margin-top:15px; }
   </style>
 </head>
 
 <body>
 
 <header>
+  <div class="menu-icon" onclick="toggleMenu()">☰</div>
   <div class="logo" onclick="goHome()">Gigto</div>
   <div id="profileSection" class="profile"></div>
 </header>
 
+<div id="overlay" onclick="closeMenu()"></div>
+
+<div id="sideMenu" class="side-menu">
+  <a href="index.html">Home</a>
+  <a href="profile.html">Profile</a>
+  <a href="my-bookings.html">My Bookings</a>
+</div>
+
 <div class="container">
 
   <div class="section-title">Active Bookings</div>
+  <div class="count" id="activeCount"></div>
   <div id="activeBookings"></div>
 
   <div class="section-title">Booking History</div>
+  <div class="count" id="historyCount"></div>
   <div id="historyBookings"></div>
 
 </div>
@@ -87,24 +142,25 @@
 <script type="module">
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  doc,
-  updateDoc,
-  orderBy
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { collection, query, where, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let currentUser;
 
-window.goHome = function() {
+window.toggleMenu = function(){
+  document.getElementById("sideMenu").classList.add("open");
+  document.getElementById("overlay").classList.add("show");
+};
+
+window.closeMenu = function(){
+  document.getElementById("sideMenu").classList.remove("open");
+  document.getElementById("overlay").classList.remove("show");
+};
+
+window.goHome = function(){
   window.location.href = "index.html";
 };
 
 onAuthStateChanged(auth, async (user) => {
-
   if (!user) {
     window.location.href = "index.html";
     return;
@@ -124,10 +180,12 @@ async function loadBookings() {
   activeDiv.innerHTML = "";
   historyDiv.innerHTML = "";
 
+  let activeCount = 0;
+  let historyCount = 0;
+
   const q = query(
     collection(db, "bookings"),
-    where("userId", "==", currentUser.uid),
-    orderBy("createdAt", "desc")
+    where("userId", "==", currentUser.uid)
   );
 
   const snapshot = await getDocs(q);
@@ -149,16 +207,27 @@ async function loadBookings() {
       <div class="status ${status}">${status.toUpperCase()}</div>
       <div><b>${data.serviceType}</b></div>
       <div>${data.address}</div>
-      <div style="font-size:12px;color:#666;">
+      <div style="font-size:12px;color:#777;">
         ${new Date(data.createdAt.seconds * 1000).toLocaleString()}
+      </div>
+      <div class="details">
+        Phone: ${data.phone}<br>
+        Booking ID: ${docSnap.id}
       </div>
     `;
 
-    // Cancel button only if pending
+    // Expand details
+    card.onclick = () => {
+      const details = card.querySelector(".details");
+      details.style.display = details.style.display === "block" ? "none" : "block";
+    };
+
+    // Cancel button
     if (status === "pending") {
       const cancelBtn = document.createElement("button");
       cancelBtn.innerText = "Cancel Booking";
-      cancelBtn.onclick = async () => {
+      cancelBtn.onclick = async (e) => {
+        e.stopPropagation();
         await updateDoc(doc(db, "bookings", docSnap.id), {
           status: "cancelled"
         });
@@ -167,14 +236,18 @@ async function loadBookings() {
       card.appendChild(cancelBtn);
     }
 
-    // Active vs History split
-    if (status === "pending" || status === "assigned" || status === "in_progress") {
+    if (["pending","assigned","in_progress"].includes(status)) {
       activeDiv.appendChild(card);
+      activeCount++;
     } else {
       historyDiv.appendChild(card);
+      historyCount++;
     }
 
   });
+
+  document.getElementById("activeCount").innerText = activeCount + " active booking(s)";
+  document.getElementById("historyCount").innerText = historyCount + " completed / cancelled";
 }
 </script>
 

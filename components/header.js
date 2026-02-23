@@ -1,5 +1,11 @@
 // components/header.js
 
+import { auth, db } from "../firebase.js";
+import { onAuthStateChanged, signOut } 
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { doc, getDoc } 
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
 export function renderHeader() {
 
   document.body.insertAdjacentHTML("afterbegin", `
@@ -10,26 +16,35 @@ export function renderHeader() {
     </header>
 
     <nav id="sideMenu" class="side-menu">
-      <div class="close-btn" onclick="toggleSideMenu()">✕</div>
-      <a href="index.html">Home</a>
-      <a href="profile.html">Profile</a>
-      <a href="my-bookings.html">My Bookings</a>
-      <a href="contact.html">Contact</a>
-      <a href="#" onclick="logout()">Logout</a>
+
+      <!-- MENU HEADER (COLORED SECTION) -->
+      <div class="menu-top">
+        <div class="menu-brand">Gigto</div>
+        <div id="menuUser" class="menu-user hidden"></div>
+        <div class="close-btn" onclick="toggleSideMenu()">✕</div>
+      </div>
+
+      <!-- MENU LINKS -->
+      <div class="menu-links">
+        <a href="index.html">🏠 Home</a>
+        <a href="profile.html">👤 Profile</a>
+        <a href="my-bookings.html">📋 My Bookings</a>
+        <a href="contact.html">📞 Contact</a>
+        <a href="#" onclick="logout()">🚪 Logout</a>
+      </div>
+
     </nav>
 
-    <div id="menuOverlay" class="menu-overlay hidden"></div>
+    <div id="menuOverlay" class="menu-overlay hidden" onclick="toggleSideMenu()"></div>
   `);
 
-  initAuthHeader(); // setup profile display
+  initAuthHeader();
 }
 
-// Toggle menu
+// Toggle
 window.toggleSideMenu = function() {
-  const menu = document.getElementById("sideMenu");
-  const overlay = document.getElementById("menuOverlay");
-  menu.classList.toggle("open");
-  overlay.classList.toggle("hidden");
+  document.getElementById("sideMenu").classList.toggle("open");
+  document.getElementById("menuOverlay").classList.toggle("hidden");
 };
 
 // Home redirect
@@ -37,27 +52,38 @@ window.goHome = function() {
   window.location.href = "index.html";
 };
 
-// Logout (clear session)
+// Logout
 window.logout = async function() {
-  await firebase.auth().signOut();
+  await signOut(auth);
   window.location.href = "index.html";
 };
 
-// Show profile info
+// Load profile into header + menu
 async function initAuthHeader() {
-  const profile = document.getElementById("headerProfile");
-  firebase.auth().onAuthStateChanged(async user => {
+
+  const headerProfile = document.getElementById("headerProfile");
+  const menuUser = document.getElementById("menuUser");
+
+  onAuthStateChanged(auth, async (user) => {
+
     if (user) {
-      // Load stored user detail
-      const docSnap = await firebase.firestore()
-                         .collection("users").doc(user.uid).get();
+
+      const userRef = doc(db, "users", user.uid);
+      const snap = await getDoc(userRef);
+
       let name = user.phoneNumber;
-      if (docSnap.exists && docSnap.data().name) {
-        name = docSnap.data().name;
+
+      if (snap.exists() && snap.data().name) {
+        name = snap.data().name;
       }
-      profile.textContent = `👤 ${name}`;
-      profile.classList.remove("hidden");
-      profile.onclick = () => window.location.href = "profile.html";
+
+      headerProfile.textContent = `👤 ${name}`;
+      headerProfile.classList.remove("hidden");
+      headerProfile.onclick = () => window.location.href = "profile.html";
+
+      menuUser.textContent = name;
+      menuUser.classList.remove("hidden");
+
     }
   });
 }

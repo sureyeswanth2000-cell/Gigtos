@@ -25,29 +25,6 @@
     .logo { font-size: 20px; font-weight: bold; cursor: pointer; }
     .profile { font-size: 13px; cursor: pointer; }
 
-    .side-menu {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 230px;
-      height: 100%;
-      background: white;
-      box-shadow: 4px 0 12px rgba(0,0,0,0.1);
-      padding-top: 60px;
-      display: flex;
-      flex-direction: column;
-      z-index: 1000;
-    }
-
-    .side-menu a {
-      padding: 15px 20px;
-      text-decoration: none;
-      color: #333;
-      border-bottom: 1px solid #eee;
-    }
-
-    .hidden { display: none; }
-
     .hero {
       text-align: center;
       padding: 40px 20px 20px;
@@ -114,14 +91,8 @@
 <header>
   <div class="menu-icon" onclick="openMenu()">☰</div>
   <div class="logo" onclick="goHome()">Gigto</div>
-  <div id="profileSection" class="profile hidden"></div>
+  <div id="profileSection" class="profile"></div>
 </header>
-
-<div id="sideMenu" class="side-menu hidden">
-  <a href="index.html">Home</a>
-  <a href="#">My Bookings</a>
-  <a href="#">Contact</a>
-</div>
 
 <div class="hero">
   <h1>Home Services in Kavali</h1>
@@ -157,10 +128,6 @@ import { auth, db } from "./firebase.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-window.toggleMenu = function() {
-  document.getElementById("sideMenu").classList.toggle("hidden");
-};
-
 window.goHome = function() {
   window.location.href = "index.html";
 };
@@ -176,29 +143,23 @@ window.filterServices = function() {
 };
 
 onAuthStateChanged(auth, async (user) => {
-
   const profile = document.getElementById("profileSection");
 
   if (user) {
-
     const userRef = doc(db, "users", user.uid);
     const snap = await getDoc(userRef);
 
     let displayName = user.phoneNumber;
-
     if (snap.exists() && snap.data().name) {
       displayName = snap.data().name;
     }
 
     profile.innerText = "👤 " + displayName;
-    profile.classList.remove("hidden");
-
-    profile.onclick = () => {
-      window.location.href = "profile.html";
-    };
+    profile.onclick = () => window.location.href = "profile.html";
   }
 });
 </script>
+
 <script type="module" src="./components/menu.js"></script>
 
 </body>

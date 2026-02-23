@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
-    body { margin:0; font-family:'Segoe UI', sans-serif; background:#f4f7fb; }
+    body { margin:0; font-family:'Segoe UI'; background:#f4f7fb; }
 
     header {
-      background: linear-gradient(90deg, #4f46e5, #06b6d4);
+      background: linear-gradient(90deg,#4f46e5,#06b6d4);
       padding:15px;
       color:white;
       display:flex;
@@ -17,45 +17,8 @@
     }
 
     .menu-icon { font-size:22px; cursor:pointer; }
-    .logo { font-size:20px; font-weight:bold; cursor:pointer; }
-    .profile { font-size:13px; cursor:pointer; }
-
-    .side-menu {
-      position: fixed;
-      top: 0;
-      left: -250px;
-      width: 230px;
-      height: 100%;
-      background: white;
-      box-shadow: 4px 0 12px rgba(0,0,0,0.1);
-      padding-top: 60px;
-      display: flex;
-      flex-direction: column;
-      z-index: 1000;
-      transition: left 0.3s ease;
-    }
-
-    .side-menu.open { left: 0; }
-
-    .side-menu a {
-      padding: 15px 20px;
-      text-decoration: none;
-      color: #333;
-      border-bottom: 1px solid #eee;
-    }
-
-    #overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.3);
-      display: none;
-      z-index: 999;
-    }
-
-    #overlay.show { display:block; }
+    .logo { font-size:18px; font-weight:bold; cursor:pointer; }
+    .profile { font-size:13px; }
 
     .container { max-width:500px; margin:auto; padding:20px; }
 
@@ -92,36 +55,16 @@
 <body>
 
 <header>
-  <div class="menu-icon" onclick="toggleMenu()">☰</div>
+  <div class="menu-icon" onclick="openMenu()">☰</div>
   <div class="logo" onclick="goHome()">Gigto</div>
-  <div id="profileSection" class="profile hidden"></div>
+  <div id="profileSection" class="profile"></div>
 </header>
-
-<div id="overlay" onclick="closeMenu()"></div>
-
-<div id="sideMenu" class="side-menu">
-  <a href="index.html">Home</a>
-  <a href="profile.html">Profile</a>
-  <a href="my-bookings.html">My Bookings</a>
-  <a href="#" onclick="logout()">Logout</a>
-</div>
 
 <div class="container">
 
   <div class="card">
     <h2 id="serviceTitle"></h2>
     <p>₹200 Visiting Charge</p>
-  </div>
-
-  <div class="card" id="phoneSection">
-    <input type="text" id="phone" placeholder="10 digit mobile number">
-    <div id="recaptcha-container"></div>
-    <button onclick="sendOTP()">Send OTP</button>
-  </div>
-
-  <div class="card hidden" id="otpSection">
-    <input type="text" id="otp" placeholder="Enter OTP">
-    <button onclick="verifyOTP()">Verify OTP</button>
   </div>
 
   <div class="card hidden" id="bookingSection">
@@ -134,154 +77,45 @@
 
 <script type="module">
 import { auth, db } from "./firebase.js";
-import {
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  onAuthStateChanged,
-  signOut
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-import {
-  collection,
-  addDoc,
-  doc,
-  getDoc,
-  setDoc
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-let confirmationResult;
 let currentUser;
-
 const params = new URLSearchParams(window.location.search);
 const serviceType = params.get("type") || "Service";
+
 document.getElementById("serviceTitle").innerText = serviceType;
+window.goHome = () => window.location.href = "index.html";
 
-/* MENU */
-window.toggleMenu = function() {
-  document.getElementById("sideMenu").classList.add("open");
-  document.getElementById("overlay").classList.add("show");
-};
-
-window.closeMenu = function() {
-  document.getElementById("sideMenu").classList.remove("open");
-  document.getElementById("overlay").classList.remove("show");
-};
-
-window.goHome = function() {
-  window.location.href = "index.html";
-};
-
-window.logout = async function() {
-  await signOut(auth);
-  window.location.href = "index.html";
-};
-
-/* AUTH */
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    currentUser = user;
-
-    const profile = document.getElementById("profileSection");
-    const userRef = doc(db, "users", user.uid);
-    const snap = await getDoc(userRef);
-
-    let displayName = user.phoneNumber;
-
-    if (snap.exists() && snap.data().name) {
-      displayName = snap.data().name;
-      document.getElementById("customerName").value = snap.data().name || "";
-      document.getElementById("address").value = snap.data().address || "";
-    }
-
-    profile.innerText = "👤 " + displayName;
-    profile.classList.remove("hidden");
-    profile.onclick = () => window.location.href = "profile.html";
-
-    document.getElementById("phoneSection").classList.add("hidden");
-    document.getElementById("otpSection").classList.add("hidden");
-    document.getElementById("bookingSection").classList.remove("hidden");
-  }
+onAuthStateChanged(auth,(user)=>{
+  if(!user) return window.location.href="index.html";
+  currentUser = user;
+  document.getElementById("profileSection").innerText = user.phoneNumber;
+  document.getElementById("bookingSection").classList.remove("hidden");
 });
 
-/* RECAPTCHA */
-window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-  size: 'normal'
-});
-
-/* OTP */
-window.sendOTP = async function() {
-  let phone = document.getElementById("phone").value.trim();
-  if (phone.length !== 10 || isNaN(phone)) {
-    alert("Enter valid 10 digit mobile number");
-    return;
-  }
-
-  phone = "+91" + phone;
-
-  try {
-    confirmationResult = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
-    document.getElementById("phoneSection").classList.add("hidden");
-    document.getElementById("otpSection").classList.remove("hidden");
-  } catch (error) {
-    alert(error.message);
-  }
-};
-
-window.verifyOTP = async function() {
-  const otp = document.getElementById("otp").value;
-  try {
-    const result = await confirmationResult.confirm(otp);
-    currentUser = result.user;
-    document.getElementById("otpSection").classList.add("hidden");
-    document.getElementById("bookingSection").classList.remove("hidden");
-  } catch {
-    alert("Invalid OTP");
-  }
-};
-
-/* BOOKING */
-window.confirmBooking = async function() {
+window.confirmBooking = async function(){
 
   const name = document.getElementById("customerName").value.trim();
   const address = document.getElementById("address").value.trim();
 
-  if (!name || !address) {
-    alert("Please fill all details");
-    return;
-  }
+  if(!name || !address) return alert("Fill all details");
 
-  try {
+  await addDoc(collection(db,"bookings"),{
+    userId: currentUser.uid,
+    serviceType,
+    customerName:name,
+    address,
+    phone: currentUser.phoneNumber,
+    status:"pending",
+    createdAt:new Date()
+  });
 
-    // Save / update user profile
-    await setDoc(doc(db, "users", currentUser.uid), {
-      phone: currentUser.phoneNumber,
-      name,
-      address,
-      updatedAt: new Date()
-    }, { merge: true });
-
-    // Create booking with professional structure
-    await addDoc(collection(db, "bookings"), {
-      userId: currentUser.uid,
-      serviceType,
-      customerName: name,
-      address,
-      phone: currentUser.phoneNumber,
-      status: "pending",
-      assignedWorkerId: null,
-      assignedAt: null,
-      completedAt: null,
-      createdAt: new Date()
-    });
-
-    // Redirect instead of success message
-    window.location.href = "my-bookings.html";
-
-  } catch (error) {
-    alert("Booking failed: " + error.message);
-  }
+  window.location.href="my-bookings.html";
 };
 </script>
+
+<script type="module" src="./components/menu.js"></script>
 
 </body>
 </html>

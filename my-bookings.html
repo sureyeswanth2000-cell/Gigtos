@@ -1,141 +1,15 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>My Bookings - Gigto</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <style>
-    body {
-      margin:0;
-      font-family:'Segoe UI', sans-serif;
-      background:#f3f6fb;
-    }
-
-    header {
-      background: linear-gradient(90deg,#4f46e5,#06b6d4);
-      padding:15px;
-      color:white;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-    }
-
-    .menu-icon { font-size:22px; cursor:pointer; }
-    .logo { font-weight:bold; font-size:18px; cursor:pointer; }
-    .profile { font-size:13px; }
-
-    .container {
-      max-width:600px;
-      margin:auto;
-      padding:20px;
-    }
-
-    .section-title {
-      font-size:20px;
-      font-weight:700;
-      margin-top:30px;
-      margin-bottom:5px;
-    }
-
-    .count {
-      font-size:13px;
-      color:#777;
-      margin-bottom:15px;
-    }
-
-    .card {
-      background:white;
-      padding:18px;
-      border-radius:16px;
-      box-shadow:0 6px 16px rgba(0,0,0,0.06);
-      margin-bottom:18px;
-      transition:0.2s;
-      cursor:pointer;
-      border-left:5px solid transparent;
-    }
-
-    .card.active-highlight {
-      border-left:5px solid #4f46e5;
-    }
-
-    .badge {
-      display:inline-block;
-      padding:4px 12px;
-      border-radius:20px;
-      font-size:12px;
-      font-weight:bold;
-      margin-bottom:8px;
-    }
-
-    .pending { background:#fff4e5; color:#e67e22; }
-    .assigned { background:#e0f2fe; color:#0284c7; }
-    .in_progress { background:#f3e8ff; color:#9333ea; }
-    .completed { background:#e6f4ea; color:#1e7e34; }
-    .cancelled { background:#fdecea; color:#b02a37; }
-
-    .service {
-      font-size:16px;
-      font-weight:600;
-      margin-bottom:5px;
-    }
-
-    .address {
-      font-size:13px;
-      color:#555;
-    }
-
-    .time {
-      font-size:12px;
-      color:#777;
-      margin-top:6px;
-    }
-
-    .details {
-      margin-top:12px;
-      font-size:13px;
-      color:#555;
-      display:none;
-      border-top:1px solid #eee;
-      padding-top:10px;
-      animation: fadeIn 0.3s ease-in-out;
-    }
-
-    @keyframes fadeIn {
-      from { opacity:0; transform:translateY(-5px); }
-      to { opacity:1; transform:translateY(0); }
-    }
-
-    .cancel-btn {
-      margin-top:12px;
-      padding:8px 14px;
-      border:none;
-      border-radius:8px;
-      background:#ef4444;
-      color:white;
-      font-size:13px;
-      cursor:pointer;
-    }
-
-    .cancel-btn:hover {
-      background:#dc2626;
-    }
-
-    .empty {
-      text-align:center;
-      color:#777;
-      margin-top:20px;
-      font-size:14px;
-    }
-  </style>
+  <link rel="stylesheet" href="./styles/global.css">
 </head>
 
 <body>
 
-<header>
-  <div class="menu-icon" onclick="openMenu()">☰</div>
-  <div class="logo" onclick="goHome()">Gigto</div>
-  <div id="profileSection" class="profile"></div>
-</header>
+<div id="header-placeholder"></div>
 
 <div class="container">
 
@@ -149,6 +23,18 @@
 
 </div>
 
+<div id="footer-placeholder"></div>
+
+<script type="module">
+import { renderHeader } from "./components/header.js";
+import { renderFooter } from "./components/footer.js";
+import { initModal } from "./components/modal.js";
+
+renderHeader();
+renderFooter();
+initModal();
+</script>
+
 <script type="module">
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -156,12 +42,9 @@ import { collection, query, where, getDocs, doc, updateDoc } from "https://www.g
 
 let currentUser;
 
-window.goHome = () => window.location.href = "index.html";
-
 onAuthStateChanged(auth, async (user) => {
   if (!user) return window.location.href = "index.html";
   currentUser = user;
-  document.getElementById("profileSection").innerText = user.phoneNumber;
   loadBookings();
 });
 
@@ -218,10 +101,13 @@ async function loadBookings() {
       const cancelBtn = document.createElement("button");
       cancelBtn.classList.add("cancel-btn");
       cancelBtn.innerText = "Cancel Booking";
-      cancelBtn.onclick = async (e) => {
+      cancelBtn.onclick = (e) => {
         e.stopPropagation();
-        await updateDoc(doc(db,"bookings",docSnap.id),{status:"cancelled"});
-        loadBookings();
+
+        openModal("Are you sure you want to cancel this booking?", async () => {
+          await updateDoc(doc(db,"bookings",docSnap.id),{status:"cancelled"});
+          loadBookings();
+        });
       };
       card.appendChild(cancelBtn);
     }
@@ -240,8 +126,6 @@ async function loadBookings() {
   document.getElementById("historyCount").innerText = historyCount + " completed / cancelled";
 }
 </script>
-
-<script type="module" src="./components/menu.js"></script>
 
 </body>
 </html>

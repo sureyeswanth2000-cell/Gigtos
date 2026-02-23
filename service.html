@@ -5,11 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
-    body {
-      margin:0;
-      font-family:'Segoe UI', sans-serif;
-      background:#f4f7fb;
-    }
+    body { margin:0; font-family:'Segoe UI', sans-serif; background:#f4f7fb; }
 
     header {
       background: linear-gradient(90deg, #4f46e5, #06b6d4);
@@ -24,7 +20,6 @@
     .logo { font-size:20px; font-weight:bold; cursor:pointer; }
     .profile { font-size:13px; cursor:pointer; }
 
-    /* SIDE MENU */
     .side-menu {
       position: fixed;
       top: 0;
@@ -40,9 +35,7 @@
       transition: left 0.3s ease;
     }
 
-    .side-menu.open {
-      left: 0;
-    }
+    .side-menu.open { left: 0; }
 
     .side-menu a {
       padding: 15px 20px;
@@ -62,9 +55,7 @@
       z-index: 999;
     }
 
-    #overlay.show {
-      display: block;
-    }
+    #overlay.show { display:block; }
 
     .container { max-width:500px; margin:auto; padding:20px; }
 
@@ -92,13 +83,6 @@
       background:#4f46e5;
       color:white;
       cursor:pointer;
-    }
-
-    .success {
-      color:green;
-      text-align:center;
-      font-weight:bold;
-      margin-top:15px;
     }
 
     .hidden { display:none; }
@@ -144,10 +128,6 @@
     <input type="text" id="customerName" placeholder="Your Name">
     <input type="text" id="address" placeholder="Your Address">
     <button onclick="confirmBooking()">Confirm Booking</button>
-  </div>
-
-  <div id="successMsg" class="success hidden">
-    ✅ Booking Submitted Successfully!
   </div>
 
 </div>
@@ -261,6 +241,7 @@ window.verifyOTP = async function() {
 
 /* BOOKING */
 window.confirmBooking = async function() {
+
   const name = document.getElementById("customerName").value.trim();
   const address = document.getElementById("address").value.trim();
 
@@ -270,23 +251,31 @@ window.confirmBooking = async function() {
   }
 
   try {
+
+    // Save / update user profile
     await setDoc(doc(db, "users", currentUser.uid), {
       phone: currentUser.phoneNumber,
       name,
-      address
-    });
+      address,
+      updatedAt: new Date()
+    }, { merge: true });
 
+    // Create booking with professional structure
     await addDoc(collection(db, "bookings"), {
+      userId: currentUser.uid,
       serviceType,
       customerName: name,
       address,
       phone: currentUser.phoneNumber,
       status: "pending",
+      assignedWorkerId: null,
+      assignedAt: null,
+      completedAt: null,
       createdAt: new Date()
     });
 
-    document.getElementById("bookingSection").classList.add("hidden");
-    document.getElementById("successMsg").classList.remove("hidden");
+    // Redirect instead of success message
+    window.location.href = "my-bookings.html";
 
   } catch (error) {
     alert("Booking failed: " + error.message);

@@ -18,7 +18,7 @@
     <p>₹200 Visiting Charge</p>
   </div>
 
-  <div class="card hidden" id="bookingSection">
+  <div class="card" id="bookingSection">
     <input type="text" id="customerName" placeholder="Your Name">
     <input type="text" id="address" placeholder="Your Address">
     <button onclick="confirmBooking()">Confirm Booking</button>
@@ -28,6 +28,7 @@
 
 <div id="footer-placeholder"></div>
 
+<!-- HEADER + FOOTER -->
 <script type="module">
 import { renderHeader } from "./components/header.js";
 import { renderFooter } from "./components/footer.js";
@@ -38,21 +39,23 @@ renderFooter();
 initModal();
 </script>
 
+<!-- BOOKING LOGIC -->
 <script type="module">
 import { auth, db } from "./firebase.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { onAuthStateChanged } from 
+"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { collection, addDoc } 
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-let currentUser;
+let currentUser = null;
+
 const params = new URLSearchParams(window.location.search);
 const serviceType = params.get("type") || "Service";
-
 document.getElementById("serviceTitle").innerText = serviceType;
 
-onAuthStateChanged(auth,(user)=>{
-  if(!user) return window.location.href="index.html";
+// Just store user if logged in (NO REDIRECT)
+onAuthStateChanged(auth, (user) => {
   currentUser = user;
-  document.getElementById("bookingSection").classList.remove("hidden");
 });
 
 window.confirmBooking = async function(){
@@ -60,18 +63,26 @@ window.confirmBooking = async function(){
   const name = document.getElementById("customerName").value.trim();
   const address = document.getElementById("address").value.trim();
 
-  if(!name || !address) return alert("Fill all details");
+  if(!name || !address){
+    alert("Fill all details");
+    return;
+  }
+
+  if(!currentUser){
+    alert("Please login before booking.");
+    return;
+  }
 
   openModal("Confirm booking for ₹200?", async () => {
 
     await addDoc(collection(db,"bookings"),{
       userId: currentUser.uid,
       serviceType,
-      customerName:name,
+      customerName: name,
       address,
       phone: currentUser.phoneNumber,
-      status:"pending",
-      createdAt:new Date()
+      status: "pending",
+      createdAt: new Date()
     });
 
     window.location.href="my-bookings.html";

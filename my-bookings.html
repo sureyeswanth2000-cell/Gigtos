@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My Bookings - Gigto</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body { margin:0; font-family:'Segoe UI', sans-serif; background:#f4f7fb; }
+
+    header {
+      background: linear-gradient(90deg, #4f46e5, #06b6d4);
+      padding:15px;
+      color:white;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+
+    .logo { font-size:20px; font-weight:bold; cursor:pointer; }
+    .profile { font-size:13px; cursor:pointer; }
+
+    .container { max-width:600px; margin:auto; padding:20px; }
+
+    .section-title {
+      margin-top:20px;
+      margin-bottom:10px;
+      font-weight:bold;
+      font-size:18px;
+    }
+
+    .card {
+      background:white;
+      padding:15px;
+      border-radius:12px;
+      box-shadow:0 4px 12px rgba(0,0,0,0.08);
+      margin-bottom:15px;
+    }
+
+    .status {
+      font-size:13px;
+      font-weight:bold;
+      margin-bottom:5px;
+    }
+
+    .pending { color:orange; }
+    .assigned { color:#0284c7; }
+    .in_progress { color:#9333ea; }
+    .completed { color:green; }
+    .cancelled { color:red; }
+
+    button {
+      margin-top:10px;
+      padding:8px 12px;
+      border:none;
+      border-radius:8px;
+      background:#dc2626;
+      color:white;
+      cursor:pointer;
+      font-size:13px;
+    }
+
+    .empty {
+      text-align:center;
+      color:#666;
+      margin-top:20px;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <div class="logo" onclick="goHome()">Gigto</div>
+  <div id="profileSection" class="profile"></div>
+</header>
+
+<div class="container">
+
+  <div class="section-title">Active Bookings</div>
+  <div id="activeBookings"></div>
+
+  <div class="section-title">Booking History</div>
+  <div id="historyBookings"></div>
+
+</div>
+
+<script type="module">
+import { auth, db } from "./firebase.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  updateDoc,
+  orderBy
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+let currentUser;
+
+window.goHome = function() {
+  window.location.href = "index.html";
+};
+
+onAuthStateChanged(auth, async (user) => {
+
+  if (!user) {
+    window.location.href = "index.html";
+    return;
+  }
+
+  currentUser = user;
+  document.getElementById("profileSection").innerText = user.phoneNumber;
+
+  loadBookings();
+});
+
+async function loadBookings() {
+
+  const activeDiv = document.getElementById("activeBookings");
+  const historyDiv = document.getElementById("historyBookings");
+
+  activeDiv.innerHTML = "";
+  historyDiv.innerHTML = "";
+
+  const q = query(
+    collection(db, "bookings"),
+    where("userId", "==", currentUser.uid),
+    orderBy("createdAt", "desc")
+  );
+
+  const snapshot = await getDocs(q);
+
+  if (snapshot.empty) {
+    activeDiv.innerHTML = "<div class='empty'>No bookings found</div>";
+    return;
+  }
+
+  snapshot.forEach(docSnap => {
+
+    const data = docSnap.data();
+    const status = data.status;
+
+    const card = document.createElement("div");
+    card.classList.add("card");
+
+    card.innerHTML = `
+      <div class="status ${status}">${status.toUpperCase()}</div>
+      <div><b>${data.serviceType}</b></div>
+      <div>${data.address}</div>
+      <div style="font-size:12px;color:#666;">
+        ${new Date(data.createdAt.seconds * 1000).toLocaleString()}
+      </div>
+    `;
+
+    // Cancel button only if pending
+    if (status === "pending") {
+      const cancelBtn = document.createElement("button");
+      cancelBtn.innerText = "Cancel Booking";
+      cancelBtn.onclick = async () => {
+        await updateDoc(doc(db, "bookings", docSnap.id), {
+          status: "cancelled"
+        });
+        loadBookings();
+      };
+      card.appendChild(cancelBtn);
+    }
+
+    // Active vs History split
+    if (status === "pending" || status === "assigned" || status === "in_progress") {
+      activeDiv.appendChild(card);
+    } else {
+      historyDiv.appendChild(card);
+    }
+
+  });
+}
+</script>
+
+</body>
+</html>

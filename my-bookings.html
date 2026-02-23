@@ -25,6 +25,7 @@
 
 <div id="footer-placeholder"></div>
 
+<!-- Header + Footer -->
 <script type="module">
 import { renderHeader } from "./components/header.js";
 import { renderFooter } from "./components/footer.js";
@@ -35,15 +36,31 @@ renderFooter();
 initModal();
 </script>
 
+<!-- Booking Logic -->
 <script type="module">
 import { auth, db } from "./firebase.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, query, where, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { onAuthStateChanged } 
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { collection, query, where, getDocs, doc, updateDoc } 
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-let currentUser;
+let currentUser = null;
+let authChecked = false;
 
 onAuthStateChanged(auth, async (user) => {
-  if (!user) return window.location.href = "index.html";
+
+  authChecked = true;
+
+  if (!user) {
+    // wait a little before redirect
+    setTimeout(() => {
+      if (!auth.currentUser) {
+        window.location.href = "index.html";
+      }
+    }, 500);
+    return;
+  }
+
   currentUser = user;
   loadBookings();
 });
@@ -59,7 +76,11 @@ async function loadBookings() {
   let activeCount = 0;
   let historyCount = 0;
 
-  const q = query(collection(db,"bookings"), where("userId","==",currentUser.uid));
+  const q = query(
+    collection(db,"bookings"), 
+    where("userId","==",currentUser.uid)
+  );
+
   const snapshot = await getDocs(q);
 
   if(snapshot.empty){
@@ -70,6 +91,7 @@ async function loadBookings() {
   snapshot.forEach(docSnap => {
 
     const data = docSnap.data();
+
     const createdTime = data.createdAt?.seconds
       ? new Date(data.createdAt.seconds * 1000).toLocaleString()
       : "Time unavailable";
@@ -94,7 +116,8 @@ async function loadBookings() {
 
     card.onclick = () => {
       const details = card.querySelector(".details");
-      details.style.display = details.style.display === "block" ? "none" : "block";
+      details.style.display = 
+        details.style.display === "block" ? "none" : "block";
     };
 
     if(data.status === "pending"){
@@ -105,7 +128,9 @@ async function loadBookings() {
         e.stopPropagation();
 
         openModal("Are you sure you want to cancel this booking?", async () => {
-          await updateDoc(doc(db,"bookings",docSnap.id),{status:"cancelled"});
+          await updateDoc(doc(db,"bookings",docSnap.id),{
+            status:"cancelled"
+          });
           loadBookings();
         });
       };
@@ -122,8 +147,11 @@ async function loadBookings() {
 
   });
 
-  document.getElementById("activeCount").innerText = activeCount + " active booking(s)";
-  document.getElementById("historyCount").innerText = historyCount + " completed / cancelled";
+  document.getElementById("activeCount").innerText =
+    activeCount + " active booking(s)";
+
+  document.getElementById("historyCount").innerText =
+    historyCount + " completed / cancelled";
 }
 </script>
 

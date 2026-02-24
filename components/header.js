@@ -7,7 +7,6 @@ from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 export function renderHeader() {
 
   const placeholder = document.getElementById("header-placeholder");
-
   if (!placeholder) return;
 
   placeholder.innerHTML = `
@@ -33,7 +32,6 @@ function initAuthHeader() {
 
     if (!profile) return;
 
-    // Not logged in
     if (!user) {
       profile.innerText = "Login";
       profile.classList.remove("hidden");
@@ -43,18 +41,23 @@ function initAuthHeader() {
       return;
     }
 
-    // Logged in
-    const userRef = doc(db, "users", user.uid);
-    const snap = await getDoc(userRef);
+    try {
+      const userRef = doc(db, "users", user.uid);
+      const snap = await getDoc(userRef);
 
-    let name = user.phoneNumber;
+      let name = user.phoneNumber;
 
-    if (snap.exists() && snap.data().name) {
-      name = snap.data().name;
+      if (snap.exists() && snap.data().name) {
+        name = snap.data().name;
+      }
+
+      profile.innerText = "👤 " + name;
+      profile.classList.remove("hidden");
+      profile.onclick = () => window.location.href = "profile.html";
+
+    } catch (error) {
+      profile.innerText = "👤 User";
+      profile.classList.remove("hidden");
     }
-
-    profile.innerText = "👤 " + name;
-    profile.classList.remove("hidden");
-    profile.onclick = () => window.location.href = "profile.html";
   });
 }

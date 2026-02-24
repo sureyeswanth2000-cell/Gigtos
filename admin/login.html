@@ -2,30 +2,80 @@
 <html>
 <head>
   <title>Admin Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      margin:0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg,#4f46e5,#06b6d4);
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      height:100vh;
+    }
+
+    .card {
+      background:white;
+      padding:30px;
+      border-radius:16px;
+      width:90%;
+      max-width:400px;
+      box-shadow:0 15px 40px rgba(0,0,0,0.2);
+      text-align:center;
+    }
+
+    input {
+      width:100%;
+      padding:12px;
+      margin-bottom:15px;
+      border-radius:8px;
+      border:1px solid #ddd;
+    }
+
+    button {
+      width:100%;
+      padding:12px;
+      background:#4f46e5;
+      color:white;
+      border:none;
+      border-radius:8px;
+      font-weight:600;
+      cursor:pointer;
+    }
+
+    button:hover { opacity:0.9; }
+  </style>
 </head>
+
 <body>
+
+<div class="card">
   <h2>Admin Login</h2>
 
-  <input type="email" id="email" placeholder="Email"><br><br>
-  <input type="password" id="password" placeholder="Password"><br><br>
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
 
   <button onclick="login()">Login</button>
+</div>
 
-  <script type="module">
-    import { auth } from "./firebase.js";
-    import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+<script type="module">
+import { auth } from "../firebase.js";
+import { signInWithEmailAndPassword }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-    window.login = async function() {
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
+window.login = async function() {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
 
-      try {
-        await signInWithEmailAndPassword(auth, email, password);
-        window.location.href = "dashboard.html";
-      } catch (error) {
-        alert("Invalid login");
-      }
-    }
-  </script>
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    window.location.href = "Dashboard.html";
+  } catch {
+    alert("Invalid login");
+  }
+};
+</script>
+
 </body>
 </html>

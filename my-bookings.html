@@ -51,7 +51,8 @@ let authChecked = false;
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     alert("Please login first.");
-    window.location.href = "index.html";
+    localStorage.setItem("redirectAfterLogin", window.location.href);
+    window.location.href = "auth.html";
     return;
   }
   currentUser = user;

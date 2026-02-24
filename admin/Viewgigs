@@ -2,181 +2,109 @@
 <html>
 <head>
   <title>View Workers</title>
-  <link rel="stylesheet" href="./styles.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      margin:0;
+      font-family:'Segoe UI', sans-serif;
+      background:#f3f6fb;
+    }
+
+    .container {
+      max-width:1000px;
+      margin:40px auto;
+      padding:20px;
+    }
+
+    table {
+      width:100%;
+      border-collapse:collapse;
+      background:white;
+      border-radius:12px;
+      overflow:hidden;
+      box-shadow:0 8px 25px rgba(0,0,0,0.08);
+    }
+
+    th, td {
+      padding:14px;
+      border-bottom:1px solid #eee;
+      text-align:left;
+    }
+
+    th {
+      background:#4f46e5;
+      color:white;
+    }
+
+    tr:hover { background:#f5f7ff; }
+
+    button {
+      padding:6px 12px;
+      border:none;
+      border-radius:6px;
+      cursor:pointer;
+    }
+
+    .danger { background:#dc2626; color:white; }
+    .primary { background:#4f46e5; color:white; }
+  </style>
 </head>
+
 <body>
 
 <div class="container">
-
   <h2>Gig Workers</h2>
-  <p class="subtitle" id="roleInfo"></p>
 
-  <div class="section">
-    <input 
-      type="text" 
-      id="searchInput" 
-      placeholder="Search by name or phone"
-      oninput="loadWorkers()"
-    >
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Contact</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="workerList"></tbody>
+  </table>
 
-    <select id="filterType" onchange="loadWorkers()">
-      <option value="all">All</option>
-      <option value="Plumber">Plumber</option>
-      <option value="Electrician">Electrician</option>
-    </select>
-  </div>
-
-  <div id="workerList"></div>
-
-  <div class="section">
-    <button class="secondary" onclick="goDashboard()">Back to Dashboard</button>
-  </div>
-
+  <br>
+  <button onclick="goDashboard()">Back to Dashboard</button>
 </div>
 
 <script type="module">
-import { auth, db } from "./firebase.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { 
-  collection, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  query, 
-  where, 
-  updateDoc,
-  orderBy 
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-let currentUser;
-let currentRole;
+import { auth, db } from "../firebase.js";
+import { onAuthStateChanged }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { collection, getDocs }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 onAuthStateChanged(auth, async (user) => {
-
   if (!user) {
-    window.location.href = "index.html";
+    window.location.href="login.html";
     return;
   }
 
-  currentUser = user;
-
-  const adminSnap = await getDoc(doc(db, "admins", user.uid));
-
-  if (!adminSnap.exists()) {
-    alert("Not authorized");
-    window.location.href = "index.html";
-    return;
-  }
-
-  currentRole = adminSnap.data().role;
-  document.getElementById("roleInfo").innerText = "Role: " + currentRole;
-
-  loadWorkers();
-});
-
-window.loadWorkers = async function () {
+  const snapshot = await getDocs(collection(db,"gig_workers"));
 
   const list = document.getElementById("workerList");
-  list.innerHTML = "";
 
-  const filter = document.getElementById("filterType").value;
-  const searchText = document.getElementById("searchInput").value.trim().toLowerCase();
-
-  let q;
-
-  if (currentRole === "superadmin") {
-    q = query(collection(db, "gig_workers"), orderBy("createdAt", "desc"));
-  } else {
-    q = query(
-      collection(db, "gig_workers"),
-      where("adminId", "==", currentUser.uid),
-      orderBy("createdAt", "desc")
-    );
-  }
-
-  const snapshot = await getDocs(q);
-
-  if (snapshot.empty) {
-    list.innerHTML = "<p>No workers found.</p>";
-    return;
-  }
-
-  snapshot.forEach((docSnap) => {
-
+  snapshot.forEach(docSnap=>{
     const data = docSnap.data();
 
-    const name = data.name || "";
-    const contact = data.contact || "";
-    const gigType = data.gigType || "";
-    const createdByEmail = data.createdByEmail || "";
-    const status = (data.status || "active").toLowerCase();
-
-    // Filter by gig type
-    if (filter !== "all" && gigType !== filter) return;
-
-    // Search filter
-    if (
-      searchText &&
-      !name.toLowerCase().includes(searchText) &&
-      !contact.includes(searchText)
-    ) return;
-
-    const badgeClass = status === "active" ? "active" : "inactive";
-
-    const card = document.createElement("div");
-    card.classList.add("worker-card");
-
-    card.innerHTML = `
-      <div class="worker-name">${name}</div>
-      <div class="worker-meta">
-        <span class="status-badge ${badgeClass}">
-          ${status.toUpperCase()}
-        </span><br>
-        ${gigType} | 📞 ${contact}<br>
-        Created By: ${createdByEmail}
-      </div>
+    list.innerHTML += `
+      <tr>
+        <td>${data.name}</td>
+        <td>${data.gigType}</td>
+        <td>${data.contact}</td>
+        <td>${data.status}</td>
+      </tr>
     `;
-
-    const actions = document.createElement("div");
-    actions.classList.add("worker-actions");
-
-    // Edit button
-    if (
-      currentRole === "superadmin" ||
-      (currentRole === "admin" && data.adminId === currentUser.uid)
-    ) {
-      const editBtn = document.createElement("button");
-      editBtn.classList.add("secondary");
-      editBtn.innerText = "Edit";
-      editBtn.onclick = () => {
-        window.location.href = "dashboard.html?edit=" + docSnap.id;
-      };
-      actions.appendChild(editBtn);
-    }
-
-    // Enable / Disable (Superadmin only)
-    if (currentRole === "superadmin") {
-      const toggleBtn = document.createElement("button");
-      toggleBtn.classList.add(status === "active" ? "danger" : "primary");
-      toggleBtn.innerText = status === "active" ? "Disable" : "Enable";
-
-      toggleBtn.onclick = async () => {
-        await updateDoc(doc(db, "gig_workers", docSnap.id), {
-          status: status === "active" ? "inactive" : "active"
-        });
-        loadWorkers();
-      };
-
-      actions.appendChild(toggleBtn);
-    }
-
-    card.appendChild(actions);
-    list.appendChild(card);
   });
-};
+});
 
-window.goDashboard = function () {
-  window.location.href = "dashboard.html";
+window.goDashboard=function(){
+  window.location.href="Dashboard.html";
 };
 </script>
 

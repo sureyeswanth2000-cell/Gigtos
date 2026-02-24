@@ -9,15 +9,18 @@
 
 <body>
 
+<!-- Header -->
 <div id="header-placeholder"></div>
 
 <div class="container">
 
+  <!-- Service Title -->
   <div class="card">
     <h2 id="serviceTitle"></h2>
     <p>₹200 Visiting Charge</p>
   </div>
 
+  <!-- Booking Section -->
   <div class="card" id="bookingSection">
     <input type="text" id="customerName" placeholder="Your Name">
     <input type="text" id="address" placeholder="Your Address">
@@ -26,9 +29,10 @@
 
 </div>
 
+<!-- Footer -->
 <div id="footer-placeholder"></div>
 
-<!-- Header + Footer -->
+<!-- Header + Footer + Modal -->
 <script type="module">
 import { renderHeader } from "./components/header.js";
 import { renderFooter } from "./components/footer.js";
@@ -42,25 +46,31 @@ initModal();
 <!-- Booking Logic -->
 <script type="module">
 import { auth, db } from "./firebase.js";
-import { onAuthStateChanged } from 
-"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { onAuthStateChanged } 
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { collection, addDoc, doc, getDoc } 
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let currentUser = null;
 
+// Get service type from URL
 const params = new URLSearchParams(window.location.search);
 const serviceType = params.get("type") || "Service";
 document.getElementById("serviceTitle").innerText = serviceType;
 
-// Detect login state (NO redirect)
+// Auth Check
 onAuthStateChanged(auth, async (user) => {
+
+  // If not logged in → redirect to login
+  if (!user) {
+    localStorage.setItem("redirectAfterLogin", window.location.href);
+    window.location.href = "auth.html";
+    return;
+  }
 
   currentUser = user;
 
-  if (!user) return;
-
-  // Auto-fill profile
+  // Auto-fill profile details
   const userRef = doc(db, "users", user.uid);
   const snap = await getDoc(userRef);
 
@@ -71,6 +81,7 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
+// Confirm Booking
 window.confirmBooking = async function(){
 
   const name = document.getElementById("customerName").value.trim();
@@ -79,12 +90,6 @@ window.confirmBooking = async function(){
   if(!name || !address){
     alert("Please fill all details");
     return;
-  }
-
-  if(!currentUser){
-  localStorage.setItem("redirectAfterLogin", window.location.href);
-  window.location.href = "auth.html";
-  return;
   }
 
   openModal("Confirm booking for ₹200?", async () => {
@@ -99,7 +104,7 @@ window.confirmBooking = async function(){
       createdAt: new Date()
     });
 
-    window.location.href="my-bookings.html";
+    window.location.href = "my-bookings.html";
   });
 };
 </script>

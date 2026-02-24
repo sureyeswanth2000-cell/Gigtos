@@ -28,7 +28,7 @@
 
 <div id="footer-placeholder"></div>
 
-<!-- HEADER + FOOTER -->
+<!-- Header + Footer -->
 <script type="module">
 import { renderHeader } from "./components/header.js";
 import { renderFooter } from "./components/footer.js";
@@ -39,12 +39,12 @@ renderFooter();
 initModal();
 </script>
 
-<!-- BOOKING LOGIC -->
+<!-- Booking Logic -->
 <script type="module">
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged } from 
 "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, addDoc } 
+import { collection, addDoc, doc, getDoc } 
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let currentUser = null;
@@ -53,9 +53,22 @@ const params = new URLSearchParams(window.location.search);
 const serviceType = params.get("type") || "Service";
 document.getElementById("serviceTitle").innerText = serviceType;
 
-// Just store user if logged in (NO REDIRECT)
-onAuthStateChanged(auth, (user) => {
+// Detect login state (NO redirect)
+onAuthStateChanged(auth, async (user) => {
+
   currentUser = user;
+
+  if (!user) return;
+
+  // Auto-fill profile
+  const userRef = doc(db, "users", user.uid);
+  const snap = await getDoc(userRef);
+
+  if (snap.exists()) {
+    const data = snap.data();
+    document.getElementById("customerName").value = data.name || "";
+    document.getElementById("address").value = data.address || "";
+  }
 });
 
 window.confirmBooking = async function(){
@@ -64,7 +77,7 @@ window.confirmBooking = async function(){
   const address = document.getElementById("address").value.trim();
 
   if(!name || !address){
-    alert("Fill all details");
+    alert("Please fill all details");
     return;
   }
 

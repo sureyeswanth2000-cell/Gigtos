@@ -1,8 +1,27 @@
 // components/menu.js
 
+// Define globally FIRST (important)
+window.openMenu = function() {
+  const sideMenu = document.getElementById("sideMenu");
+  const overlay = document.getElementById("menuOverlay");
+  if (sideMenu && overlay) {
+    sideMenu.classList.add("open");
+    overlay.classList.add("show");
+  }
+};
+
+window.closeMenu = function() {
+  const sideMenu = document.getElementById("sideMenu");
+  const overlay = document.getElementById("menuOverlay");
+  if (sideMenu && overlay) {
+    sideMenu.classList.remove("open");
+    overlay.classList.remove("show");
+  }
+};
+
 document.addEventListener("DOMContentLoaded", () => {
 
-  // Inject Menu HTML
+  // Inject HTML
   document.body.insertAdjacentHTML("afterbegin", `
     <div id="menuOverlay" class="menu-overlay"></div>
 
@@ -22,7 +41,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // Inject CSS
   const style = document.createElement("style");
   style.innerHTML = `
-
     .side-menu {
       position: fixed;
       top: 0;
@@ -62,7 +80,6 @@ document.addEventListener("DOMContentLoaded", () => {
       color: #333;
       border-bottom: 1px solid #eee;
       font-weight: 500;
-      transition: background 0.2s ease;
     }
 
     .side-menu a:hover {
@@ -86,25 +103,11 @@ document.addEventListener("DOMContentLoaded", () => {
   `;
   document.head.appendChild(style);
 
-  // Setup references
+  // Events
   const overlay = document.getElementById("menuOverlay");
-  const sideMenu = document.getElementById("sideMenu");
   const closeBtn = document.getElementById("closeMenuBtn");
 
-  // Open Menu
-  window.openMenu = function() {
-    sideMenu.classList.add("open");
-    overlay.classList.add("show");
-  };
-
-  // Close Menu
-  window.closeMenu = function() {
-    sideMenu.classList.remove("open");
-    overlay.classList.remove("show");
-  };
-
-  // Events
-  overlay.addEventListener("click", closeMenu);
-  closeBtn.addEventListener("click", closeMenu);
+  overlay.addEventListener("click", window.closeMenu);
+  closeBtn.addEventListener("click", window.closeMenu);
 
 });

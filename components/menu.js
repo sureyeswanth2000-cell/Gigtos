@@ -1,5 +1,5 @@
 // components/menu.js
-
+alert("Menu JS Loaded");
 // Define globally FIRST (important)
 window.openMenu = function() {
   const sideMenu = document.getElementById("sideMenu");

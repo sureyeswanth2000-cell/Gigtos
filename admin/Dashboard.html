@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<div class="container">
+
+  <h2>Admin Dashboard</h2>
+  <p class="subtitle" id="roleInfo"></p>
+
+  <div class="section">
+    <button class="secondary" onclick="goView()">View Workers</button>
+    <button class="danger" onclick="logout()">Logout</button>
+  </div>
+
+  <div class="section">
+    <h3 id="formTitle">Create Gig Worker</h3>
+
+    <input type="text" id="name" placeholder="Worker Name">
+    <input type="text" id="contact" placeholder="Contact Number">
+    <input type="text" id="aadhaar" placeholder="Aadhaar (Optional)">
+
+    <select id="gigType">
+      <option value="Plumber">Plumber</option>
+      <option value="Electrician">Electrician</option>
+    </select>
+
+    <input type="text" id="address" placeholder="Address">
+    <input type="text" id="emergencyPhone" placeholder="Emergency Phone (Optional)">
+
+    <button class="primary" onclick="saveWorker()">Save Worker</button>
+  </div>
+
+</div>
+
+<script type="module">
+import { auth, db } from "./firebase.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { doc, getDoc, addDoc, updateDoc, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+let currentUser;
+let currentRole;
+
+const urlParams = new URLSearchParams(window.location.search);
+const editId = urlParams.get("edit");
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    window.location.href = "index.html";
+    return;
+  }
+
+  currentUser = user;
+
+  const adminDoc = await getDoc(doc(db, "admins", user.uid));
+
+  if (!adminDoc.exists()) {
+    alert("Not authorized");
+    await signOut(auth);
+    window.location.href = "index.html";
+    return;
+  }
+
+  currentRole = adminDoc.data().role;
+  document.getElementById("roleInfo").innerText = "Role: " + currentRole;
+
+  if (editId) {
+    const workerSnap = await getDoc(doc(db, "gig_workers", editId));
+
+    if (workerSnap.exists()) {
+      const data = workerSnap.data();
+
+      if (currentRole === "admin" && data.adminId !== currentUser.uid) {
+        alert("Not allowed to edit this worker");
+        window.location.href = "view.html";
+        return;
+      }
+
+      document.getElementById("formTitle").innerText = "Edit Gig Worker";
+      document.getElementById("name").value = data.name;
+      document.getElementById("contact").value = data.contact;
+      document.getElementById("aadhaar").value = data.aadhaar || "";
+      document.getElementById("gigType").value = data.gigType;
+      document.getElementById("address").value = data.address;
+      document.getElementById("emergencyPhone").value = data.emergencyPhone || "";
+    }
+  }
+});
+
+window.saveWorker = async function () {
+  const name = document.getElementById("name").value;
+  const contact = document.getElementById("contact").value;
+  const aadhaar = document.getElementById("aadhaar").value;
+  const gigType = document.getElementById("gigType").value;
+  const address = document.getElementById("address").value;
+  const emergencyPhone = document.getElementById("emergencyPhone").value;
+
+  if (!name || !contact || !address) {
+    alert("Fill required fields");
+    return;
+  }
+
+  if (editId) {
+    await updateDoc(doc(db, "gig_workers", editId), {
+      name,
+      contact,
+      aadhaar,
+      gigType,
+      address,
+      emergencyPhone
+    });
+
+    alert("Worker Updated!");
+  } else {
+    await addDoc(collection(db, "gig_workers"), {
+      name,
+      contact,
+      aadhaar,
+      gigType,
+      address,
+      emergencyPhone,
+
+      // ✅ STEP 1 ADDITION
+      status: "active",
+
+      adminId: currentUser.uid,
+      createdByEmail: currentUser.email,
+      createdAt: new Date()
+    });
+
+    alert("Worker Created!");
+  }
+
+  window.location.href = "view.html";
+};
+
+window.logout = async function () {
+  await signOut(auth);
+  window.location.href = "index.html";
+};
+
+window.goView = function () {
+  window.location.href = "view.html";
+};
+</script>
+
+</body>
+</html>

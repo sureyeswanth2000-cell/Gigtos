@@ -13,7 +13,6 @@
   <div class="card">
     <h2 id="formTitle">Login</h2>
 
-    <!-- Register Fields -->
     <div id="registerFields" class="hidden">
       <input type="text" id="name" placeholder="Full Name">
       <input type="text" id="address" placeholder="Address in Kavali">
@@ -47,17 +46,19 @@ import {
 
 let confirmationResult = null;
 let isRegister = false;
+let recaptchaVerifier;
+
+window.addEventListener("load", () => {
+  recaptchaVerifier = new RecaptchaVerifier(
+    auth,
+    "recaptcha-container",
+    { size: "normal" }
+  );
+});
 
 const actionBtn = document.getElementById("actionBtn");
 const toggleBtn = document.getElementById("toggleBtn");
 
-window.recaptchaVerifier = new RecaptchaVerifier(
-  auth,
-  "recaptcha-container",
-  { size: "normal" }
-);
-
-// Toggle Mode
 toggleBtn.onclick = function(e){
   e.preventDefault();
   isRegister = !isRegister;
@@ -68,9 +69,7 @@ toggleBtn.onclick = function(e){
     isRegister ? "Already have account?" : "New user?";
 };
 
-// Button Click
 actionBtn.onclick = async function(){
-
   if (!confirmationResult) {
     await sendOTP();
   } else {
@@ -93,7 +92,7 @@ async function sendOTP() {
     confirmationResult = await signInWithPhoneNumber(
       auth,
       phone,
-      window.recaptchaVerifier
+      recaptchaVerifier
     );
 
     document.getElementById("otp").classList.remove("hidden");
@@ -120,7 +119,6 @@ async function verifyOTP(){
     const userRef = doc(db, "users", user.uid);
     const snap = await getDoc(userRef);
 
-    // REGISTER MODE
     if(isRegister){
 
       if(snap.exists()){
@@ -143,9 +141,7 @@ async function verifyOTP(){
         createdAt: new Date()
       });
 
-    }
-    // LOGIN MODE
-    else{
+    } else {
 
       if(!snap.exists()){
         alert("User not found. Please register.");
@@ -154,6 +150,7 @@ async function verifyOTP(){
     }
 
     const redirect = localStorage.getItem("redirectAfterLogin");
+    localStorage.removeItem("redirectAfterLogin");
     window.location.href = redirect || "index.html";
 
   }

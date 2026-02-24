@@ -47,20 +47,13 @@ from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 let currentUser = null;
 let authChecked = false;
 
+
 onAuthStateChanged(auth, async (user) => {
-
-  authChecked = true;
-
   if (!user) {
-    // wait a little before redirect
-    setTimeout(() => {
-      if (!auth.currentUser) {
-        window.location.href = "index.html";
-      }
-    }, 500);
+    alert("Please login first.");
+    window.location.href = "index.html";
     return;
   }
-
   currentUser = user;
   loadBookings();
 });

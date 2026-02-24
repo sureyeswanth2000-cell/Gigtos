@@ -1,5 +1,5 @@
 import { auth, db } from "../firebase.js";
-import { onAuthStateChanged, signOut } 
+import { onAuthStateChanged } 
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { doc, getDoc } 
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -7,6 +7,8 @@ from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 export function renderHeader() {
 
   const placeholder = document.getElementById("header-placeholder");
+
+  if (!placeholder) return;
 
   placeholder.innerHTML = `
     <header class="global-header">
@@ -23,12 +25,15 @@ window.goHome = function() {
   window.location.href = "index.html";
 };
 
-async function initAuthHeader() {
+function initAuthHeader() {
 
   const profile = document.getElementById("headerProfile");
 
   onAuthStateChanged(auth, async (user) => {
 
+    if (!profile) return;
+
+    // Not logged in
     if (!user) {
       profile.innerText = "Login";
       profile.classList.remove("hidden");
@@ -38,6 +43,7 @@ async function initAuthHeader() {
       return;
     }
 
+    // Logged in
     const userRef = doc(db, "users", user.uid);
     const snap = await getDoc(userRef);
 

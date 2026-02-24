@@ -95,17 +95,25 @@ window.confirmBooking = async function(){
   openModal("Confirm booking for ₹200?", async () => {
 
     await addDoc(collection(db,"bookings"),{
-      userId: currentUser.uid,
-      serviceType,
-      customerName: name,
-      address,
-      phone: currentUser.phoneNumber,
-      status: "pending",
-      createdAt: new Date()
-    });
+  userId: currentUser.uid,
+  serviceType,
+  customerName: name,
+  address,
+  phone: currentUser.phoneNumber,
+  status: "pending",
+  createdAt: new Date()
+});
 
-    window.location.href = "my-bookings.html";
-  });
+// Show Success Message
+openModal(
+  "🎉 Order Placed Successfully!\n\nOur team will assign a plumber shortly.\nYou can track status in My Bookings.",
+  () => {}
+);
+
+// Auto Redirect After 2 Seconds
+setTimeout(() => {
+  window.location.href = "my-bookings.html";
+}, 2000);  });
 };
 </script>
 

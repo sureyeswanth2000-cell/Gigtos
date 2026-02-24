@@ -12,7 +12,7 @@
     }
 
     .container {
-      max-width:1000px;
+      max-width:1100px;
       margin:40px auto;
       padding:20px;
     }
@@ -40,14 +40,17 @@
     tr:hover { background:#f5f7ff; }
 
     button {
-      padding:6px 12px;
+      padding:6px 10px;
       border:none;
       border-radius:6px;
       cursor:pointer;
+      margin-right:5px;
+      font-size:13px;
     }
 
-    .danger { background:#dc2626; color:white; }
     .primary { background:#4f46e5; color:white; }
+    .danger { background:#dc2626; color:white; }
+    .secondary { background:#e5e7eb; }
   </style>
 </head>
 
@@ -55,6 +58,7 @@
 
 <div class="container">
   <h2>Gig Workers</h2>
+  <p id="roleInfo"></p>
 
   <table>
     <thead>
@@ -63,48 +67,124 @@
         <th>Type</th>
         <th>Contact</th>
         <th>Status</th>
+        <th>Actions</th>
       </tr>
     </thead>
     <tbody id="workerList"></tbody>
   </table>
 
   <br>
-  <button onclick="goDashboard()">Back to Dashboard</button>
+  <button onclick="goDashboard()">Back</button>
 </div>
 
 <script type="module">
 import { auth, db } from "../firebase.js";
 import { onAuthStateChanged }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, getDocs }
-from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import {
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  updateDoc,
+  deleteDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+let currentUser;
+let currentRole;
 
 onAuthStateChanged(auth, async (user) => {
+
   if (!user) {
     window.location.href="login.html";
     return;
   }
 
-  const snapshot = await getDocs(collection(db,"gig_workers"));
+  currentUser = user;
 
+  const adminSnap = await getDoc(doc(db,"admins",user.uid));
+
+  if(!adminSnap.exists()){
+    alert("Not authorized");
+    window.location.href="login.html";
+    return;
+  }
+
+  currentRole = adminSnap.data().role;
+  document.getElementById("roleInfo").innerText =
+    "Role: " + currentRole;
+
+  loadWorkers();
+});
+
+async function loadWorkers(){
+
+  const snapshot = await getDocs(collection(db,"gig_workers"));
   const list = document.getElementById("workerList");
+  list.innerHTML="";
 
   snapshot.forEach(docSnap=>{
     const data = docSnap.data();
+    const id = docSnap.id;
 
-    list.innerHTML += `
-      <tr>
-        <td>${data.name}</td>
-        <td>${data.gigType}</td>
-        <td>${data.contact}</td>
-        <td>${data.status}</td>
-      </tr>
+    // Admin restriction
+    if(currentRole === "admin" && data.adminId !== currentUser.uid){
+      return;
+    }
+
+    const row = document.createElement("tr");
+
+    row.innerHTML=`
+      <td>${data.name}</td>
+      <td>${data.gigType}</td>
+      <td>${data.contact}</td>
+      <td>${data.status}</td>
+      <td></td>
     `;
+
+    const actionsCell = row.children[4];
+
+    // EDIT
+    const editBtn = document.createElement("button");
+    editBtn.className="secondary";
+    editBtn.innerText="Edit";
+    editBtn.onclick=()=> {
+      window.location.href="dashboard.html?edit="+id;
+    };
+    actionsCell.appendChild(editBtn);
+
+    // DISABLE / ENABLE
+    const toggleBtn=document.createElement("button");
+    toggleBtn.className="primary";
+    toggleBtn.innerText=data.status==="active"?"Disable":"Enable";
+    toggleBtn.onclick=async ()=>{
+      await updateDoc(doc(db,"gig_workers",id),{
+        status:data.status==="active"?"inactive":"active"
+      });
+      loadWorkers();
+    };
+    actionsCell.appendChild(toggleBtn);
+
+    // DELETE (superadmin only)
+    if(currentRole==="superadmin"){
+      const deleteBtn=document.createElement("button");
+      deleteBtn.className="danger";
+      deleteBtn.innerText="Delete";
+      deleteBtn.onclick=async ()=>{
+        if(confirm("Delete this worker?")){
+          await deleteDoc(doc(db,"gig_workers",id));
+          loadWorkers();
+        }
+      };
+      actionsCell.appendChild(deleteBtn);
+    }
+
+    list.appendChild(row);
   });
-});
+}
 
 window.goDashboard=function(){
-  window.location.href="Dashboard.html";
+  window.location.href="dashboard.html";
 };
 </script>
 

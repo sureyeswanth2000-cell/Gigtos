@@ -63,10 +63,22 @@ toggleBtn.onclick = function(e){
   e.preventDefault();
   isRegister = !isRegister;
 
-  document.getElementById("formTitle").innerText = isRegister ? "Register" : "Login";
-  document.getElementById("registerFields").classList.toggle("hidden");
-  document.getElementById("toggleText").innerText =
-    isRegister ? "Already have account?" : "New user?";
+  const formTitle = document.getElementById("formTitle");
+  const registerFields = document.getElementById("registerFields");
+  const toggleText = document.getElementById("toggleText");
+  const toggleBtnText = document.getElementById("toggleBtn");
+
+  if(isRegister){
+    formTitle.innerText = "Register";
+    registerFields.classList.remove("hidden");
+    toggleText.innerText = "Already have account?";
+    toggleBtnText.innerText = "Login";
+  } else {
+    formTitle.innerText = "Login";
+    registerFields.classList.add("hidden");
+    toggleText.innerText = "New user?";
+    toggleBtnText.innerText = "Register";
+  }
 };
 
 actionBtn.onclick = async function(){

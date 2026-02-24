@@ -82,8 +82,9 @@ window.confirmBooking = async function(){
   }
 
   if(!currentUser){
-    alert("Please login before booking.");
-    return;
+  localStorage.setItem("redirectAfterLogin", window.location.href);
+  window.location.href = "auth.html";
+  return;
   }
 
   openModal("Confirm booking for ₹200?", async () => {

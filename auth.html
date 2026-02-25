@@ -1,173 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Login / Register - Gigto</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="./styles/global.css">
+<meta charset="UTF-8">
+<title>Login - Gigto</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="./styles/global.css">
+<style>
+.tab-buttons { display:flex; margin-bottom:15px; }
+.tab-buttons button {
+  flex:1;
+  padding:10px;
+  border:none;
+  cursor:pointer;
+  background:#eee;
+}
+.tab-buttons .active {
+  background:#4f46e5;
+  color:white;
+}
+.hidden{display:none;}
+</style>
 </head>
 
 <body>
 
 <div class="container">
-  <div class="card">
-    <h2 id="formTitle">Login</h2>
+<div class="card">
 
-    <div id="registerFields" class="hidden">
-      <input type="text" id="name" placeholder="Full Name">
-      <input type="text" id="address" placeholder="Address in Kavali">
-    </div>
+<h2>Login</h2>
 
-    <input type="text" id="phone" placeholder="10 Digit Phone Number">
+<div class="tab-buttons">
+  <button id="phoneTab" class="active">Phone</button>
+  <button id="emailTab">Email</button>
+</div>
 
-    <div id="recaptcha-container"></div>
+<!-- PHONE LOGIN -->
+<div id="phoneSection">
+  <input type="text" id="phone" placeholder="10 Digit Phone Number">
+  <div id="recaptcha-container"></div>
+  <input type="text" id="otp" placeholder="Enter OTP" class="hidden">
+  <button id="phoneBtn">Send OTP</button>
+</div>
 
-    <input type="text" id="otp" placeholder="Enter OTP" class="hidden">
+<!-- EMAIL LOGIN -->
+<div id="emailSection" class="hidden">
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
+  <button id="emailBtn">Login</button>
+</div>
 
-    <button id="actionBtn">Send OTP</button>
-
-    <p style="margin-top:15px;">
-      <span id="toggleText">New user?</span>
-      <a href="#" id="toggleBtn">Register</a>
-    </p>
-
-  </div>
+</div>
 </div>
 
 <script type="module">
 import { auth, db } from "./firebase.js";
 import {
   RecaptchaVerifier,
-  signInWithPhoneNumber
+  signInWithPhoneNumber,
+  signInWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
-  doc, getDoc, setDoc
+  doc,
+  getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let confirmationResult = null;
-let isRegister = false;
 let recaptchaVerifier;
 
-window.addEventListener("load", () => {
+const phoneTab = document.getElementById("phoneTab");
+const emailTab = document.getElementById("emailTab");
+const phoneSection = document.getElementById("phoneSection");
+const emailSection = document.getElementById("emailSection");
+
+phoneTab.onclick = ()=>{
+  phoneTab.classList.add("active");
+  emailTab.classList.remove("active");
+  phoneSection.classList.remove("hidden");
+  emailSection.classList.add("hidden");
+};
+
+emailTab.onclick = ()=>{
+  emailTab.classList.add("active");
+  phoneTab.classList.remove("active");
+  emailSection.classList.remove("hidden");
+  phoneSection.classList.add("hidden");
+};
+
+window.addEventListener("load", ()=>{
   recaptchaVerifier = new RecaptchaVerifier(
     auth,
     "recaptcha-container",
-    { size: "normal" }
+    { size:"normal" }
   );
 });
 
-const actionBtn = document.getElementById("actionBtn");
-const toggleBtn = document.getElementById("toggleBtn");
+/* PHONE LOGIN */
 
-toggleBtn.onclick = function(e){
-  e.preventDefault();
-  isRegister = !isRegister;
-
-  const formTitle = document.getElementById("formTitle");
-  const registerFields = document.getElementById("registerFields");
-  const toggleText = document.getElementById("toggleText");
-  const toggleBtnText = document.getElementById("toggleBtn");
-
-  if(isRegister){
-    formTitle.innerText = "Register";
-    registerFields.classList.remove("hidden");
-    toggleText.innerText = "Already have account?";
-    toggleBtnText.innerText = "Login";
-  } else {
-    formTitle.innerText = "Login";
-    registerFields.classList.add("hidden");
-    toggleText.innerText = "New user?";
-    toggleBtnText.innerText = "Register";
-  }
-};
-
-actionBtn.onclick = async function(){
-  if (!confirmationResult) {
-    await sendOTP();
-  } else {
-    await verifyOTP();
-  }
-};
-
-async function sendOTP() {
-
-  const phoneInput = document.getElementById("phone").value.trim();
-
-  if(phoneInput.length !== 10){
-    alert("Enter valid 10 digit number");
-    return;
-  }
-
-  const phone = "+91" + phoneInput;
-
-  try{
-    confirmationResult = await signInWithPhoneNumber(
-      auth,
-      phone,
-      recaptchaVerifier
-    );
-
-    document.getElementById("otp").classList.remove("hidden");
-    actionBtn.innerText = "Verify OTP";
-  }
-  catch(error){
-    alert(error.message);
-  }
-}
-
-async function verifyOTP(){
-
-  const otp = document.getElementById("otp").value.trim();
-
-  if(!otp){
-    alert("Enter OTP");
-    return;
-  }
-
-  try{
-    const result = await confirmationResult.confirm(otp);
-    const user = result.user;
-
-    const userRef = doc(db, "users", user.uid);
-    const snap = await getDoc(userRef);
-
-    if(isRegister){
-
-      if(snap.exists()){
-        alert("User already exists. Please login.");
-        return;
-      }
-
-      const name = document.getElementById("name").value.trim();
-      const address = document.getElementById("address").value.trim();
-
-      if(!name || !address){
-        alert("Name and address required");
-        return;
-      }
-
-      await setDoc(userRef,{
-        name,
-        address,
-        phone: user.phoneNumber,
-        createdAt: new Date()
-      });
-
-    } else {
-
-      if(!snap.exists()){
-        alert("User not found. Please register.");
-        return;
-      }
+document.getElementById("phoneBtn").onclick = async ()=>{
+  if(!confirmationResult){
+    const phoneInput = document.getElementById("phone").value.trim();
+    if(phoneInput.length!==10){
+      alert("Enter valid 10 digit number");
+      return;
     }
+    const phone = "+91"+phoneInput;
 
-    const redirect = localStorage.getItem("redirectAfterLogin");
-    localStorage.removeItem("redirectAfterLogin");
-    window.location.href = redirect || "index.html";
+    try{
+      confirmationResult = await signInWithPhoneNumber(auth,phone,recaptchaVerifier);
+      document.getElementById("otp").classList.remove("hidden");
+      document.getElementById("phoneBtn").innerText="Verify OTP";
+    }catch(e){
+      alert(e.message);
+    }
+  }else{
+    const otp = document.getElementById("otp").value.trim();
+    if(!otp){ alert("Enter OTP"); return; }
 
+    try{
+      const result = await confirmationResult.confirm(otp);
+      handlePostLogin(result.user);
+    }catch{
+      alert("Invalid OTP");
+    }
   }
-  catch(error){
-    alert("Invalid OTP");
+};
+
+/* EMAIL LOGIN */
+
+document.getElementById("emailBtn").onclick = async ()=>{
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
+
+  if(!email || !password){
+    alert("Enter email & password");
+    return;
+  }
+
+  try{
+    const cred = await signInWithEmailAndPassword(auth,email,password);
+    handlePostLogin(cred.user);
+  }catch(e){
+    alert("Invalid credentials");
+  }
+};
+
+/* ROLE + PHONE CHECK */
+
+async function handlePostLogin(user){
+
+  // Check admin
+  const adminSnap = await getDoc(doc(db,"admins",user.uid));
+  const userSnap = await getDoc(doc(db,"users",user.uid));
+
+  // Check phone mandatory
+  let phoneExists = false;
+
+  if(adminSnap.exists()){
+    phoneExists = !!adminSnap.data().phone;
+  }else if(userSnap.exists()){
+    phoneExists = !!userSnap.data().phone;
+  }
+
+  if(!phoneExists){
+    alert("Phone number required. Contact support.");
+    return;
+  }
+
+  // Redirect by role
+  if(adminSnap.exists()){
+    window.location.href="admin/managebookings.html";
+  }else{
+    window.location.href="my-bookings.html";
   }
 }
 </script>

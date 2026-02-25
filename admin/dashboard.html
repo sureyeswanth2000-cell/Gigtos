@@ -15,9 +15,11 @@
       align-items:center;
     }
 
-    .admin-logo{font-weight:600;font-size:18px;}
-
-    .admin-right{display:flex;gap:15px;align-items:center;}
+    .admin-right{
+      display:flex;
+      align-items:center;
+      gap:15px;
+    }
 
     .admin-right button{
       background:white;
@@ -36,10 +38,32 @@
 
     .card{
       background:white;
-      padding:30px;
+      padding:25px;
       border-radius:12px;
       box-shadow:0 8px 25px rgba(0,0,0,0.08);
+      margin-bottom:25px;
     }
+
+    input, select{
+      width:100%;
+      padding:10px;
+      margin-bottom:12px;
+      border-radius:8px;
+      border:1px solid #ddd;
+    }
+
+    button{
+      padding:8px 14px;
+      border:none;
+      border-radius:6px;
+      cursor:pointer;
+      margin-right:6px;
+      margin-top:5px;
+    }
+
+    .primary{background:#4f46e5;color:white;}
+    .danger{background:#dc2626;color:white;}
+    .secondary{background:#e5e7eb;}
 
     .nav-buttons{
       display:flex;
@@ -51,18 +75,16 @@
       background:#4f46e5;
       color:white;
       border:none;
-      padding:14px 20px;
+      padding:12px 18px;
       border-radius:8px;
       cursor:pointer;
-      font-size:15px;
     }
   </style>
 </head>
 <body>
 
 <div class="admin-header">
-  <div class="admin-logo">Gigto Admin Panel</div>
-  <div></div>
+  <div>Gigto Admin</div>
   <div class="admin-right">
     <span id="adminName"></span>
     <button onclick="logout()">Logout</button>
@@ -70,23 +92,51 @@
 </div>
 
 <div class="container">
-  <div class="card">
-    <h2>Control Panel</h2>
-    <div class="nav-buttons">
-      <button onclick="goBookings()">Manage Bookings</button>
-      <button onclick="goWorkers()">Manage Workers</button>
-    </div>
+
+<div class="card">
+  <h2>Control Panel</h2>
+  <div class="nav-buttons">
+    <button onclick="goBookings()">Manage Bookings</button>
+    <button onclick="goWorkers()">Manage Workers</button>
   </div>
 </div>
 
+<!-- SUPER ADMIN SECTION -->
+<div class="card" id="superAdminSection" style="display:none;">
+  <h3>Create Admin</h3>
+
+  <input id="adminEmail" placeholder="Admin Email">
+  <input id="adminPassword" type="password" placeholder="Password">
+  <select id="adminRole">
+    <option value="admin">Admin</option>
+    <option value="superadmin">Superadmin</option>
+  </select>
+
+  <button class="primary" onclick="createAdmin()">Create Admin</button>
+
+  <hr style="margin:25px 0;">
+
+  <h3>Admins List</h3>
+  <div id="adminList"></div>
+</div>
+
+</div>
+
 <script type="module">
-import { auth, db } from "../firebase.js";
-import { onAuthStateChanged, signOut }
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { doc, getDoc }
+import { doc, getDoc, setDoc, getDocs, collection, updateDoc, deleteDoc }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
+import { auth, db } from "../firebase.js";
+
+/* Secondary app for creating admins without logout */
+const secondaryApp = initializeApp(auth.app.options, "SecondaryAdminApp");
+const secondaryAuth = getAuth(secondaryApp);
+
 let currentUser;
+let currentRole;
 
 onAuthStateChanged(auth, async(user)=>{
   if(!user){
@@ -94,29 +144,121 @@ onAuthStateChanged(auth, async(user)=>{
     return;
   }
 
-  currentUser=user;
+  currentUser = user;
 
-  const snap=await getDoc(doc(db,"admins",user.uid));
+  const snap = await getDoc(doc(db,"admins",user.uid));
   if(!snap.exists() || snap.data().status!=="active"){
     await signOut(auth);
     window.location.href="../auth.html";
     return;
   }
 
-  document.getElementById("adminName").innerText=user.email;
+  currentRole = snap.data().role;
+  document.getElementById("adminName").innerText = user.email;
+
+  if(currentRole === "superadmin"){
+    document.getElementById("superAdminSection").style.display="block";
+    loadAdmins();
+  }
 });
 
-window.logout=async function(){
+/* CREATE ADMIN */
+window.createAdmin = async function(){
+
+  if(!adminEmail.value || !adminPassword.value){
+    alert("Email and password required");
+    return;
+  }
+
+  try{
+
+    const cred = await createUserWithEmailAndPassword(
+      secondaryAuth,
+      adminEmail.value,
+      adminPassword.value
+    );
+
+    await setDoc(doc(db,"admins",cred.user.uid),{
+      email: adminEmail.value,
+      role: adminRole.value,
+      status:"active",
+      createdAt:new Date()
+    });
+
+    await secondaryAuth.signOut();
+
+    alert("Admin Created");
+
+    adminEmail.value="";
+    adminPassword.value="";
+
+    loadAdmins();
+
+  }catch(error){
+    alert(error.message);
+  }
+};
+
+/* LOAD ADMINS */
+async function loadAdmins(){
+
+  const snapshot = await getDocs(collection(db,"admins"));
+  const list = document.getElementById("adminList");
+  list.innerHTML="";
+
+  snapshot.forEach(docSnap=>{
+    const data = docSnap.data();
+    const id = docSnap.id;
+
+    list.innerHTML+=`
+      <div style="padding:10px;background:#f9f9f9;margin-bottom:10px;border-radius:8px;">
+        <b>${data.email}</b> (${data.role}) - ${data.status}
+        <br><br>
+        <button onclick="toggleAdmin('${id}','${data.status}')">
+          ${data.status==="active"?"Disable":"Enable"}
+        </button>
+        <button class="danger" onclick="deleteAdmin('${id}')">Delete</button>
+      </div>
+    `;
+  });
+}
+
+/* ENABLE / DISABLE */
+window.toggleAdmin = async function(id,status){
+
+  if(id === currentUser.uid){
+    alert("You cannot disable yourself.");
+    return;
+  }
+
+  await updateDoc(doc(db,"admins",id),{
+    status: status==="active"?"inactive":"active"
+  });
+
+  loadAdmins();
+};
+
+/* DELETE */
+window.deleteAdmin = async function(id){
+
+  if(id === currentUser.uid){
+    alert("You cannot delete yourself.");
+    return;
+  }
+
+  if(confirm("Delete this admin?")){
+    await deleteDoc(doc(db,"admins",id));
+    loadAdmins();
+  }
+};
+
+/* NAVIGATION */
+window.goBookings = ()=> window.location.href="managebookings.html";
+window.goWorkers = ()=> window.location.href="viewgigs.html";
+
+window.logout = async function(){
   await signOut(auth);
   window.location.href="../auth.html";
-};
-
-window.goBookings=function(){
-  window.location.href="managebookings.html";
-};
-
-window.goWorkers=function(){
-  window.location.href="viewgigs.html";
 };
 </script>
 

@@ -69,12 +69,11 @@
     <tbody id="workerList"></tbody>
   </table>
 
-  <br>
-  </div>
+</div>
 
 <script type="module">
 import { auth, db } from "../firebase.js";
-import { onAuthStateChanged }
+import { onAuthStateChanged, signOut }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   collection,
@@ -100,6 +99,15 @@ onAuthStateChanged(auth, async (user) => {
   const adminSnap = await getDoc(doc(db,"admins",user.uid));
   if(!adminSnap.exists()){
     alert("Not authorized");
+    await signOut(auth);
+    window.location.href="login.html";
+    return;
+  }
+
+  // ✅ BLOCK INACTIVE SITE LEAD
+  if(adminSnap.data().status !== "active"){
+    alert("Your account is disabled.");
+    await signOut(auth);
     window.location.href="login.html";
     return;
   }
@@ -121,7 +129,6 @@ async function loadWorkers(){
     const data = docSnap.data();
     const id = docSnap.id;
 
-    // Admin can only see their workers
     if(currentRole === "admin" && data.adminId !== currentUser.uid){
       return;
     }
@@ -140,7 +147,6 @@ async function loadWorkers(){
 
     const actionsCell = row.children[4];
 
-    // EDIT
     const editBtn = document.createElement("button");
     editBtn.className="secondary";
     editBtn.innerText="Edit";
@@ -149,7 +155,6 @@ async function loadWorkers(){
     };
     actionsCell.appendChild(editBtn);
 
-    // ENABLE / DISABLE
     const toggleBtn=document.createElement("button");
     toggleBtn.className = data.status==="active" ? "danger" : "primary";
     toggleBtn.innerText = data.status==="active" ? "Disable" : "Enable";
@@ -163,7 +168,6 @@ async function loadWorkers(){
 
     actionsCell.appendChild(toggleBtn);
 
-    // DELETE (superadmin only)
     if(currentRole==="superadmin"){
       const deleteBtn=document.createElement("button");
       deleteBtn.className="danger";

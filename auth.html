@@ -2,23 +2,31 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Login - Gigto</title>
+<title>Gigto Login</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="./styles/global.css">
+
 <style>
-.tab-buttons { display:flex; margin-bottom:15px; }
-.tab-buttons button {
+.tab-row { display:flex; margin-bottom:15px; }
+.tab-row button {
   flex:1;
   padding:10px;
   border:none;
   cursor:pointer;
   background:#eee;
 }
-.tab-buttons .active {
+.tab-row .active {
   background:#4f46e5;
   color:white;
 }
 .hidden{display:none;}
+.role-box{
+  background:#f3f4f6;
+  padding:10px;
+  border-radius:8px;
+  margin-bottom:15px;
+  font-size:14px;
+}
 </style>
 </head>
 
@@ -27,14 +35,31 @@
 <div class="container">
 <div class="card">
 
-<h2>Login</h2>
+<h2 id="mainTitle">Login</h2>
 
-<div class="tab-buttons">
+<div class="role-box">
+<strong>User:</strong> Can place service orders and track bookings.<br>
+<strong>Site Lead:</strong> Can manage workers and assign bookings.
+</div>
+
+<div class="tab-row">
+  <button id="loginTab" class="active">Login</button>
+  <button id="registerTab">Register (User)</button>
+</div>
+
+<!-- REGISTER FIELDS -->
+<div id="registerFields" class="hidden">
+  <input type="text" id="name" placeholder="Full Name">
+  <input type="text" id="address" placeholder="Address">
+</div>
+
+<!-- LOGIN METHOD TABS -->
+<div class="tab-row">
   <button id="phoneTab" class="active">Phone</button>
   <button id="emailTab">Email</button>
 </div>
 
-<!-- PHONE LOGIN -->
+<!-- PHONE SECTION -->
 <div id="phoneSection">
   <input type="text" id="phone" placeholder="10 Digit Phone Number">
   <div id="recaptcha-container"></div>
@@ -42,7 +67,7 @@
   <button id="phoneBtn">Send OTP</button>
 </div>
 
-<!-- EMAIL LOGIN -->
+<!-- EMAIL SECTION -->
 <div id="emailSection" class="hidden">
   <input type="email" id="email" placeholder="Email">
   <input type="password" id="password" placeholder="Password">
@@ -61,12 +86,36 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   doc,
-  getDoc
+  getDoc,
+  setDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let confirmationResult = null;
 let recaptchaVerifier;
+let isRegister = false;
 
+/* Tabs */
+const loginTab = document.getElementById("loginTab");
+const registerTab = document.getElementById("registerTab");
+const registerFields = document.getElementById("registerFields");
+
+loginTab.onclick = ()=>{
+  isRegister = false;
+  loginTab.classList.add("active");
+  registerTab.classList.remove("active");
+  registerFields.classList.add("hidden");
+  document.getElementById("mainTitle").innerText="Login";
+};
+
+registerTab.onclick = ()=>{
+  isRegister = true;
+  registerTab.classList.add("active");
+  loginTab.classList.remove("active");
+  registerFields.classList.remove("hidden");
+  document.getElementById("mainTitle").innerText="Register (User)";
+};
+
+/* Login Method Tabs */
 const phoneTab = document.getElementById("phoneTab");
 const emailTab = document.getElementById("emailTab");
 const phoneSection = document.getElementById("phoneSection");
@@ -94,9 +143,9 @@ window.addEventListener("load", ()=>{
   );
 });
 
-/* PHONE LOGIN */
-
+/* PHONE FLOW */
 document.getElementById("phoneBtn").onclick = async ()=>{
+
   if(!confirmationResult){
     const phoneInput = document.getElementById("phone").value.trim();
     if(phoneInput.length!==10){
@@ -105,73 +154,80 @@ document.getElementById("phoneBtn").onclick = async ()=>{
     }
     const phone = "+91"+phoneInput;
 
-    try{
-      confirmationResult = await signInWithPhoneNumber(auth,phone,recaptchaVerifier);
-      document.getElementById("otp").classList.remove("hidden");
-      document.getElementById("phoneBtn").innerText="Verify OTP";
-    }catch(e){
-      alert(e.message);
-    }
+    confirmationResult = await signInWithPhoneNumber(auth,phone,recaptchaVerifier);
+    document.getElementById("otp").classList.remove("hidden");
+    document.getElementById("phoneBtn").innerText="Verify OTP";
   }else{
     const otp = document.getElementById("otp").value.trim();
-    if(!otp){ alert("Enter OTP"); return; }
-
-    try{
-      const result = await confirmationResult.confirm(otp);
-      handlePostLogin(result.user);
-    }catch{
-      alert("Invalid OTP");
-    }
+    const result = await confirmationResult.confirm(otp);
+    await handlePostLogin(result.user);
   }
 };
 
 /* EMAIL LOGIN */
-
 document.getElementById("emailBtn").onclick = async ()=>{
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value.trim();
 
-  if(!email || !password){
-    alert("Enter email & password");
-    return;
-  }
-
-  try{
-    const cred = await signInWithEmailAndPassword(auth,email,password);
-    handlePostLogin(cred.user);
-  }catch(e){
-    alert("Invalid credentials");
-  }
+  const cred = await signInWithEmailAndPassword(auth,email,password);
+  await handlePostLogin(cred.user);
 };
 
-/* ROLE + PHONE CHECK */
-
+/* POST LOGIN LOGIC */
 async function handlePostLogin(user){
 
-  // Check admin
   const adminSnap = await getDoc(doc(db,"admins",user.uid));
   const userSnap = await getDoc(doc(db,"users",user.uid));
 
-  // Check phone mandatory
-  let phoneExists = false;
+  /* REGISTER USER */
+  if(isRegister){
+    if(userSnap.exists()){
+      alert("User already exists. Please login.");
+      return;
+    }
 
-  if(adminSnap.exists()){
-    phoneExists = !!adminSnap.data().phone;
-  }else if(userSnap.exists()){
-    phoneExists = !!userSnap.data().phone;
-  }
+    const name = document.getElementById("name").value.trim();
+    const address = document.getElementById("address").value.trim();
 
-  if(!phoneExists){
-    alert("Phone number required. Contact support.");
+    if(!name || !address){
+      alert("Name & Address required");
+      return;
+    }
+
+    await setDoc(doc(db,"users",user.uid),{
+      name,
+      address,
+      phone:user.phoneNumber,
+      createdAt:new Date()
+    });
+
+    window.location.href="my-bookings.html";
     return;
   }
 
-  // Redirect by role
+  /* LOGIN FLOW */
+
+  // Admin
   if(adminSnap.exists()){
+    if(!adminSnap.data().phone){
+      window.location.href="complete-profile.html";
+      return;
+    }
     window.location.href="admin/managebookings.html";
-  }else{
-    window.location.href="my-bookings.html";
+    return;
   }
+
+  // User
+  if(userSnap.exists()){
+    if(!userSnap.data().phone){
+      window.location.href="complete-profile.html";
+      return;
+    }
+    window.location.href="my-bookings.html";
+    return;
+  }
+
+  alert("Account not found. Please register.");
 }
 </script>
 

@@ -39,36 +39,32 @@
 
 
 <div class="tab-row">
-  <button id="loginTab" class="active">Login</button>
-  <button id="registerTab">Register (User)</button>
+  <button id="userTab" class="active" onclick="showMode('user')">User Login/Reg</button>
+  <button id="adminTab" onclick="showMode('admin')">Admin Login</button>
 </div>
 
-<!-- REGISTER FIELDS -->
-<div id="registerFields" class="hidden">
-  <input type="text" id="name" placeholder="Full Name">
-  <input type="text" id="address" placeholder="Address">
-</div>
+<hr>
 
-<!-- LOGIN METHOD TABS -->
-<div class="tab-row">
-  <button id="phoneTab" class="active">Phone</button>
-  <button id="emailTab">Email</button>
-</div>
-
-<!-- PHONE SECTION -->
-<div id="phoneSection">
+<div id="userSection">
+  <div id="registerFields" class="hidden">
+    <input type="text" id="name" placeholder="Full Name">
+    <input type="text" id="address" placeholder="Address">
+  </div>
+  
   <input type="text" id="phone" placeholder="10 Digit Phone Number">
   <div id="recaptcha-container"></div>
   <input type="text" id="otp" placeholder="Enter OTP" class="hidden">
+  
   <button id="phoneBtn">Send OTP</button>
+  <p><small>Need an account? <a href="#" onclick="toggleReg()">Register here</a></small></p>
 </div>
 
-<!-- EMAIL SECTION -->
-<div id="emailSection" class="hidden">
-  <input type="email" id="email" placeholder="Email">
+<div id="adminSection" class="hidden">
+  <input type="email" id="email" placeholder="Admin Email">
   <input type="password" id="password" placeholder="Password">
-  <button id="emailBtn">Login</button>
+  <button id="adminBtn">Admin Login</button>
 </div>
+
 
 </div>
 </div>

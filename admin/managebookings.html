@@ -1,60 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Manage Bookings</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body{margin:0;font-family:'Segoe UI';background:#f3f6fb;}
-
-    .admin-header{
-      background:#4f46e5;
-      color:white;
-      padding:15px 25px;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-    }
-
-    .admin-logo{font-weight:600;font-size:18px;}
-    .admin-right{display:flex;gap:15px;align-items:center;}
-    .admin-right button{
-      background:white;color:#4f46e5;border:none;
-      padding:6px 12px;border-radius:6px;cursor:pointer;
-    }
-
-    .container{max-width:1200px;margin:30px auto;padding:20px;}
-
-    .card{
-      background:white;
-      padding:20px;
-      border-radius:12px;
-      box-shadow:0 8px 25px rgba(0,0,0,0.08);
-      margin-bottom:25px;
-    }
-
-    table{width:100%;border-collapse:collapse;}
-    th,td{padding:12px;border-bottom:1px solid #eee;text-align:left;}
-    th{background:#4f46e5;color:white;}
-
-    .status-badge{
-      padding:4px 8px;
-      border-radius:6px;
-      font-size:12px;
-      font-weight:600;
-    }
-
-    .pending{background:#fef3c7;color:#92400e;}
-    .assigned{background:#dbeafe;color:#1e40af;}
-    .in_progress{background:#e0f2fe;color:#075985;}
-
-    .free{color:green;font-weight:600;}
-    .busy{color:red;font-weight:600;}
-  </style>
+<title>Manage Bookings</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body{margin:0;font-family:'Segoe UI';background:#f3f6fb;}
+.admin-header{
+  background:#4f46e5;color:white;
+  padding:15px 25px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.admin-right{display:flex;align-items:center;gap:15px;}
+.admin-right button{background:white;color:#4f46e5;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;}
+.container{max-width:1200px;margin:40px auto;padding:20px;}
+.card{background:white;padding:20px;border-radius:12px;box-shadow:0 8px 25px rgba(0,0,0,0.08);margin-bottom:25px;}
+table{width:100%;border-collapse:collapse;}
+th,td{padding:12px;border-bottom:1px solid #eee;text-align:left;}
+th{background:#4f46e5;color:white;}
+.free{color:green;font-weight:600;}
+.busy{color:red;font-weight:600;}
+</style>
 </head>
 <body>
 
 <div class="admin-header">
-  <div class="admin-logo">Gigto Admin Panel</div>
+  <div>Gigto Admin</div>
   <div class="admin-right">
     <span id="adminName"></span>
     <button onclick="logout()">Logout</button>
@@ -64,33 +34,33 @@
 <div class="container">
 
 <div class="card">
-  <h3>Open Bookings</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>Service</th>
-        <th>Address</th>
-        <th>Phone</th>
-        <th>Status</th>
-        <th>Assign</th>
-      </tr>
-    </thead>
-    <tbody id="bookingList"></tbody>
-  </table>
+<h3>Open Bookings</h3>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Address</th>
+<th>Phone</th>
+<th>Status</th>
+<th>Assign</th>
+</tr>
+</thead>
+<tbody id="bookingList"></tbody>
+</table>
 </div>
 
 <div class="card">
-  <h3>Worker Availability</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Service</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody id="workerList"></tbody>
-  </table>
+<h3>Worker Availability</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Service</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody id="workerList"></tbody>
+</table>
 </div>
 
 </div>
@@ -99,30 +69,29 @@
 import { auth, db } from "../firebase.js";
 import { onAuthStateChanged, signOut }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection,getDocs,doc,getDoc,updateDoc }
+import { collection, getDocs, doc, getDoc, updateDoc }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let currentUser,currentRole,workers=[],bookings=[];
 
-onAuthStateChanged(auth, async(user)=>{
+onAuthStateChanged(auth,async(user)=>{
   if(!user){window.location.href="../auth.html";return;}
   currentUser=user;
-
   const snap=await getDoc(doc(db,"admins",user.uid));
-  if(!snap.exists() || snap.data().status!=="active"){
+  if(!snap.exists()||snap.data().status!=="active"){
     await signOut(auth);
     window.location.href="../auth.html";
     return;
   }
-
   currentRole=snap.data().role;
   document.getElementById("adminName").innerText=user.email;
   loadData();
 });
 
 async function loadData(){
+  workers=[]; bookings=[];
+
   const workerSnap=await getDocs(collection(db,"gig_workers"));
-  workers=[];
   workerSnap.forEach(docSnap=>{
     const data=docSnap.data();
     if(currentRole==="admin" && data.adminId!==currentUser.uid) return;
@@ -130,65 +99,67 @@ async function loadData(){
   });
 
   const bookingSnap=await getDocs(collection(db,"bookings"));
-  bookings=[];
   bookingSnap.forEach(docSnap=>{
-    bookings.push({id:docSnap.id,...docSnap.data()});
+    const data=docSnap.data();
+    bookings.push({id:docSnap.id,...data});
   });
 
-  renderBookings();
   renderWorkers();
-}
-
-function renderBookings(){
-  const list=document.getElementById("bookingList");
-  list.innerHTML="";
-
-  bookings
-  .filter(b=>["pending","assigned","in_progress"]
-  .includes((b.status||"").toLowerCase()))
-  .forEach(b=>{
-    let workerOptions=`<option value="">Select</option>`;
-    workers.forEach(w=>{
-      if(w.status==="active"){
-        workerOptions+=`<option value="${w.id}">${w.name}</option>`;
-      }
-    });
-
-    list.innerHTML+=`
-      <tr>
-        <td>${b.serviceType}</td>
-        <td>${b.address}</td>
-        <td>${b.phone}</td>
-        <td><span class="status-badge ${b.status}">${b.status}</span></td>
-        <td>
-          ${b.status==="pending"?
-          `<select onchange="assignWorker('${b.id}',this.value)">
-            ${workerOptions}
-          </select>`:"Assigned"}
-        </td>
-      </tr>
-    `;
-  });
+  renderBookings();
 }
 
 function renderWorkers(){
   const list=document.getElementById("workerList");
   list.innerHTML="";
-
-  workers.forEach(w=>{
-    const busy=bookings.some(b=>b.assignedWorkerId===w.id && b.status==="assigned");
+  workers.forEach(worker=>{
+    const busy=bookings.some(b=>
+      b.assignedWorkerId===worker.id &&
+      ["assigned","in_progress"].includes((b.status||"").toLowerCase())
+    );
     list.innerHTML+=`
       <tr>
-        <td>${w.name}</td>
-        <td>${w.gigType}</td>
+        <td>${worker.name}</td>
+        <td>${worker.gigType}</td>
         <td class="${busy?"busy":"free"}">${busy?"Busy":"Free"}</td>
       </tr>
     `;
   });
 }
 
+function renderBookings(){
+  const list=document.getElementById("bookingList");
+  list.innerHTML="";
+  bookings
+  .filter(b=>["pending","assigned","in_progress"].includes((b.status||"").toLowerCase()))
+  .forEach(booking=>{
+    let options=`<option value="">Select</option>`;
+    workers.forEach(worker=>{
+      const busy=bookings.some(b=>
+        b.assignedWorkerId===worker.id &&
+        ["assigned","in_progress"].includes((b.status||"").toLowerCase())
+      );
+      if(!busy && worker.status==="active"){
+        options+=`<option value="${worker.id}">${worker.name}</option>`;
+      }
+    });
+    list.innerHTML+=`
+      <tr>
+        <td>${booking.serviceType}</td>
+        <td>${booking.address}</td>
+        <td>${booking.phone}</td>
+        <td>${booking.status}</td>
+        <td>
+        ${booking.status==="pending"?
+          `<select onchange="assignWorker('${booking.id}',this.value)">${options}</select>`
+          :"Assigned"}
+        </td>
+      </tr>
+    `;
+  });
+}
+
 window.assignWorker=async function(id,workerId){
-  if(!workerId) return;
+  if(!workerId)return;
   await updateDoc(doc(db,"bookings",id),{
     assignedWorkerId:workerId,
     status:"assigned"
@@ -196,10 +167,7 @@ window.assignWorker=async function(id,workerId){
   loadData();
 };
 
-window.logout=async function(){
-  await signOut(auth);
-  window.location.href="../auth.html";
-};
+window.logout=async()=>{await signOut(auth);window.location.href="../auth.html";}
 </script>
 
 </body>

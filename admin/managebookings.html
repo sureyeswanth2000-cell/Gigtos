@@ -39,6 +39,34 @@
       margin-right:5px;
     }
 
+    .admin-header{
+  background:#4f46e5;
+  color:white;
+  padding:15px 25px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.admin-logo{
+  font-weight:600;
+  font-size:18px;
+}
+
+.admin-right{
+  display:flex;
+  align-items:center;
+  gap:15px;
+}
+
+.admin-right button{
+  background:white;
+  color:#4f46e5;
+  border:none;
+  padding:6px 12px;
+  border-radius:6px;
+  cursor:pointer;
+}
     .free { color:green; font-weight:600; }
     .busy { color:red; font-weight:600; }
   </style>
@@ -47,7 +75,13 @@
 <body>
 
 <div class="container">
-
+<div class="admin-header">
+  <div class="admin-logo">Gigto Admin</div>
+  <div class="admin-right">
+    <span id="adminName"></span>
+    <button onclick="logout()">Logout</button>
+  </div>
+</div>
 <h2>Booking Management</h2>
 <button onclick="goDashboard()">Back to Dashboard</button>
 
@@ -149,7 +183,7 @@ async function loadData(){
 }
 
 function renderWorkers(){
-
+document.getElementById("adminName").innerText = currentUser.email;
   const list = document.getElementById("workerList");
   list.innerHTML="";
 

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Complete Profile</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="./styles/global.css">
+</head>
+<body>
+
+<div class="container">
+<div class="card">
+<h2>Phone Required</h2>
+<input type="text" id="phone" placeholder="Enter Phone Number">
+<button onclick="savePhone()">Save</button>
+</div>
+</div>
+
+<script type="module">
+import { auth, db } from "./firebase.js";
+import { doc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+window.savePhone = async function(){
+
+  const user = auth.currentUser;
+  const phone = document.getElementById("phone").value.trim();
+
+  if(phone.length!==10){
+    alert("Enter valid phone");
+    return;
+  }
+
+  const adminSnap = await getDoc(doc(db,"admins",user.uid));
+
+  if(adminSnap.exists()){
+    await updateDoc(doc(db,"admins",user.uid),{
+      phone:"+91"+phone
+    });
+    window.location.href="admin/managebookings.html";
+  }else{
+    await updateDoc(doc(db,"users",user.uid),{
+      phone:"+91"+phone
+    });
+    window.location.href="my-bookings.html";
+  }
+};
+</script>
+
+</body>
+</html>

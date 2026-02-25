@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin Dashboard</title>
+  <title>Super Admin Control Panel</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
@@ -67,7 +67,6 @@
 <button onclick="logout()">Logout</button>
 </div>
 
-<!-- WORKER CREATION -->
 <div class="card">
 <h3>Create Worker</h3>
 <input id="name" placeholder="Worker Name">
@@ -82,9 +81,7 @@
 <button class="primary" onclick="createWorker()">Create Worker</button>
 </div>
 
-<!-- ADMIN SECTION -->
 <div class="card" id="adminSection" style="display:none;">
-
 <h3>Create Admin</h3>
 <input id="adminEmail" placeholder="Admin Email">
 <input id="adminPassword" type="password" placeholder="Password">
@@ -98,7 +95,6 @@
 
 <h3>Admins List</h3>
 <div id="adminList"></div>
-
 </div>
 
 </div>
@@ -112,7 +108,6 @@ from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 import { auth, db } from "../firebase.js";
 
-// Secondary app for creating admins without logging out superadmin
 const secondaryApp = initializeApp(auth.app.options, "Secondary");
 const secondaryAuth = getAuth(secondaryApp);
 
@@ -126,6 +121,14 @@ onAuthStateChanged(auth, async(user)=>{
   const snap=await getDoc(doc(db,"admins",user.uid));
   if(!snap.exists()){ alert("Not authorized"); return; }
 
+  // ✅ BLOCK INACTIVE LOGIN
+  if(snap.data().status !== "active"){
+    alert("Your account is disabled.");
+    await signOut(auth);
+    window.location.href="login.html";
+    return;
+  }
+
   currentRole=snap.data().role;
   document.getElementById("roleInfo").innerText="Role: "+currentRole;
 
@@ -136,7 +139,6 @@ onAuthStateChanged(auth, async(user)=>{
   }
 });
 
-// ================= STATS =================
 async function loadStats(){
   const workers = await getDocs(collection(db,"gig_workers"));
   const admins = await getDocs(collection(db,"admins"));
@@ -144,7 +146,6 @@ async function loadStats(){
   totalAdmins.innerText = admins.size;
 }
 
-// ================= WORKER =================
 window.createWorker=async function(){
   await addDoc(collection(db,"gig_workers"),{
     name:name.value,
@@ -161,9 +162,7 @@ window.createWorker=async function(){
   loadStats();
 };
 
-// ================= CREATE ADMIN (NO LOGOUT ISSUE) =================
 window.createAdmin=async function(){
-
   try{
     const cred = await createUserWithEmailAndPassword(
       secondaryAuth,
@@ -178,7 +177,7 @@ window.createAdmin=async function(){
       createdAt:new Date()
     });
 
-    await secondaryAuth.signOut(); // important
+    await secondaryAuth.signOut();
 
     alert("Admin Created");
     loadAdmins();
@@ -189,36 +188,51 @@ window.createAdmin=async function(){
   }
 };
 
-// ================= LOAD ADMINS =================
 async function loadAdmins(){
   const snap=await getDocs(collection(db,"admins"));
   adminList.innerHTML="";
+
   snap.forEach(docSnap=>{
     const data=docSnap.data();
+    const id=docSnap.id;
+
     adminList.innerHTML+=`
       <div style="padding:10px;background:#f9f9f9;margin-bottom:10px;border-radius:8px;">
         <b>${data.email}</b> (${data.role}) - ${data.status}
         <br>
-        <button onclick="toggleAdmin('${docSnap.id}','${data.status}')">
+        <button onclick="toggleAdmin('${id}','${data.status}')">
           ${data.status==="active"?"Disable":"Enable"}
         </button>
         <button onclick="resetPassword('${data.email}')">Reset Password</button>
-        <button class="danger" onclick="deleteAdmin('${docSnap.id}')">Delete</button>
+        <button class="danger" onclick="deleteAdmin('${id}')">Delete</button>
       </div>
     `;
   });
 }
 
-// ================= ENABLE / DISABLE =================
 window.toggleAdmin=async function(id,status){
+
+  // ✅ Prevent self-disable
+  if(id === currentUser.uid){
+    alert("You cannot disable your own account.");
+    return;
+  }
+
   await updateDoc(doc(db,"admins",id),{
     status: status==="active"?"inactive":"active"
   });
+
   loadAdmins();
 };
 
-// ================= DELETE =================
 window.deleteAdmin=async function(id){
+
+  // ✅ Prevent self-delete
+  if(id === currentUser.uid){
+    alert("You cannot delete your own account.");
+    return;
+  }
+
   if(confirm("Delete Admin?")){
     await deleteDoc(doc(db,"admins",id));
     loadAdmins();
@@ -226,7 +240,6 @@ window.deleteAdmin=async function(id){
   }
 };
 
-// ================= PASSWORD RESET =================
 window.resetPassword=async function(email){
   await sendPasswordResetEmail(auth,email);
   alert("Password reset email sent to "+email);

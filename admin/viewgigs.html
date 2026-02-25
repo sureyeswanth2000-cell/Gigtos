@@ -1,62 +1,34 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Manage Workers</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body{margin:0;font-family:'Segoe UI';background:#f3f6fb;}
-
-    .admin-header{
-      background:#4f46e5;
-      color:white;
-      padding:15px 25px;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-    }
-
-    .admin-logo{font-weight:600;font-size:18px;}
-    .admin-right{display:flex;gap:15px;align-items:center;}
-    .admin-right button{
-      background:white;color:#4f46e5;border:none;
-      padding:6px 12px;border-radius:6px;cursor:pointer;
-    }
-
-    .container{max-width:1200px;margin:40px auto;padding:20px;}
-
-    table{
-      width:100%;
-      border-collapse:collapse;
-      background:white;
-      border-radius:12px;
-      overflow:hidden;
-      box-shadow:0 8px 25px rgba(0,0,0,0.08);
-    }
-
-    th,td{padding:14px;border-bottom:1px solid #eee;text-align:left;}
-    th{background:#4f46e5;color:white;}
-
-    button{
-      padding:6px 12px;
-      border:none;
-      border-radius:6px;
-      cursor:pointer;
-      margin-right:5px;
-      font-size:13px;
-    }
-
-    .primary{background:#4f46e5;color:white;}
-    .danger{background:#dc2626;color:white;}
-    .secondary{background:#e5e7eb;}
-
-    .active{color:green;font-weight:600;}
-    .inactive{color:red;font-weight:600;}
-  </style>
+<title>Manage Workers</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body{margin:0;font-family:'Segoe UI';background:#f3f6fb;}
+.admin-header{
+  background:#4f46e5;color:white;
+  padding:15px 25px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.admin-right{display:flex;align-items:center;gap:15px;}
+.admin-right button{background:white;color:#4f46e5;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;}
+.container{max-width:1100px;margin:40px auto;padding:20px;}
+.card{background:white;padding:20px;border-radius:12px;box-shadow:0 8px 25px rgba(0,0,0,0.08);margin-bottom:25px;}
+table{width:100%;border-collapse:collapse;background:white;border-radius:12px;overflow:hidden;}
+th,td{padding:12px;border-bottom:1px solid #eee;text-align:left;}
+th{background:#4f46e5;color:white;}
+button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;margin-right:5px;}
+.primary{background:#4f46e5;color:white;}
+.danger{background:#dc2626;color:white;}
+.secondary{background:#e5e7eb;}
+.active{color:green;font-weight:600;}
+.inactive{color:red;font-weight:600;}
+</style>
 </head>
 <body>
 
 <div class="admin-header">
-  <div class="admin-logo">Gigto Admin Panel</div>
+  <div>Gigto Admin</div>
   <div class="admin-right">
     <span id="adminName"></span>
     <button onclick="logout()">Logout</button>
@@ -64,35 +36,50 @@
 </div>
 
 <div class="container">
-  <h2>Workers</h2>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Type</th>
-        <th>Contact</th>
-        <th>Status</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody id="workerList"></tbody>
-  </table>
+<div class="card">
+<h3>Create Worker</h3>
+<input id="name" placeholder="Name">
+<input id="contact" placeholder="Contact">
+<select id="gigType">
+<option>Plumber</option>
+<option>Electrician</option>
+</select>
+<button class="primary" onclick="createWorker()">Create</button>
+</div>
+
+<div class="card">
+<input id="searchWorker" placeholder="Search Worker..." oninput="loadWorkers()">
+</div>
+
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Contact</th>
+<th>Status</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody id="workerList"></tbody>
+</table>
+
 </div>
 
 <script type="module">
 import { auth, db } from "../firebase.js";
 import { onAuthStateChanged, signOut }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection,getDocs,doc,getDoc,updateDoc,deleteDoc }
+import { collection, getDocs, addDoc, doc, getDoc, updateDoc, deleteDoc }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-let currentUser,currentRole;
+let currentUser, currentRole;
 
 onAuthStateChanged(auth, async(user)=>{
-  if(!user){window.location.href="../auth.html";return;}
-  currentUser=user;
+  if(!user){ window.location.href="../auth.html"; return; }
 
+  currentUser=user;
   const snap=await getDoc(doc(db,"admins",user.uid));
   if(!snap.exists() || snap.data().status!=="active"){
     await signOut(auth);
@@ -108,6 +95,7 @@ onAuthStateChanged(auth, async(user)=>{
 async function loadWorkers(){
   const snapshot=await getDocs(collection(db,"gig_workers"));
   const list=document.getElementById("workerList");
+  const search=document.getElementById("searchWorker").value.toLowerCase();
   list.innerHTML="";
 
   snapshot.forEach(docSnap=>{
@@ -115,43 +103,56 @@ async function loadWorkers(){
     const id=docSnap.id;
 
     if(currentRole==="admin" && data.adminId!==currentUser.uid) return;
+    if(search && !data.name.toLowerCase().includes(search)) return;
 
     list.innerHTML+=`
       <tr>
         <td>${data.name}</td>
         <td>${data.gigType}</td>
         <td>${data.contact}</td>
-        <td class="${data.status}">${data.status}</td>
+        <td class="${data.status==="active"?"active":"inactive"}">${data.status}</td>
         <td>
-          <button class="${data.status==="active"?"danger":"primary"}"
-            onclick="toggleWorker('${id}','${data.status}')">
+          <button onclick="toggleWorker('${id}','${data.status}')">
             ${data.status==="active"?"Disable":"Enable"}
           </button>
-          ${currentRole==="superadmin"?
-          `<button class="danger" onclick="deleteWorker('${id}')">Delete</button>`:""}
+          ${currentRole==="superadmin"?`<button class="danger" onclick="deleteWorker('${id}')">Delete</button>`:""}
         </td>
       </tr>
     `;
   });
 }
 
+window.createWorker=async function(){
+  if(!name.value || !contact.value){ alert("Fill fields"); return; }
+
+  await addDoc(collection(db,"gig_workers"),{
+    name:name.value,
+    contact:contact.value,
+    gigType:gigType.value,
+    status:"active",
+    adminId:currentUser.uid,
+    createdAt:new Date()
+  });
+
+  name.value=""; contact.value="";
+  loadWorkers();
+};
+
 window.toggleWorker=async function(id,status){
   await updateDoc(doc(db,"gig_workers",id),{
-    status:status==="active"?"inactive":"active"
+    status: status==="active"?"inactive":"active"
   });
   loadWorkers();
 };
 
 window.deleteWorker=async function(id){
-  if(!confirm("Delete worker?")) return;
-  await deleteDoc(doc(db,"gig_workers",id));
-  loadWorkers();
+  if(confirm("Delete worker?")){
+    await deleteDoc(doc(db,"gig_workers",id));
+    loadWorkers();
+  }
 };
 
-window.logout=async function(){
-  await signOut(auth);
-  window.location.href="../auth.html";
-};
+window.logout=async()=>{await signOut(auth);window.location.href="../auth.html";}
 </script>
 
 </body>

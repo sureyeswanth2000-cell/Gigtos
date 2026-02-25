@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
   logoutBtn.addEventListener("click", async (e) => {
     e.preventDefault();
     await signOut(auth);
-    window.location.href = "index.html";
+    window.location.href = "../index.html";
   });
 
   highlightActivePage();

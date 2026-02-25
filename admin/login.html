@@ -1,79 +1,192 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin Login</title>
+  <title>View Workers</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
-    body {
-      margin:0;
-      font-family: 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg,#4f46e5,#06b6d4);
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      height:100vh;
-    }
+    body { margin:0; font-family:'Segoe UI'; background:#f3f6fb; }
+    .container { max-width:1200px; margin:40px auto; padding:20px; }
 
-    .card {
+    table {
+      width:100%;
+      border-collapse:collapse;
       background:white;
-      padding:30px;
-      border-radius:16px;
-      width:90%;
-      max-width:400px;
-      box-shadow:0 15px 40px rgba(0,0,0,0.2);
-      text-align:center;
+      border-radius:12px;
+      overflow:hidden;
+      box-shadow:0 8px 25px rgba(0,0,0,0.08);
     }
 
-    input {
-      width:100%;
-      padding:12px;
-      margin-bottom:15px;
-      border-radius:8px;
-      border:1px solid #ddd;
+    th, td {
+      padding:14px;
+      border-bottom:1px solid #eee;
+      text-align:left;
     }
 
-    button {
-      width:100%;
-      padding:12px;
+    th {
       background:#4f46e5;
       color:white;
-      border:none;
-      border-radius:8px;
-      font-weight:600;
-      cursor:pointer;
     }
 
-    button:hover { opacity:0.9; }
+    tr:hover { background:#f5f7ff; }
+
+    button {
+      padding:6px 12px;
+      border:none;
+      border-radius:6px;
+      cursor:pointer;
+      margin-right:5px;
+      font-size:13px;
+    }
+
+    .primary { background:#4f46e5; color:white; }
+    .danger { background:#dc2626; color:white; }
+    .secondary { background:#e5e7eb; }
+
+    .active { color:green; font-weight:600; }
+    .inactive { color:red; font-weight:600; }
   </style>
 </head>
 
 <body>
 
-<div class="card">
-  <h2>Admin Login</h2>
+<div class="container">
+  <h2>Gig Workers</h2>
+  <button onclick="Dashboard()">Back</button>
+  
+  <p id="roleInfo"></p>
 
-  <input type="email" id="email" placeholder="Email">
-  <input type="password" id="password" placeholder="Password">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Contact</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="workerList"></tbody>
+  </table>
 
-  <button onclick="login()">Login</button>
 </div>
 
 <script type="module">
-import { auth } from "../firebase.js";
-import { signInWithEmailAndPassword }
+import { auth, db } from "../firebase.js";
+import { onAuthStateChanged, signOut }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  updateDoc,
+  deleteDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-window.login = async function() {
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
+let currentUser;
+let currentRole;
 
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
-    window.location.href = "Dashboard.html";
-  } catch {
-    alert("Invalid login");
+onAuthStateChanged(auth, async (user) => {
+
+  if (!user) {
+    window.location.href="login.html";
+    return;
   }
+
+  currentUser = user;
+
+  const adminSnap = await getDoc(doc(db,"admins",user.uid));
+  if(!adminSnap.exists()){
+    alert("Not authorized");
+    await signOut(auth);
+    window.location.href="login.html";
+    return;
+  }
+
+  // ✅ BLOCK INACTIVE SITE LEAD
+  if(adminSnap.data().status !== "active"){
+    alert("Your account is disabled.");
+    await signOut(auth);
+    window.location.href="login.html";
+    return;
+  }
+
+  currentRole = adminSnap.data().role;
+  document.getElementById("roleInfo").innerText =
+    "Role: " + currentRole;
+
+  loadWorkers();
+});
+
+async function loadWorkers(){
+
+  const snapshot = await getDocs(collection(db,"gig_workers"));
+  const list = document.getElementById("workerList");
+  list.innerHTML="";
+
+  snapshot.forEach(docSnap=>{
+    const data = docSnap.data();
+    const id = docSnap.id;
+
+    if(currentRole === "admin" && data.adminId !== currentUser.uid){
+      return;
+    }
+
+    const statusClass = data.status === "active" ? "active" : "inactive";
+
+    const row = document.createElement("tr");
+
+    row.innerHTML=`
+      <td>${data.name}</td>
+      <td>${data.gigType}</td>
+      <td>${data.contact}</td>
+      <td class="${statusClass}">${data.status}</td>
+      <td></td>
+    `;
+
+    const actionsCell = row.children[4];
+
+    const editBtn = document.createElement("button");
+    editBtn.className="secondary";
+    editBtn.innerText="Edit";
+    editBtn.onclick=()=> {
+      window.location.href="Dashboard.html?edit="+id;
+    };
+    actionsCell.appendChild(editBtn);
+
+    const toggleBtn=document.createElement("button");
+    toggleBtn.className = data.status==="active" ? "danger" : "primary";
+    toggleBtn.innerText = data.status==="active" ? "Disable" : "Enable";
+
+    toggleBtn.onclick=async ()=>{
+      await updateDoc(doc(db,"gig_workers",id),{
+        status:data.status==="active"?"inactive":"active"
+      });
+      loadWorkers();
+    };
+
+    actionsCell.appendChild(toggleBtn);
+
+    if(currentRole==="superadmin"){
+      const deleteBtn=document.createElement("button");
+      deleteBtn.className="danger";
+      deleteBtn.innerText="Delete";
+      deleteBtn.onclick=async ()=>{
+        if(confirm("Delete this worker?")){
+          await deleteDoc(doc(db,"gig_workers",id));
+          loadWorkers();
+        }
+      };
+      actionsCell.appendChild(deleteBtn);
+    }
+
+    list.appendChild(row);
+  });
+}
+
+window.Dashboard=function(){
+  window.location.href="Dashboard.html";
 };
 </script>
 

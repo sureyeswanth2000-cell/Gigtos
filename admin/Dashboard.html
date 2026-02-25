@@ -103,25 +103,34 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, addDoc, collection, getDocs, deleteDoc, updateDoc }
+import { doc, getDoc, setDoc, addDoc, collection, getDocs, deleteDoc, updateDoc }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 import { auth, db } from "../firebase.js";
 
-const secondaryApp = initializeApp(auth.app.options, "Secondary");
+const secondaryApp = initializeApp(auth.app.options, "SecondaryApp");
 const secondaryAuth = getAuth(secondaryApp);
 
 let currentUser;
 let currentRole;
 
 onAuthStateChanged(auth, async(user)=>{
-  if(!user){ window.location.href="login.html"; return; }
+  if(!user){
+    window.location.href="login.html";
+    return;
+  }
 
   currentUser=user;
-  const snap=await getDoc(doc(db,"admins",user.uid));
-  if(!snap.exists()){ alert("Not authorized"); return; }
 
-  // ✅ BLOCK INACTIVE LOGIN
+  const snap=await getDoc(doc(db,"admins",user.uid));
+  if(!snap.exists()){
+    alert("Not authorized");
+    await signOut(auth);
+    window.location.href="login.html";
+    return;
+  }
+
+  // 🔐 Block inactive login
   if(snap.data().status !== "active"){
     alert("Your account is disabled.");
     await signOut(auth);
@@ -139,30 +148,22 @@ onAuthStateChanged(auth, async(user)=>{
   }
 });
 
+// ================= STATS =================
 async function loadStats(){
   const workers = await getDocs(collection(db,"gig_workers"));
   const admins = await getDocs(collection(db,"admins"));
-  totalWorkers.innerText = workers.size;
-  totalAdmins.innerText = admins.size;
+  document.getElementById("totalWorkers").innerText = workers.size;
+  document.getElementById("totalAdmins").innerText = admins.size;
 }
 
-window.createWorker=async function(){
-  await addDoc(collection(db,"gig_workers"),{
-    name:name.value,
-    contact:contact.value,
-    aadhaar:aadhaar.value,
-    altContact:altContact.value,
-    gigType:gigType.value,
-    address:address.value,
-    status:"active",
-    adminId:currentUser.uid,
-    createdAt:new Date()
-  });
-  alert("Worker Created");
-  loadStats();
-};
+// ================= CREATE ADMIN =================
+window.createAdmin = async function(){
 
-window.createAdmin=async function(){
+  if(!adminEmail.value || !adminPassword.value){
+    alert("Email and Password required");
+    return;
+  }
+
   try{
     const cred = await createUserWithEmailAndPassword(
       secondaryAuth,
@@ -180,6 +181,9 @@ window.createAdmin=async function(){
     await secondaryAuth.signOut();
 
     alert("Admin Created");
+    adminEmail.value="";
+    adminPassword.value="";
+
     loadAdmins();
     loadStats();
 
@@ -188,18 +192,20 @@ window.createAdmin=async function(){
   }
 };
 
+// ================= LOAD ADMINS =================
 async function loadAdmins(){
   const snap=await getDocs(collection(db,"admins"));
-  adminList.innerHTML="";
+  const list=document.getElementById("adminList");
+  list.innerHTML="";
 
   snap.forEach(docSnap=>{
     const data=docSnap.data();
     const id=docSnap.id;
 
-    adminList.innerHTML+=`
+    list.innerHTML+=`
       <div style="padding:10px;background:#f9f9f9;margin-bottom:10px;border-radius:8px;">
         <b>${data.email}</b> (${data.role}) - ${data.status}
-        <br>
+        <br><br>
         <button onclick="toggleAdmin('${id}','${data.status}')">
           ${data.status==="active"?"Disable":"Enable"}
         </button>
@@ -210,42 +216,59 @@ async function loadAdmins(){
   });
 }
 
-window.toggleAdmin=async function(id,status){
+// ================= ENABLE / DISABLE =================
+window.toggleAdmin = async function(id,status){
 
-  // ✅ Prevent self-disable
   if(id === currentUser.uid){
     alert("You cannot disable your own account.");
     return;
   }
 
-  await updateDoc(doc(db,"admins",id),{
-    status: status==="active"?"inactive":"active"
-  });
+  try{
+    await updateDoc(doc(db,"admins",id),{
+      status: status==="active" ? "inactive" : "active"
+    });
 
-  loadAdmins();
+    alert("Status Updated");
+    loadAdmins();
+  }
+  catch(error){
+    alert(error.message);
+  }
 };
 
-window.deleteAdmin=async function(id){
+// ================= DELETE =================
+window.deleteAdmin = async function(id){
 
-  // ✅ Prevent self-delete
   if(id === currentUser.uid){
     alert("You cannot delete your own account.");
     return;
   }
 
-  if(confirm("Delete Admin?")){
+  if(!confirm("Delete Admin?")) return;
+
+  try{
     await deleteDoc(doc(db,"admins",id));
+    alert("Admin Deleted");
     loadAdmins();
     loadStats();
   }
+  catch(error){
+    alert(error.message);
+  }
 };
 
-window.resetPassword=async function(email){
-  await sendPasswordResetEmail(auth,email);
-  alert("Password reset email sent to "+email);
+// ================= RESET PASSWORD =================
+window.resetPassword = async function(email){
+  try{
+    await sendPasswordResetEmail(auth,email);
+    alert("Password reset email sent.");
+  }catch(error){
+    alert(error.message);
+  }
 };
 
-window.logout=async function(){
+window.logout = async function(){
   await signOut(auth);
   window.location.href="login.html";
 };

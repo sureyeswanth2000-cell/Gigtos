@@ -1,14 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>View Workers</title>
+  <title>Manage Workers</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <style>
-    body { margin:0; font-family:'Segoe UI'; background:#f3f6fb; }
-    .container { max-width:1200px; margin:40px auto; padding:20px; }
+    body{margin:0;font-family:'Segoe UI';background:#f3f6fb;}
 
-    table {
+    .admin-header{
+      background:#4f46e5;
+      color:white;
+      padding:15px 25px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+
+    .admin-logo{font-weight:600;font-size:18px;}
+    .admin-right{display:flex;gap:15px;align-items:center;}
+    .admin-right button{
+      background:white;color:#4f46e5;border:none;
+      padding:6px 12px;border-radius:6px;cursor:pointer;
+    }
+
+    .container{max-width:1200px;margin:40px auto;padding:20px;}
+
+    table{
       width:100%;
       border-collapse:collapse;
       background:white;
@@ -17,20 +33,10 @@
       box-shadow:0 8px 25px rgba(0,0,0,0.08);
     }
 
-    th, td {
-      padding:14px;
-      border-bottom:1px solid #eee;
-      text-align:left;
-    }
+    th,td{padding:14px;border-bottom:1px solid #eee;text-align:left;}
+    th{background:#4f46e5;color:white;}
 
-    th {
-      background:#4f46e5;
-      color:white;
-    }
-
-    tr:hover { background:#f5f7ff; }
-
-    button {
+    button{
       padding:6px 12px;
       border:none;
       border-radius:6px;
@@ -39,22 +45,26 @@
       font-size:13px;
     }
 
-    .primary { background:#4f46e5; color:white; }
-    .danger { background:#dc2626; color:white; }
-    .secondary { background:#e5e7eb; }
+    .primary{background:#4f46e5;color:white;}
+    .danger{background:#dc2626;color:white;}
+    .secondary{background:#e5e7eb;}
 
-    .active { color:green; font-weight:600; }
-    .inactive { color:red; font-weight:600; }
+    .active{color:green;font-weight:600;}
+    .inactive{color:red;font-weight:600;}
   </style>
 </head>
-
 <body>
 
+<div class="admin-header">
+  <div class="admin-logo">Gigto Admin Panel</div>
+  <div class="admin-right">
+    <span id="adminName"></span>
+    <button onclick="logout()">Logout</button>
+  </div>
+</div>
+
 <div class="container">
-  <h2>Gig Workers</h2>
-  <button onclick="Dashboard()">Back</button>
-  
-  <p id="roleInfo"></p>
+  <h2>Workers</h2>
 
   <table>
     <thead>
@@ -68,125 +78,79 @@
     </thead>
     <tbody id="workerList"></tbody>
   </table>
-
 </div>
 
 <script type="module">
 import { auth, db } from "../firebase.js";
 import { onAuthStateChanged, signOut }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import {
-  collection,
-  getDocs,
-  doc,
-  getDoc,
-  updateDoc,
-  deleteDoc
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { collection,getDocs,doc,getDoc,updateDoc,deleteDoc }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-let currentUser;
-let currentRole;
+let currentUser,currentRole;
 
-onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(auth, async(user)=>{
+  if(!user){window.location.href="../auth.html";return;}
+  currentUser=user;
 
-  if (!user) {
-    window.location.href="login.html";
-    return;
-  }
-
-  currentUser = user;
-
-  const adminSnap = await getDoc(doc(db,"admins",user.uid));
-  if(!adminSnap.exists()){
-    alert("Not authorized");
+  const snap=await getDoc(doc(db,"admins",user.uid));
+  if(!snap.exists() || snap.data().status!=="active"){
     await signOut(auth);
-    window.location.href="login.html";
+    window.location.href="../auth.html";
     return;
   }
 
-  // ✅ BLOCK INACTIVE SITE LEAD
-  if(adminSnap.data().status !== "active"){
-    alert("Your account is disabled.");
-    await signOut(auth);
-    window.location.href="login.html";
-    return;
-  }
-
-  currentRole = adminSnap.data().role;
-  document.getElementById("roleInfo").innerText =
-    "Role: " + currentRole;
-
+  currentRole=snap.data().role;
+  document.getElementById("adminName").innerText=user.email;
   loadWorkers();
 });
 
 async function loadWorkers(){
-
-  const snapshot = await getDocs(collection(db,"gig_workers"));
-  const list = document.getElementById("workerList");
+  const snapshot=await getDocs(collection(db,"gig_workers"));
+  const list=document.getElementById("workerList");
   list.innerHTML="";
 
   snapshot.forEach(docSnap=>{
-    const data = docSnap.data();
-    const id = docSnap.id;
+    const data=docSnap.data();
+    const id=docSnap.id;
 
-    if(currentRole === "admin" && data.adminId !== currentUser.uid){
-      return;
-    }
+    if(currentRole==="admin" && data.adminId!==currentUser.uid) return;
 
-    const statusClass = data.status === "active" ? "active" : "inactive";
-
-    const row = document.createElement("tr");
-
-    row.innerHTML=`
-      <td>${data.name}</td>
-      <td>${data.gigType}</td>
-      <td>${data.contact}</td>
-      <td class="${statusClass}">${data.status}</td>
-      <td></td>
+    list.innerHTML+=`
+      <tr>
+        <td>${data.name}</td>
+        <td>${data.gigType}</td>
+        <td>${data.contact}</td>
+        <td class="${data.status}">${data.status}</td>
+        <td>
+          <button class="${data.status==="active"?"danger":"primary"}"
+            onclick="toggleWorker('${id}','${data.status}')">
+            ${data.status==="active"?"Disable":"Enable"}
+          </button>
+          ${currentRole==="superadmin"?
+          `<button class="danger" onclick="deleteWorker('${id}')">Delete</button>`:""}
+        </td>
+      </tr>
     `;
-
-    const actionsCell = row.children[4];
-
-    const editBtn = document.createElement("button");
-    editBtn.className="secondary";
-    editBtn.innerText="Edit";
-    editBtn.onclick=()=> {
-      window.location.href="Dashboard.html?edit="+id;
-    };
-    actionsCell.appendChild(editBtn);
-
-    const toggleBtn=document.createElement("button");
-    toggleBtn.className = data.status==="active" ? "danger" : "primary";
-    toggleBtn.innerText = data.status==="active" ? "Disable" : "Enable";
-
-    toggleBtn.onclick=async ()=>{
-      await updateDoc(doc(db,"gig_workers",id),{
-        status:data.status==="active"?"inactive":"active"
-      });
-      loadWorkers();
-    };
-
-    actionsCell.appendChild(toggleBtn);
-
-    if(currentRole==="superadmin"){
-      const deleteBtn=document.createElement("button");
-      deleteBtn.className="danger";
-      deleteBtn.innerText="Delete";
-      deleteBtn.onclick=async ()=>{
-        if(confirm("Delete this worker?")){
-          await deleteDoc(doc(db,"gig_workers",id));
-          loadWorkers();
-        }
-      };
-      actionsCell.appendChild(deleteBtn);
-    }
-
-    list.appendChild(row);
   });
 }
 
-window.Dashboard=function(){
-  window.location.href="dashboard.html";
+window.toggleWorker=async function(id,status){
+  await updateDoc(doc(db,"gig_workers",id),{
+    status:status==="active"?"inactive":"active"
+  });
+  loadWorkers();
+};
+
+window.deleteWorker=async function(id){
+  if(!confirm("Delete worker?")) return;
+  await deleteDoc(doc(db,"gig_workers",id));
+  loadWorkers();
+};
+
+window.logout=async function(){
+  await signOut(auth);
+  window.location.href="../auth.html";
 };
 </script>
 

@@ -1,49 +1,62 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title>Complete Profile</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="stylesheet" href="./styles/global.css">
-</head>
-<body>
-
-<div class="container">
-<div class="card">
-<h2>Phone Required</h2>
-<input type="text" id="phone" placeholder="Enter Phone Number">
-<button onclick="savePhone()">Save</button>
-</div>
-</div>
-
 <script type="module">
 import { auth, db } from "./firebase.js";
-import { doc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { onAuthStateChanged }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { doc, updateDoc, getDoc }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+let currentUser = null;
+
+onAuthStateChanged(auth, (user)=>{
+  if(!user){
+    window.location.href="auth.html";
+  }else{
+    currentUser = user;
+  }
+});
 
 window.savePhone = async function(){
 
-  const user = auth.currentUser;
-  const phone = document.getElementById("phone").value.trim();
-
-  if(phone.length!==10){
-    alert("Enter valid phone");
+  if(!currentUser){
+    alert("User not ready. Try again.");
     return;
   }
 
-  const adminSnap = await getDoc(doc(db,"admins",user.uid));
+  const phone = document.getElementById("phone").value.trim();
 
-  if(adminSnap.exists()){
-    await updateDoc(doc(db,"admins",user.uid),{
-      phone:"+91"+phone
-    });
-    window.location.href="admin/managebookings.html";
-  }else{
-    await updateDoc(doc(db,"users",user.uid),{
-      phone:"+91"+phone
-    });
-    window.location.href="my-bookings.html";
+  if(phone.length !== 10){
+    alert("Enter valid 10 digit phone");
+    return;
+  }
+
+  try{
+
+    const adminRef = doc(db,"admins",currentUser.uid);
+    const adminSnap = await getDoc(adminRef);
+
+    if(adminSnap.exists()){
+      await updateDoc(adminRef,{
+        phone:"+91"+phone
+      });
+      window.location.href="admin/managebookings.html";
+      return;
+    }
+
+    const userRef = doc(db,"users",currentUser.uid);
+    const userSnap = await getDoc(userRef);
+
+    if(userSnap.exists()){
+      await updateDoc(userRef,{
+        phone:"+91"+phone
+      });
+      window.location.href="my-bookings.html";
+      return;
+    }
+
+    alert("Account not found.");
+    
+  }catch(error){
+    alert(error.message);
   }
 };
 </script>
-
-</body>
-</html>

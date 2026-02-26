@@ -3,23 +3,60 @@
 <head>
 <title>Manage Bookings</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
 body{margin:0;font-family:'Segoe UI';background:#f3f6fb;}
-.admin-header{background:#4f46e5;color:white;padding:15px 25px;display:flex;justify-content:space-between;}
-.admin-right{display:flex;gap:15px;align-items:center;}
-.admin-right button{background:white;color:#4f46e5;border:none;padding:6px 12px;border-radius:6px;}
-.container{max-width:1200px;margin:40px auto;padding:20px;}
-.card{background:white;padding:20px;border-radius:12px;box-shadow:0 8px 25px rgba(0,0,0,0.08);margin-bottom:25px;}
-table{width:100%;border-collapse:collapse;}
-th,td{padding:12px;border-bottom:1px solid #eee;text-align:left;}
-th{background:#4f46e5;color:white;}
+.container{max-width:1100px;margin:20px auto;padding:15px;}
+
+.card{
+  background:white;
+  padding:15px;
+  border-radius:12px;
+  box-shadow:0 8px 25px rgba(0,0,0,0.08);
+  margin-bottom:20px;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th,td{
+  padding:10px;
+  border-bottom:1px solid #eee;
+  font-size:14px;
+}
+
+th{
+  background:#4f46e5;
+  color:white;
+}
+
+button{
+  padding:6px 10px;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:12px;
+}
+
+.primary{background:#4f46e5;color:white;}
+.danger{background:#dc2626;color:white;}
+.secondary{background:#e5e7eb;}
+
 .free{color:green;font-weight:600;}
 .busy{color:red;font-weight:600;}
+
+@media(max-width:768px){
+  table, thead, tbody, th, td, tr{display:block;}
+  th{display:none;}
+  tr{margin-bottom:12px;background:white;padding:10px;border-radius:10px;}
+  td{border:none;padding:5px 0;}
+}
 </style>
 </head>
+
 <body>
-
-
 
 <div class="container">
 
@@ -29,10 +66,8 @@ th{background:#4f46e5;color:white;}
 <thead>
 <tr>
 <th>Service</th>
-<th>Address</th>
-<th>Phone</th>
 <th>Status</th>
-<th>Assign</th>
+<th>Action</th>
 </tr>
 </thead>
 <tbody id="bookingList"></tbody>
@@ -41,6 +76,7 @@ th{background:#4f46e5;color:white;}
 
 <div class="card">
 <h3>Worker Availability</h3>
+<h4 id="workerStats"></h4>
 <table>
 <thead>
 <tr>
@@ -56,6 +92,7 @@ th{background:#4f46e5;color:white;}
 </div>
 
 <script type="module">
+
 import { auth, db } from "../firebase.js";
 import { renderAdminHeader } from "./admin-menu.js";
 import { onAuthStateChanged, signOut }
@@ -68,12 +105,14 @@ let currentUser,currentRole,workers=[],bookings=[];
 onAuthStateChanged(auth,async(user)=>{
   if(!user){window.location.href="../auth.html";return;}
   currentUser=user;
+
   const snap=await getDoc(doc(db,"admins",user.uid));
   if(!snap.exists()||snap.data().status!=="active"){
     await signOut(auth);
     window.location.href="../auth.html";
     return;
   }
+
   currentRole=snap.data().role;
   renderAdminHeader(user.email);
   loadData();
@@ -98,14 +137,29 @@ async function loadData(){
   renderBookings();
 }
 
+/* ================= WORKER TABLE ================= */
+
 function renderWorkers(){
   const list=document.getElementById("workerList");
   list.innerHTML="";
+
+  const freeCount = workers.filter(worker=>{
+    const busy=bookings.some(b=>
+      b.assignedWorkerId===worker.id &&
+      ["assigned","in_progress"].includes((b.status||"").toLowerCase())
+    );
+    return !busy && worker.status==="active";
+  }).length;
+
+  document.getElementById("workerStats").innerText =
+    "Available Workers: " + freeCount;
+
   workers.forEach(worker=>{
     const busy=bookings.some(b=>
       b.assignedWorkerId===worker.id &&
       ["assigned","in_progress"].includes((b.status||"").toLowerCase())
     );
+
     list.innerHTML+=`
       <tr>
         <td>${worker.name}</td>
@@ -116,87 +170,102 @@ function renderWorkers(){
   });
 }
 
+/* ================= BOOKING TABLE ================= */
+
 function renderBookings(){
   const list=document.getElementById("bookingList");
   list.innerHTML="";
+
   bookings
   .filter(b=>["pending","assigned","in_progress"].includes((b.status||"").toLowerCase()))
   .forEach(booking=>{
-    let options=`<option value="">Select</option>`;
+
+    let options=`<option value="">Assign Worker</option>`;
+
     workers.forEach(worker=>{
+      const busy=bookings.some(b=>
+        b.assignedWorkerId===worker.id &&
+        ["assigned","in_progress"].includes((b.status||"").toLowerCase())
+      );
 
-  const busy = bookings.some(b=>
-    b.assignedWorkerId === worker.id &&
-    ["assigned","in_progress"].includes((b.status||"").toLowerCase())
-  );
+      const sameService =
+        (worker.gigType||"").toLowerCase() ===
+        (booking.serviceType||"").toLowerCase();
 
-  const sameService =
-    (worker.gigType || "").toLowerCase() ===
-    (booking.serviceType || "").toLowerCase();
-
-  if(!busy && worker.status==="active" && sameService){
-    options+=`
-      <option value="${worker.id}">
-        ${worker.name} (${worker.gigType})
-      </option>
-    `;
-  }
-});
+      if(!busy && worker.status==="active" && sameService){
+        options+=`<option value="${worker.id}">${worker.name}</option>`;
+      }
+    });
 
     list.innerHTML+=`
       <tr>
         <td>${booking.serviceType}</td>
-        <td>${booking.address}</td>
-        <td>${booking.phone}</td>
         <td>${booking.status}</td>
         <td>
-        ${
-booking.status==="pending" ?
-  `<select onchange="assignWorker('${booking.id}',this.value)">
-     ${options}
-   </select>`
-:
-booking.status==="assigned" ?
-  `<button onclick="markCompleted('${booking.id}')">
-     Mark Completed
-   </button>`
-:
-"Completed"
-        }
+          ${
+            booking.status==="pending"
+            ? `
+              <select onchange="assignWorker('${booking.id}',this.value)">
+                ${options}
+              </select>
+              <button class="danger" onclick="cancelBooking('${booking.id}')">Cancel</button>
+              `
+            : booking.status==="assigned"
+            ? `
+              <button class="primary" onclick="startWork('${booking.id}')">Start</button>
+              <button class="danger" onclick="cancelBooking('${booking.id}')">Cancel</button>
+              `
+            : booking.status==="in_progress"
+            ? `
+              <button class="primary" onclick="markCompleted('${booking.id}')">Complete</button>
+              `
+            : ""
+          }
         </td>
       </tr>
     `;
   });
 }
-window.markCompleted = async function(id){
 
-  try {
+/* ================= ACTIONS ================= */
 
-    await updateDoc(doc(db,"bookings",id),{
-      status:"completed"
-    });
-
-    alert("Work marked as completed");
-    loadData();
-
-  } catch(error){
-    console.error(error);
-    alert(error.message);
-  }
-};
-  
 window.assignWorker=async function(id,workerId){
   if(!workerId)return;
+
   await updateDoc(doc(db,"bookings",id),{
     assignedWorkerId:workerId,
-    status:"assigned"
+    status:"assigned",
+    updatedAt:new Date()
+  });
+
+  loadData();
+};
+
+window.startWork=async function(id){
+  await updateDoc(doc(db,"bookings",id),{
+    status:"in_progress",
+    updatedAt:new Date()
   });
   loadData();
 };
 
-window.logout=async()=>{await signOut(auth);window.location.href="../auth.html";}
-window.goDashboard=()=>window.location.href="dashboard.html";
-window.goWorkers=()=>window.location.href="viewgigs.html";
+window.markCompleted=async function(id){
+  await updateDoc(doc(db,"bookings",id),{
+    status:"completed",
+    updatedAt:new Date()
+  });
+  loadData();
+};
+
+window.cancelBooking=async function(id){
+  await updateDoc(doc(db,"bookings",id),{
+    status:"cancelled",
+    assignedWorkerId:null,
+    updatedAt:new Date()
+  });
+  loadData();
+};
+
 </script>
 
 </body>

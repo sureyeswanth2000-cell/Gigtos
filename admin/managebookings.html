@@ -5,13 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body{margin:0;font-family:'Segoe UI';background:#f3f6fb;}
-.admin-header{
-  background:#4f46e5;color:white;
-  padding:15px 25px;
-  display:flex;justify-content:space-between;align-items:center;
-}
-.admin-right{display:flex;align-items:center;gap:15px;}
-.admin-right button{background:white;color:#4f46e5;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;}
+.admin-header{background:#4f46e5;color:white;padding:15px 25px;display:flex;justify-content:space-between;}
+.admin-right{display:flex;gap:15px;align-items:center;}
+.admin-right button{background:white;color:#4f46e5;border:none;padding:6px 12px;border-radius:6px;}
 .container{max-width:1200px;margin:40px auto;padding:20px;}
 .card{background:white;padding:20px;border-radius:12px;box-shadow:0 8px 25px rgba(0,0,0,0.08);margin-bottom:25px;}
 table{width:100%;border-collapse:collapse;}
@@ -26,6 +22,8 @@ th{background:#4f46e5;color:white;}
 <div class="admin-header">
   <div>Gigto Admin</div>
   <div class="admin-right">
+    <button onclick="goDashboard()">Dashboard</button>
+    <button onclick="goWorkers()">Workers</button>
     <span id="adminName"></span>
     <button onclick="logout()">Logout</button>
   </div>
@@ -100,8 +98,7 @@ async function loadData(){
 
   const bookingSnap=await getDocs(collection(db,"bookings"));
   bookingSnap.forEach(docSnap=>{
-    const data=docSnap.data();
-    bookings.push({id:docSnap.id,...data});
+    bookings.push({id:docSnap.id,...docSnap.data()});
   });
 
   renderWorkers();
@@ -142,6 +139,7 @@ function renderBookings(){
         options+=`<option value="${worker.id}">${worker.name}</option>`;
       }
     });
+
     list.innerHTML+=`
       <tr>
         <td>${booking.serviceType}</td>
@@ -168,6 +166,8 @@ window.assignWorker=async function(id,workerId){
 };
 
 window.logout=async()=>{await signOut(auth);window.location.href="../auth.html";}
+window.goDashboard=()=>window.location.href="dashboard.html";
+window.goWorkers=()=>window.location.href="viewgigs.html";
 </script>
 
 </body>

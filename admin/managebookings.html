@@ -8,12 +8,67 @@
 body{margin:0;font-family:'Segoe UI';background:#f3f6fb;}
 .container{max-width:1100px;margin:20px auto;padding:15px;}
 
+.section-title{
+  font-size:18px;
+  font-weight:600;
+  margin-bottom:15px;
+}
+
+.booking-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:15px;
+}
+
+.booking-card{
+  background:white;
+  padding:15px;
+  border-radius:12px;
+  box-shadow:0 8px 25px rgba(0,0,0,0.08);
+}
+
+.badge{
+  display:inline-block;
+  padding:4px 8px;
+  border-radius:20px;
+  font-size:12px;
+  margin-bottom:8px;
+}
+
+.pending{background:#fef3c7;color:#92400e;}
+.assigned{background:#dbeafe;color:#1e40af;}
+.in_progress{background:#e0e7ff;color:#3730a3;}
+.completed{background:#dcfce7;color:#166534;}
+.cancelled{background:#fee2e2;color:#991b1b;}
+
+button{
+  padding:6px 10px;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:12px;
+  margin-top:6px;
+  margin-right:4px;
+}
+
+.primary{background:#4f46e5;color:white;}
+.danger{background:#dc2626;color:white;}
+.secondary{background:#e5e7eb;}
+
 .card{
   background:white;
   padding:15px;
   border-radius:12px;
   box-shadow:0 8px 25px rgba(0,0,0,0.08);
   margin-bottom:20px;
+}
+
+input, select{
+  padding:8px;
+  border-radius:8px;
+  border:1px solid #ddd;
+  margin-right:10px;
+  margin-bottom:10px;
 }
 
 table{
@@ -32,27 +87,8 @@ th{
   color:white;
 }
 
-button{
-  padding:6px 10px;
-  border:none;
-  border-radius:6px;
-  cursor:pointer;
-  font-size:12px;
-}
-
-.primary{background:#4f46e5;color:white;}
-.danger{background:#dc2626;color:white;}
-.secondary{background:#e5e7eb;}
-
 .free{color:green;font-weight:600;}
 .busy{color:red;font-weight:600;}
-
-@media(max-width:768px){
-  table, thead, tbody, th, td, tr{display:block;}
-  th{display:none;}
-  tr{margin-bottom:12px;background:white;padding:10px;border-radius:10px;}
-  td{border:none;padding:5px 0;}
-}
 </style>
 </head>
 
@@ -60,23 +96,21 @@ button{
 
 <div class="container">
 
-<div class="card">
-<h3>Open Bookings</h3>
-<table>
-<thead>
-<tr>
-<th>Service</th>
-<th>Status</th>
-<th>Action</th>
-</tr>
-</thead>
-<tbody id="bookingList"></tbody>
-</table>
-</div>
+<div class="section-title">Open Bookings</div>
+<div class="booking-grid" id="bookingList"></div>
 
 <div class="card">
-<h3>Worker Availability</h3>
-<h4 id="workerStats"></h4>
+<div class="section-title">Workers</div>
+
+<input id="searchWorker" placeholder="Search worker name..." oninput="renderWorkers()">
+<select id="availabilityFilter" onchange="renderWorkers()">
+  <option value="all">All</option>
+  <option value="free">Free</option>
+  <option value="busy">Busy</option>
+</select>
+
+<div id="workerStats"></div>
+
 <table>
 <thead>
 <tr>
@@ -87,6 +121,7 @@ button{
 </thead>
 <tbody id="workerList"></tbody>
 </table>
+
 </div>
 
 </div>
@@ -137,42 +172,50 @@ async function loadData(){
   renderBookings();
 }
 
-/* ================= WORKER TABLE ================= */
+/* ================= WORKERS ================= */
 
-function renderWorkers(){
+window.renderWorkers = function(){
+
   const list=document.getElementById("workerList");
+  const search=document.getElementById("searchWorker").value.toLowerCase();
+  const filter=document.getElementById("availabilityFilter").value;
+
   list.innerHTML="";
 
-  const freeCount = workers.filter(worker=>{
-    const busy=bookings.some(b=>
-      b.assignedWorkerId===worker.id &&
-      ["assigned","in_progress"].includes((b.status||"").toLowerCase())
-    );
-    return !busy && worker.status==="active";
-  }).length;
-
-  document.getElementById("workerStats").innerText =
-    "Available Workers: " + freeCount;
+  let freeCount=0;
 
   workers.forEach(worker=>{
+
     const busy=bookings.some(b=>
       b.assignedWorkerId===worker.id &&
       ["assigned","in_progress"].includes((b.status||"").toLowerCase())
     );
+
+    const statusText = busy?"Busy":"Free";
+
+    if(!busy && worker.status==="active") freeCount++;
+
+    if(search && !worker.name.toLowerCase().includes(search)) return;
+    if(filter==="free" && busy) return;
+    if(filter==="busy" && !busy) return;
 
     list.innerHTML+=`
       <tr>
         <td>${worker.name}</td>
         <td>${worker.gigType}</td>
-        <td class="${busy?"busy":"free"}">${busy?"Busy":"Free"}</td>
+        <td class="${busy?"busy":"free"}">${statusText}</td>
       </tr>
     `;
   });
+
+  document.getElementById("workerStats").innerText =
+    "Available Workers: "+freeCount+" / "+workers.length;
 }
 
-/* ================= BOOKING TABLE ================= */
+/* ================= BOOKINGS (BOX UX) ================= */
 
 function renderBookings(){
+
   const list=document.getElementById("bookingList");
   list.innerHTML="";
 
@@ -180,9 +223,7 @@ function renderBookings(){
   .filter(b=>["pending","assigned","in_progress"].includes((b.status||"").toLowerCase()))
   .forEach(booking=>{
 
-    let options=`<option value="">Assign Worker</option>`;
-
-    workers.forEach(worker=>{
+    let workerOptions = workers.filter(worker=>{
       const busy=bookings.some(b=>
         b.assignedWorkerId===worker.id &&
         ["assigned","in_progress"].includes((b.status||"").toLowerCase())
@@ -192,37 +233,42 @@ function renderBookings(){
         (worker.gigType||"").toLowerCase() ===
         (booking.serviceType||"").toLowerCase();
 
-      if(!busy && worker.status==="active" && sameService){
-        options+=`<option value="${worker.id}">${worker.name}</option>`;
-      }
+      return !busy && worker.status==="active" && sameService;
     });
 
+    let actions="";
+
+    if(booking.status==="pending"){
+      actions += `
+        <select onchange="assignWorker('${booking.id}',this.value)">
+          <option value="">Assign Worker</option>
+          ${workerOptions.map(w=>`<option value="${w.id}">${w.name}</option>`).join("")}
+        </select>
+        <button class="danger" onclick="cancelBooking('${booking.id}')">Cancel</button>
+      `;
+    }
+
+    if(booking.status==="assigned"){
+      actions += `
+        <button class="primary" onclick="startWork('${booking.id}')">Start</button>
+        <button class="danger" onclick="cancelBooking('${booking.id}')">Cancel</button>
+      `;
+    }
+
+    if(booking.status==="in_progress"){
+      actions += `
+        <button class="primary" onclick="markCompleted('${booking.id}')">Complete</button>
+      `;
+    }
+
     list.innerHTML+=`
-      <tr>
-        <td>${booking.serviceType}</td>
-        <td>${booking.status}</td>
-        <td>
-          ${
-            booking.status==="pending"
-            ? `
-              <select onchange="assignWorker('${booking.id}',this.value)">
-                ${options}
-              </select>
-              <button class="danger" onclick="cancelBooking('${booking.id}')">Cancel</button>
-              `
-            : booking.status==="assigned"
-            ? `
-              <button class="primary" onclick="startWork('${booking.id}')">Start</button>
-              <button class="danger" onclick="cancelBooking('${booking.id}')">Cancel</button>
-              `
-            : booking.status==="in_progress"
-            ? `
-              <button class="primary" onclick="markCompleted('${booking.id}')">Complete</button>
-              `
-            : ""
-          }
-        </td>
-      </tr>
+      <div class="booking-card">
+        <div class="badge ${booking.status}">
+          ${booking.status.toUpperCase()}
+        </div>
+        <div><b>Service:</b> ${booking.serviceType}</div>
+        ${actions}
+      </div>
     `;
   });
 }
@@ -231,13 +277,11 @@ function renderBookings(){
 
 window.assignWorker=async function(id,workerId){
   if(!workerId)return;
-
   await updateDoc(doc(db,"bookings",id),{
     assignedWorkerId:workerId,
     status:"assigned",
     updatedAt:new Date()
   });
-
   loadData();
 };
 

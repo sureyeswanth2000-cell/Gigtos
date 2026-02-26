@@ -5,22 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body{margin:0;font-family:'Segoe UI';background:#f3f6fb;}
-.admin-header{
-  background:#4f46e5;color:white;
-  padding:15px 25px;
-  display:flex;justify-content:space-between;align-items:center;
-}
-.admin-right{display:flex;align-items:center;gap:15px;}
-.admin-right button{background:white;color:#4f46e5;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;}
+.admin-header{background:#4f46e5;color:white;padding:15px 25px;display:flex;justify-content:space-between;}
+.admin-right{display:flex;gap:15px;align-items:center;}
+.admin-right button{background:white;color:#4f46e5;border:none;padding:6px 12px;border-radius:6px;}
 .container{max-width:1100px;margin:40px auto;padding:20px;}
 .card{background:white;padding:20px;border-radius:12px;box-shadow:0 8px 25px rgba(0,0,0,0.08);margin-bottom:25px;}
-table{width:100%;border-collapse:collapse;background:white;border-radius:12px;overflow:hidden;}
+table{width:100%;border-collapse:collapse;background:white;border-radius:12px;}
 th,td{padding:12px;border-bottom:1px solid #eee;text-align:left;}
 th{background:#4f46e5;color:white;}
 button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;margin-right:5px;}
 .primary{background:#4f46e5;color:white;}
 .danger{background:#dc2626;color:white;}
-.secondary{background:#e5e7eb;}
 .active{color:green;font-weight:600;}
 .inactive{color:red;font-weight:600;}
 </style>
@@ -30,6 +25,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;margin-righ
 <div class="admin-header">
   <div>Gigto Admin</div>
   <div class="admin-right">
+    <button onclick="goDashboard()">Dashboard</button>
     <span id="adminName"></span>
     <button onclick="logout()">Logout</button>
   </div>
@@ -39,13 +35,13 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;margin-righ
 
 <div class="card">
 <h3>Create Worker</h3>
-<input id="name" placeholder="Name">
-<input id="contact" placeholder="Contact">
+<input id="name" placeholder="Worker Name">
+<input id="contact" placeholder="10 Digit Phone Number">
 <select id="gigType">
 <option>Plumber</option>
 <option>Electrician</option>
 </select>
-<button class="primary" onclick="createWorker()">Create</button>
+<button class="primary" onclick="createWorker()">Create Worker</button>
 </div>
 
 <div class="card">
@@ -74,14 +70,14 @@ from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { collection, getDocs, addDoc, doc, getDoc, updateDoc, deleteDoc }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-let currentUser, currentRole;
+let currentUser,currentRole;
 
-onAuthStateChanged(auth, async(user)=>{
-  if(!user){ window.location.href="../auth.html"; return; }
+onAuthStateChanged(auth,async(user)=>{
+  if(!user){window.location.href="../auth.html";return;}
 
   currentUser=user;
   const snap=await getDoc(doc(db,"admins",user.uid));
-  if(!snap.exists() || snap.data().status!=="active"){
+  if(!snap.exists()||snap.data().status!=="active"){
     await signOut(auth);
     window.location.href="../auth.html";
     return;
@@ -95,7 +91,7 @@ onAuthStateChanged(auth, async(user)=>{
 async function loadWorkers(){
   const snapshot=await getDocs(collection(db,"gig_workers"));
   const list=document.getElementById("workerList");
-  const search=document.getElementById("searchWorker").value.toLowerCase();
+  const search=document.getElementById("searchWorker").value.toLowerCase().trim();
   list.innerHTML="";
 
   snapshot.forEach(docSnap=>{
@@ -123,11 +119,17 @@ async function loadWorkers(){
 }
 
 window.createWorker=async function(){
-  if(!name.value || !contact.value){ alert("Fill fields"); return; }
+  const phone=contact.value.trim();
+
+  if(!name.value.trim()){ alert("Name required"); return; }
+  if(!/^[0-9]{10}$/.test(phone)){
+    alert("Enter valid 10 digit phone number");
+    return;
+  }
 
   await addDoc(collection(db,"gig_workers"),{
-    name:name.value,
-    contact:contact.value,
+    name:name.value.trim(),
+    contact:phone,
     gigType:gigType.value,
     status:"active",
     adminId:currentUser.uid,
@@ -153,6 +155,7 @@ window.deleteWorker=async function(id){
 };
 
 window.logout=async()=>{await signOut(auth);window.location.href="../auth.html";}
+window.goDashboard=()=>window.location.href="dashboard.html";
 </script>
 
 </body>

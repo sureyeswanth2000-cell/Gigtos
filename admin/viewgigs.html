@@ -22,14 +22,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;margin-righ
 </head>
 <body>
 
-<div class="admin-header">
-  <div>Gigto Admin</div>
-  <div class="admin-right">
-    <button onclick="goDashboard()">Dashboard</button>
-    <span id="adminName"></span>
-    <button onclick="logout()">Logout</button>
-  </div>
-</div>
+
 
 <div class="container">
 
@@ -65,6 +58,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;margin-righ
 
 <script type="module">
 import { auth, db } from "../firebase.js";
+  import { renderAdminHeader } from "./admin-menu.js";
 import { onAuthStateChanged, signOut }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { collection, getDocs, addDoc, doc, getDoc, updateDoc, deleteDoc }
@@ -84,7 +78,7 @@ onAuthStateChanged(auth,async(user)=>{
   }
 
   currentRole=snap.data().role;
-  document.getElementById("adminName").innerText=user.email;
+  renderAdminHeader(user.email);
   loadWorkers();
 });
 

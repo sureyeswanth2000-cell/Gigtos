@@ -131,14 +131,24 @@ function renderBookings(){
   .forEach(booking=>{
     let options=`<option value="">Select</option>`;
     workers.forEach(worker=>{
-      const busy=bookings.some(b=>
-        b.assignedWorkerId===worker.id &&
-        ["assigned","in_progress"].includes((b.status||"").toLowerCase())
-      );
-      if(!busy && worker.status==="active"){
-        options+=`<option value="${worker.id}">${worker.name}</option>`;
-      }
-    });
+
+  const busy = bookings.some(b=>
+    b.assignedWorkerId === worker.id &&
+    ["assigned","in_progress"].includes((b.status||"").toLowerCase())
+  );
+
+  const sameService =
+    (worker.gigType || "").toLowerCase() ===
+    (booking.serviceType || "").toLowerCase();
+
+  if(!busy && worker.status==="active" && sameService){
+    options+=`
+      <option value="${worker.id}">
+        ${worker.name} (${worker.gigType})
+      </option>
+    `;
+  }
+});
 
     list.innerHTML+=`
       <tr>
@@ -147,15 +157,41 @@ function renderBookings(){
         <td>${booking.phone}</td>
         <td>${booking.status}</td>
         <td>
-        ${booking.status==="pending"?
-          `<select onchange="assignWorker('${booking.id}',this.value)">${options}</select>`
-          :"Assigned"}
+        ${
+booking.status==="pending" ?
+  `<select onchange="assignWorker('${booking.id}',this.value)">
+     ${options}
+   </select>`
+:
+booking.status==="assigned" ?
+  `<button onclick="markCompleted('${booking.id}')">
+     Mark Completed
+   </button>`
+:
+"Completed"
+        }
         </td>
       </tr>
     `;
   });
 }
+window.markCompleted = async function(id){
 
+  try {
+
+    await updateDoc(doc(db,"bookings",id),{
+      status:"completed"
+    });
+
+    alert("Work marked as completed");
+    loadData();
+
+  } catch(error){
+    console.error(error);
+    alert(error.message);
+  }
+};
+  
 window.assignWorker=async function(id,workerId){
   if(!workerId)return;
   await updateDoc(doc(db,"bookings",id),{

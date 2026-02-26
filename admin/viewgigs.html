@@ -118,27 +118,50 @@ async function loadWorkers(){
   });
 }
 
-window.createWorker=async function(){
-  const phone=contact.value.trim();
+window.createWorker = async function(){
 
-  if(!name.value.trim()){ alert("Name required"); return; }
+  const nameInput = document.getElementById("name");
+  const contactInput = document.getElementById("contact");
+  const gigTypeInput = document.getElementById("gigType");
+
+  const workerName = nameInput.value.trim();
+  const phone = contactInput.value.trim();
+  const type = gigTypeInput.value;
+
+  if(!workerName){
+    alert("Name required");
+    return;
+  }
+
   if(!/^[0-9]{10}$/.test(phone)){
     alert("Enter valid 10 digit phone number");
     return;
   }
 
-  await addDoc(collection(db,"gig_workers"),{
-    name:name.value.trim(),
-    contact:phone,
-    gigType:gigType.value,
-    status:"active",
-    adminId:currentUser.uid,
-    createdAt:new Date()
-  });
+  try {
 
-  name.value=""; contact.value="";
-  loadWorkers();
+    await addDoc(collection(db,"gig_workers"),{
+      name: workerName,
+      contact: phone,
+      gigType: type,
+      status: "active",
+      adminId: currentUser.uid,
+      createdAt: new Date()
+    });
+
+    nameInput.value = "";
+    contactInput.value = "";
+
+    alert("Worker created successfully");
+
+    loadWorkers();
+
+  } catch(error){
+    console.error(error);
+    alert(error.message);
+  }
 };
+
 
 window.toggleWorker=async function(id,status){
   await updateDoc(doc(db,"gig_workers",id),{

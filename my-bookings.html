@@ -123,8 +123,10 @@ async function loadBookings() {
 
         openModal("Are you sure you want to cancel this booking?", async () => {
           await updateDoc(doc(db,"bookings",docSnap.id),{
-            status:"cancelled"
-          });
+  status:"cancelled",
+  assignedWorkerId:null,
+  updatedAt:new Date()
+});
           loadBookings();
         });
       };

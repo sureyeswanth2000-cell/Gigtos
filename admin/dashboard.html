@@ -29,13 +29,7 @@
 </head>
 <body>
 
-<div class="admin-header">
-  <div>Gigto Admin</div>
-  <div class="admin-right">
-    <span id="adminName"></span>
-    <button onclick="logout()">Logout</button>
-  </div>
-</div>
+
 
 <div class="container">
   <div class="card">
@@ -49,6 +43,7 @@
 
 <script type="module">
 import { auth, db } from "../firebase.js";
+  import { renderAdminHeader } from "./admin-menu.js";
 import { onAuthStateChanged, signOut }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { doc, getDoc }
@@ -64,7 +59,7 @@ onAuthStateChanged(auth, async(user)=>{
     return;
   }
 
-  document.getElementById("adminName").innerText=user.email;
+  renderAdminHeader(user.email);
 });
 
 window.logout=async()=>{

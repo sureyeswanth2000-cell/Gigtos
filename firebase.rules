@@ -23,18 +23,11 @@ service cloud.firestore {
       allow read, write: if isLoggedIn() && request.auth.uid == userId;
     }
 
-    // auxiliary lookup collection used by phone-based login
     match /users_by_phone/{phoneNumber} {
-      // anyone (even unauthenticated) may read a mapping so the client
-      // can resolve a phone number to an auth UID/email during login.
       allow read: if true;
-
-      // create/update only allowed by the authenticated user whose UID is
-      // stored in the document (prevents one user impersonating another).
       allow create, update: if request.auth != null
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.phone == phoneNumber;
-      // deletion not needed from client
       allow delete: if false;
     }
 
@@ -43,7 +36,7 @@ service cloud.firestore {
     ============================ */
     match /bookings/{bookingId} {
 
-      // CREATE: user may create their own booking with status pending
+      // CREATE: user creates their own booking
       allow create: if request.auth != null
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.phone != null
@@ -52,21 +45,20 @@ service cloud.firestore {
         && request.resource.data.status == "pending"
         && request.resource.data.createdAt != null;
 
-      // READ: owner or any admin can read
+      // READ: owner or any admin
       allow read: if request.auth != null && (
         resource.data.userId == request.auth.uid
         || isAdmin()
       );
 
-      // UPDATE: allowed cases
+      // UPDATE — all allowed cases combined
       allow update: if request.auth != null && (
 
-        // 1) User can cancel their own pending booking
+        // 1) User cancels their own PENDING booking
         (
           resource.data.userId == request.auth.uid
           && resource.data.status == 'pending'
           && request.resource.data.status == 'cancelled'
-          && request.resource.data.userId == resource.data.userId
         )
 
         // 2) User confirms completion when awaiting_confirmation
@@ -74,57 +66,78 @@ service cloud.firestore {
           resource.data.userId == request.auth.uid
           && resource.data.status == 'awaiting_confirmation'
           && request.resource.data.status == 'completed'
-          && request.resource.data.userId == resource.data.userId
         )
 
-        // 3) Admins may update lifecycle fields but cannot change ownership fields
+        // 3) User edits address/phone on a pending booking
+        || (
+          resource.data.userId == request.auth.uid
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'pending'
+        )
+
+        // 4) User submits rating on completed booking
+        || (
+          resource.data.userId == request.auth.uid
+          && resource.data.status == 'completed'
+          && request.resource.data.rating is number
+          && request.resource.data.rating >= 1
+          && request.resource.data.rating <= 5
+        )
+
+        // 5) User raises a dispute on completed booking
+        || (
+          resource.data.userId == request.auth.uid
+          && resource.data.status == 'completed'
+          && request.resource.data.keys().hasAll(['dispute'])
+        )
+
+        // 6) Admin manages lifecycle (cannot change userId)
         || (
           isAdmin()
           && request.resource.data.userId == resource.data.userId
-          && request.resource.data.phone == resource.data.phone
           && request.resource.data.createdAt == resource.data.createdAt
-          && request.resource.data.updatedAt != null
         )
       );
 
-      // Prevent client-side deletes
+      // No client-side deletes
       allow delete: if false;
     }
 
     /* ============================
-       CHAT SUBCOLLECTION (per booking)
+       CHAT SUBCOLLECTION
     ============================ */
     match /bookings/{bookingId}/chat/{messageId} {
-      // users may read any chat for bookings they belong to; admins may read all
       allow read: if isLoggedIn() && (
-        resource.data.senderId == request.auth.uid
-        || get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid
+        get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid
         || isAdmin()
       );
-
-      // write: only participants (user / admin) may post, cannot forge another sender
       allow create: if isLoggedIn() && (
         request.resource.data.senderId == request.auth.uid
         && (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid || isAdmin())
       );
-
-      // updates/deletes not allowed from client
       allow update, delete: if false;
     }
 
     /* ============================
-       RATINGS & REVIEWS
+       ACTIVITY LOGS
     ============================ */
-    // rating and review fields are stored on booking documents. allow the
-    // user to add them only after completion, admins cannot modify.
-    match /bookings/{bookingId} {
-      allow update: if request.auth != null &&
-        resource.data.userId == request.auth.uid &&
-        resource.data.status == 'completed' &&
-        request.resource.data.rating is number &&
-        request.resource.data.rating >= 1 &&
-        request.resource.data.rating <= 5 &&
-        (request.resource.data.review is string || request.resource.data.review == resource.data.review);
+    match /activity_logs/{logId} {
+      // Any authenticated user (user or admin) can create a log entry
+      allow create: if isLoggedIn()
+        && request.resource.data.actorId == request.auth.uid
+        && request.resource.data.bookingId != null;
+
+      // Admins can read all logs; users can read logs for their own bookings
+      allow read: if isLoggedIn() && (
+        isAdmin()
+        || (
+          exists(/databases/$(database)/documents/bookings/$(resource.data.bookingId))
+          && get(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.userId == request.auth.uid
+        )
+      );
+
+      // No updates or deletes
+      allow update, delete: if false;
     }
 
     /* ============================
@@ -140,21 +153,13 @@ service cloud.firestore {
        GIG WORKERS COLLECTION
     ============================ */
     match /gig_workers/{workerId} {
-
-      // Read: only superadmin or the owning admin can read worker details
-      allow read: if isLoggedIn() && (isSuperAdmin() || resource.data.adminId == request.auth.uid);
-
-      // Create: only authenticated admin may create and must set adminId to their uid
+      allow read: if isLoggedIn() && (isSuperAdmin() || resource.data.adminId == request.auth.uid || isAdmin());
       allow create: if request.auth != null
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
         && request.resource.data.adminId == request.auth.uid;
-
-      // Update: only superadmin or owner admin; prevent changing adminId
       allow update: if isLoggedIn() && (
         isSuperAdmin() || resource.data.adminId == request.auth.uid
       ) && request.resource.data.adminId == resource.data.adminId;
-
-      // Delete: only superadmin
       allow delete: if isSuperAdmin();
     }
 

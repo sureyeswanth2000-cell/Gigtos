@@ -1,413 +1,441 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import {
+  collection, query, where, onSnapshot,
+  doc, updateDoc, addDoc, serverTimestamp
+} from 'firebase/firestore';
 
 const statusColors = {
-  'pending': '#ff9800',
-  'assigned': '#2196f3',
-  'in_progress': '#9c27b0',
-  'awaiting_confirmation': '#f44336',
-  'completed': '#4caf50',
-  'cancelled': '#757575'
+  'pending':                '#ff9800',
+  'assigned':               '#2196f3',
+  'in_progress':            '#9c27b0',
+  'awaiting_confirmation':  '#f44336',
+  'completed':              '#4caf50',
+  'cancelled':              '#757575',
+};
+
+const statusLabels = {
+  'pending':                '⏳ Pending',
+  'assigned':               '👷 Assigned',
+  'in_progress':            '🔧 In Progress',
+  'awaiting_confirmation':  '✅ Awaiting Confirmation',
+  'completed':              '✓ Completed',
+  'cancelled':              '✕ Cancelled',
 };
 
 const serviceIcons = {
-  'Plumber': '🧰',
+  'Plumber':     '🧰',
   'Electrician': '⚡',
-  'Carpenter': '🪛',
-  'Painter': '🎨'
+  'Carpenter':   '🪛',
+  'Painter':     '🎨',
 };
 
-export default function MyBookings(){
-  const [user, setUser] = useState(null);
+export default function MyBookings() {
+  const navigate = useNavigate();
+  const [user, setUser]       = useState(null);
   const [bookings, setBookings] = useState([]);
   const [editingId, setEditingId] = useState(null);
-  const [editData, setEditData] = useState({});
-  const [updating, setUpdating] = useState(false);
+  const [editData, setEditData]   = useState({});
+  const [updating, setUpdating]   = useState(false);
+  const [disputeId, setDisputeId] = useState(null);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [ratingId, setRatingId]   = useState(null);
+  const [reviewText, setReviewText] = useState('');
+  const [selectedStar, setSelectedStar] = useState(0);
 
-  useEffect(()=>{
-    const unsubAuth = onAuthStateChanged(auth, (u)=>{
-      setUser(u);
-    });
-    return ()=> unsubAuth();
-  },[]);
+  /* ── Auth ── */
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, u => setUser(u));
+    return unsub;
+  }, []);
 
-  useEffect(()=>{
-    if(!user) return;
-
-    const q = query(collection(db,'bookings'), where('userId','==',user.uid));
-    const unsub = onSnapshot(q, (snap)=>{
-      const items = [];
-      snap.forEach(d=> items.push({id:d.id, ...d.data()}));
-      items.sort((a,b)=>{
-        const ta = a.updatedAt?.seconds || 0;
-        const tb = b.updatedAt?.seconds || 0;
-        return tb - ta;
-      });
+  /* ── Real-time bookings ── */
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'bookings'), where('userId', '==', user.uid));
+    const unsub = onSnapshot(q, snap => {
+      const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      items.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
       setBookings(items);
-    }, (err)=>{
-      console.error('snapshot error', err);
-    });
+    }, err => console.error('snapshot error', err));
+    return unsub;
+  }, [user]);
 
-    return ()=> unsub();
-  },[user]);
+  /* ── Helpers ── */
+  const logActivity = (bookingId, action, extra = {}) =>
+    addDoc(collection(db, 'activity_logs'), {
+      bookingId,
+      actorId: user?.uid,
+      actorRole: 'user',
+      action,
+      ...extra,
+      timestamp: serverTimestamp(),
+    }).catch(() => {});
 
-  async function confirmCompletion(id){
-    if (window.confirm('Confirm service completion?')) {
-      try{
-        await updateDoc(doc(db,'bookings',id),{
-          status: 'completed',
-          updatedAt: new Date()
-        });
-        alert('✓ Service completion confirmed!');
-      }catch(e){
-        console.error(e);
-        alert('Failed to confirm completion: '+e.message);
-      }
+  const fmt = ts => {
+    if (!ts) return 'N/A';
+    const ms = ts.seconds ? ts.seconds * 1000 : ts;
+    return new Date(ms).toLocaleString();
+  };
+
+  /* ── Cancel booking ── */
+  async function cancelBooking(id) {
+    if (!window.confirm('Cancel this booking?')) return;
+    try {
+      await updateDoc(doc(db, 'bookings', id), {
+        status: 'cancelled',
+        userId: user.uid,      // must re-send userId so security rule passes
+        updatedAt: new Date(),
+      });
+      await logActivity(id, 'user_cancelled');
+    } catch (e) {
+      alert('Failed to cancel: ' + e.message);
     }
   }
 
-  async function cancelBooking(id){
-    if (window.confirm('Cancel this booking?')) {
-      try{
-        await updateDoc(doc(db,'bookings',id),{
-          status: 'cancelled',
-          updatedAt: new Date()
-        });
-        alert('✓ Booking cancelled');
-      }catch(e){
-        alert('Failed: '+e.message);
-      }
+  /* ── Confirm completion ── */
+  async function confirmCompletion(id) {
+    if (!window.confirm('Confirm job is done?')) return;
+    try {
+      await updateDoc(doc(db, 'bookings', id), {
+        status: 'completed',
+        userId: user.uid,
+        updatedAt: new Date(),
+      });
+      await logActivity(id, 'user_confirmed_completion');
+      alert('✓ Service confirmed complete!');
+    } catch (e) {
+      alert('Failed: ' + e.message);
     }
   }
 
-  async function saveEdit(id){
+  /* ── Edit pending booking ── */
+  async function saveEdit(id) {
     setUpdating(true);
-    try{
-      await updateDoc(doc(db,'bookings',id),{
+    try {
+      await updateDoc(doc(db, 'bookings', id), {
         address: editData.address,
         phone: editData.phone,
-        updatedAt: new Date()
+        userId: user.uid,
+        updatedAt: new Date(),
       });
-      alert('✓ Booking updated!');
+      await logActivity(id, 'user_edited_booking');
       setEditingId(null);
       setEditData({});
-    }catch(e){
-      alert('Failed: '+e.message);
+    } catch (e) {
+      alert('Failed: ' + e.message);
     } finally {
       setUpdating(false);
     }
   }
 
-  function startEdit(booking){
-    setEditingId(booking.id);
-    setEditData({
-      address: booking.address,
-      phone: booking.phone
-    });
+  /* ── Rating ── */
+  async function submitRating(id) {
+    if (!selectedStar) { alert('Please select a star rating'); return; }
+    try {
+      await updateDoc(doc(db, 'bookings', id), {
+        rating: selectedStar,
+        review: reviewText,
+        userId: user.uid,
+      });
+      await logActivity(id, 'user_rated', { rating: selectedStar });
+      setRatingId(null);
+      setReviewText('');
+      setSelectedStar(0);
+      alert('✓ Thank you for your rating!');
+    } catch (e) {
+      alert('Failed to save rating: ' + e.message);
+    }
   }
 
-  const active = bookings.filter(b=>['pending','assigned','in_progress','awaiting_confirmation'].includes(b.status));
-  const completed = bookings.filter(b=>b.status==='completed');
-  const cancelled = bookings.filter(b=>b.status==='cancelled');
+  /* ── Dispute ── */
+  async function submitDispute(id) {
+    if (!disputeReason.trim()) { alert('Please describe the issue'); return; }
+    try {
+      await updateDoc(doc(db, 'bookings', id), {
+        dispute: {
+          reason: disputeReason.trim(),
+          raisedAt: new Date(),
+          status: 'open',
+          raisedBy: user.uid,
+        },
+        userId: user.uid,
+        updatedAt: new Date(),
+      });
+      await logActivity(id, 'user_raised_dispute', { reason: disputeReason });
+      setDisputeId(null);
+      setDisputeReason('');
+      alert('✓ Dispute submitted. Admin will review shortly.');
+    } catch (e) {
+      alert('Failed: ' + e.message);
+    }
+  }
 
-  const formatDate = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    const ms = timestamp.seconds ? timestamp.seconds * 1000 : timestamp;
-    return new Date(ms).toLocaleString();
-  };
+  /* ── Booking groups ── */
+  const active    = bookings.filter(b => ['pending','assigned','in_progress','awaiting_confirmation'].includes(b.status));
+  const completed = bookings.filter(b => b.status === 'completed');
+  const cancelled = bookings.filter(b => b.status === 'cancelled');
 
+  /* ── BookingCard ── */
   const BookingCard = ({ booking, isActive }) => (
-    <div key={booking.id} style={{
+    <div style={{
       background: 'white',
       padding: '16px',
-      borderRadius: '8px',
+      borderRadius: '10px',
       marginBottom: '12px',
       border: `2px solid ${statusColors[booking.status] || '#ccc'}`,
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ fontSize: '32px' }}>
-            {serviceIcons[booking.serviceType] || '🛠️'}
-          </div>
+      {/* Header row */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+          <span style={{ fontSize:'30px' }}>{serviceIcons[booking.serviceType] || '🛠️'}</span>
           <div>
-            <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#333' }}>
+            <div style={{ fontWeight:'bold', fontSize:'15px', color:'#333' }}>
               {(booking.serviceType || 'Service').toUpperCase()}
             </div>
-            <div style={{ fontSize: '12px', color: '#999' }}>
-              {formatDate(booking.createdAt)}
+            <div style={{ fontSize:'11px', color:'#999' }}>
+              Created: {fmt(booking.createdAt)} | Updated: {fmt(booking.updatedAt)}
             </div>
           </div>
         </div>
         <div style={{
-          padding: '6px 12px',
+          padding:'5px 10px',
           backgroundColor: statusColors[booking.status] || '#ccc',
-          color: 'white',
-          borderRadius: '20px',
-          fontSize: '12px',
-          fontWeight: 'bold'
+          color:'white',
+          borderRadius:'20px',
+          fontSize:'11px',
+          fontWeight:'bold',
         }}>
-          {(booking.status || '').replace(/_/g, ' ').toUpperCase()}
+          {statusLabels[booking.status] || booking.status}
         </div>
       </div>
 
+      {/* Dispute badge */}
+      {booking.dispute?.status === 'open' && (
+        <div style={{ padding:'6px 10px', background:'#fee2e2', borderRadius:'6px', fontSize:'12px', color:'#991b1b', marginBottom:'10px' }}>
+          🚨 Dispute raised: "{booking.dispute.reason}"
+        </div>
+      )}
+      {booking.dispute?.status === 'resolved' && (
+        <div style={{ padding:'6px 10px', background:'#dcfce7', borderRadius:'6px', fontSize:'12px', color:'#166534', marginBottom:'10px' }}>
+          ✓ Dispute resolved
+        </div>
+      )}
+
+      {/* Body */}
       {editingId === booking.id ? (
-        // Edit Mode
-        <div style={{ backgroundColor: '#f5f5f5', padding: '12px', borderRadius: '6px', marginBottom: '12px' }}>
-          <div style={{ marginBottom: '10px' }}>
-            <label style={{ fontWeight: 'bold', fontSize: '12px', color: '#666' }}>Phone:</label>
-            <input
-              type="tel"
-              value={editData.phone}
-              onChange={(e) => setEditData({...editData, phone: e.target.value})}
-              style={{
-                width: '100%',
-                padding: '8px',
-                marginTop: '4px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: '10px' }}>
-            <label style={{ fontWeight: 'bold', fontSize: '12px', color: '#666' }}>Address:</label>
-            <textarea
-              value={editData.address}
-              onChange={(e) => setEditData({...editData, address: e.target.value})}
-              rows="3"
-              style={{
-                width: '100%',
-                padding: '8px',
-                marginTop: '4px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                boxSizing: 'border-box',
-                fontFamily: 'Arial, sans-serif'
-              }}
-            />
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setEditingId(null)}
-              disabled={updating}
-              style={{
-                flex: 1,
-                padding: '8px',
-                backgroundColor: '#ccc',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '12px'
-              }}
-            >
+        <div style={{ background:'#f5f5f5', padding:'12px', borderRadius:'6px', marginBottom:'12px' }}>
+          <label style={{ fontSize:'12px', fontWeight:'bold', color:'#666' }}>Phone:</label>
+          <input type="tel" value={editData.phone}
+            onChange={e => setEditData({ ...editData, phone: e.target.value })}
+            style={{ width:'100%', padding:'8px', marginTop:'4px', border:'1px solid #ddd', borderRadius:'4px', boxSizing:'border-box', marginBottom:'8px' }}
+          />
+          <label style={{ fontSize:'12px', fontWeight:'bold', color:'#666' }}>Address:</label>
+          <textarea value={editData.address} rows={3}
+            onChange={e => setEditData({ ...editData, address: e.target.value })}
+            style={{ width:'100%', padding:'8px', marginTop:'4px', border:'1px solid #ddd', borderRadius:'4px', boxSizing:'border-box' }}
+          />
+          <div style={{ display:'flex', gap:'8px', marginTop:'8px' }}>
+            <button onClick={() => setEditingId(null)} disabled={updating}
+              style={{ flex:1, padding:'8px', background:'#ccc', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
               Cancel
             </button>
-            <button
-              onClick={() => saveEdit(booking.id)}
-              disabled={updating}
-              style={{
-                flex: 1,
-                padding: '8px',
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '12px',
-                opacity: updating ? 0.6 : 1
-              }}
-            >
-              {updating ? '⏳ Saving...' : '✓ Save'}
+            <button onClick={() => saveEdit(booking.id)} disabled={updating}
+              style={{ flex:1, padding:'8px', background:'#28a745', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px', opacity: updating ? 0.6 : 1 }}>
+              {updating ? '⏳ Saving…' : '✓ Save'}
             </button>
           </div>
         </div>
       ) : (
-        // View Mode
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{ marginBottom: '8px' }}>
-            <span style={{ fontWeight: 'bold', color: '#666', fontSize: '12px' }}>📞 Phone:</span>
-            <p style={{ margin: '3px 0 0 0', color: '#333' }}>{booking.phone}</p>
-          </div>
-          <div style={{ marginBottom: '0' }}>
-            <span style={{ fontWeight: 'bold', color: '#666', fontSize: '12px' }}>📍 Address:</span>
-            <p style={{ margin: '3px 0 0 0', color: '#333', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {booking.address}
-            </p>
-          </div>
-              {booking.rating && (
-                <div style={{ marginTop: '10px', fontSize: '14px', color: '#333' }}>
-                  <strong>Your Rating:</strong> {'★'.repeat(booking.rating)}{'☆'.repeat(5-booking.rating)}
-                  {booking.review && (
-                    <div style={{ marginTop: '4px', fontSize: '12px', color: '#555' }}>
-                      "{booking.review}"
-                    </div>
-                  )}
+        <div style={{ marginBottom:'12px' }}>
+          <div><span style={{ fontWeight:'bold', color:'#666', fontSize:'12px' }}>📞 Phone: </span>{booking.phone}</div>
+          <div style={{ marginTop:'4px' }}><span style={{ fontWeight:'bold', color:'#666', fontSize:'12px' }}>📍 Address: </span>{booking.address}</div>
+          {booking.assignedWorker && (
+            <div style={{ marginTop:'6px', padding:'6px 10px', background:'#e8f5e9', borderRadius:'6px', fontSize:'12px' }}>
+              👨‍🔧 Assigned Worker: <strong>{booking.assignedWorker}</strong>
+            </div>
+          )}
+          {/* Multi-day notes */}
+          {booking.dailyNotes?.length > 0 && (
+            <div style={{ marginTop:'8px' }}>
+              <div style={{ fontSize:'12px', fontWeight:'bold', color:'#555', marginBottom:'4px' }}>📋 Work Progress Notes:</div>
+              {booking.dailyNotes.map((n, i) => (
+                <div key={i} style={{ fontSize:'12px', color:'#555', padding:'4px 8px', background:'#f0f4ff', borderRadius:'4px', marginBottom:'4px' }}>
+                  <strong>{n.date}</strong>: {n.note}
                 </div>
-              )}
-        </div>
-      )}
-
-      {booking.assignedWorker && (
-        <div style={{ marginBottom: '12px', padding: '10px', backgroundColor: '#e8f5e9', borderRadius: '6px', fontSize: '13px' }}>
-          <strong>👨‍🔧 Assigned Worker:</strong> {booking.assignedWorker}
+              ))}
+            </div>
+          )}
+          {/* Photos */}
+          {booking.photos?.length > 0 && (
+            <div style={{ marginTop:'8px' }}>
+              <div style={{ fontSize:'12px', fontWeight:'bold', color:'#555', marginBottom:'4px' }}>📸 Photos:</div>
+              <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
+                {booking.photos.map((p, i) => (
+                  <a key={i} href={p.url} target="_blank" rel="noreferrer">
+                    <img src={p.url} alt={p.label} title={p.label}
+                      style={{ width:'60px', height:'60px', objectFit:'cover', borderRadius:'4px', border:'1px solid #ddd' }} />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Existing rating display */}
+          {booking.rating && (
+            <div style={{ marginTop:'8px', fontSize:'13px' }}>
+              <strong>Your Rating:</strong> {'★'.repeat(booking.rating)}{'☆'.repeat(5 - booking.rating)}
+              {booking.review && <div style={{ fontSize:'12px', color:'#555', marginTop:'2px' }}>"{booking.review}"</div>}
+            </div>
+          )}
         </div>
       )}
 
       {/* Action Buttons */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-        {isActive && booking.status === 'pending' && editingId !== booking.id && (
-          <>
-            <button
-              onClick={() => startEdit(booking)}
-              style={{
-                flex: '1 0 auto',
-                padding: '8px 12px',
-                backgroundColor: '#2196f3',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '12px'
-              }}
-            >
-              ✏️ Edit
-            </button>
-            <button
-              onClick={() => cancelBooking(booking.id)}
-              style={{
-                flex: '1 0 auto',
-                padding: '8px 12px',
-                backgroundColor: '#f44336',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '12px'
-              }}
-            >
-              ✕ Cancel
-            </button>
-          </>
-        )}
+      {editingId !== booking.id && (
+        <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
+          {/* PENDING: edit + cancel */}
+          {isActive && booking.status === 'pending' && (
+            <>
+              <button onClick={() => { setEditingId(booking.id); setEditData({ address: booking.address, phone: booking.phone }); }}
+                style={{ flex:'1 0 auto', padding:'8px 12px', background:'#2196f3', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
+                ✏️ Edit
+              </button>
+              <button onClick={() => cancelBooking(booking.id)}
+                style={{ flex:'1 0 auto', padding:'8px 12px', background:'#f44336', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
+                ✕ Cancel Booking
+              </button>
+            </>
+          )}
 
-        {booking.status === 'awaiting_confirmation' && (
-          <button
-            onClick={() => confirmCompletion(booking.id)}
-            style={{
-              width: '100%',
-              padding: '8px',
-              backgroundColor: '#4caf50',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '12px'
-            }}
-          >
-            ✓ Confirm Completion
-          </button>
-        )}
-      </div>
+          {/* AWAITING CONFIRMATION: confirm complete */}
+          {booking.status === 'awaiting_confirmation' && (
+            <>
+              <div style={{ width:'100%', padding:'8px', background:'#fff3cd', borderRadius:'6px', fontSize:'12px', color:'#856404', marginBottom:'4px' }}>
+                ⏳ Worker has marked the job done. Please confirm once you're satisfied.
+              </div>
+              <button onClick={() => confirmCompletion(booking.id)}
+                style={{ flex:1, padding:'10px', background:'#4caf50', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'13px' }}>
+                ✓ Confirm Completion
+              </button>
+            </>
+          )}
+
+          {/* COMPLETED: rate + dispute */}
+          {booking.status === 'completed' && !booking.rating && (
+            <button onClick={() => { setRatingId(booking.id); setSelectedStar(0); setReviewText(''); }}
+              style={{ flex:'1 0 auto', padding:'8px 12px', background:'#ff9800', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
+              ⭐ Rate Service
+            </button>
+          )}
+          {booking.status === 'completed' && !booking.dispute && (
+            <button onClick={() => { setDisputeId(booking.id); setDisputeReason(''); }}
+              style={{ flex:'1 0 auto', padding:'8px 12px', background:'#dc2626', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
+              🚨 Raise Dispute
+            </button>
+          )}
+
+          {/* Chat button for any active booking */}
+          {isActive && (
+            <button onClick={() => navigate(`/chat?bookingId=${booking.id}`)}
+              style={{ flex:'1 0 auto', padding:'8px 12px', background:'#667eea', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
+              💬 Chat
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Rating Panel */}
+      {ratingId === booking.id && (
+        <div style={{ marginTop:'12px', background:'#fffbeb', border:'1px solid #fcd34d', padding:'14px', borderRadius:'8px' }}>
+          <div style={{ fontWeight:'bold', marginBottom:'8px', fontSize:'13px' }}>⭐ Rate this service</div>
+          <div style={{ display:'flex', gap:'8px', marginBottom:'10px' }}>
+            {[1,2,3,4,5].map(star => (
+              <span key={star} onClick={() => setSelectedStar(star)}
+                style={{ fontSize:'24px', cursor:'pointer', color: star <= selectedStar ? '#ffb400' : '#ccc' }}>★</span>
+            ))}
+          </div>
+          <textarea value={reviewText} onChange={e => setReviewText(e.target.value)}
+            placeholder="Write a review (optional)…" rows={2}
+            style={{ width:'100%', padding:'8px', border:'1px solid #ddd', borderRadius:'4px', boxSizing:'border-box', fontSize:'12px', marginBottom:'8px' }}
+          />
+          <div style={{ display:'flex', gap:'8px' }}>
+            <button onClick={() => setRatingId(null)}
+              style={{ flex:1, padding:'8px', background:'#ccc', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
+              Cancel
+            </button>
+            <button onClick={() => submitRating(booking.id)}
+              style={{ flex:1, padding:'8px', background:'#ff9800', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
+              Submit Rating
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dispute Panel */}
+      {disputeId === booking.id && (
+        <div style={{ marginTop:'12px', background:'#fef2f2', border:'1px solid #fca5a5', padding:'14px', borderRadius:'8px' }}>
+          <div style={{ fontWeight:'bold', marginBottom:'8px', fontSize:'13px', color:'#dc2626' }}>🚨 Raise a Dispute</div>
+          <textarea value={disputeReason} onChange={e => setDisputeReason(e.target.value)}
+            placeholder="Describe the issue in detail…" rows={3}
+            style={{ width:'100%', padding:'8px', border:'1px solid #fca5a5', borderRadius:'4px', boxSizing:'border-box', fontSize:'12px', marginBottom:'8px' }}
+          />
+          <div style={{ display:'flex', gap:'8px' }}>
+            <button onClick={() => setDisputeId(null)}
+              style={{ flex:1, padding:'8px', background:'#ccc', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
+              Cancel
+            </button>
+            <button onClick={() => submitDispute(booking.id)}
+              style={{ flex:1, padding:'8px', background:'#dc2626', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
+              Submit Dispute
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
+  /* ── Render ── */
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
-      <h2 style={{ fontSize: '24px', marginBottom: '10px', color: '#333' }}>📦 My Bookings</h2>
+    <div style={{ maxWidth:'650px', margin:'0 auto', padding:'20px' }}>
+      <h2 style={{ fontSize:'24px', marginBottom:'20px', color:'#333' }}>📦 My Bookings</h2>
 
       {!user && (
-        <div style={{
-          padding: '20px',
-          textAlign: 'center',
-          backgroundColor: '#fff3cd',
-          borderRadius: '8px',
-          color: '#856404'
-        }}>
+        <div style={{ padding:'20px', textAlign:'center', background:'#fff3cd', borderRadius:'8px', color:'#856404' }}>
           Please login to view your bookings.
         </div>
       )}
 
       {user && (
         <>
-          {/* Active Bookings */}
-          <div style={{ marginBottom: '30px' }}>
-            <h3 style={{ fontSize: '18px', color: '#333', marginBottom: '12px' }}>
+          {/* Active */}
+          <div style={{ marginBottom:'30px' }}>
+            <h3 style={{ fontSize:'17px', color:'#333', marginBottom:'12px' }}>
               🟡 Active Bookings ({active.length})
-
-                    {/* chat button available for any booking */}
-                    <button
-                      onClick={() => navigate(`/chat?bookingId=${booking.id}`)}
-                      style={{
-                        flex: '1 0 auto',
-                        padding: '8px 12px',
-                        backgroundColor: '#667eea',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontWeight: 'bold',
-                        fontSize: '12px'
-                      }}
-                    >
-                      💬 Chat
-                    </button>
             </h3>
-            {active.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', backgroundColor: '#f5f5f5', borderRadius: '8px', color: '#999' }}>
-                No active bookings yet
-              </div>
-            ) : (
-              active.map(b => <BookingCard key={b.id} booking={b} isActive={true} />)
-            )}
+            {active.length === 0
+              ? <div style={{ padding:'20px', textAlign:'center', background:'#f5f5f5', borderRadius:'8px', color:'#999' }}>No active bookings</div>
+              : active.map(b => <BookingCard key={b.id} booking={b} isActive={true} />)
+            }
           </div>
 
-          {/* Completed Bookings */}
-          <div style={{ marginBottom: '30px' }}>
-            <h3 style={{ fontSize: '18px', color: '#333', marginBottom: '12px' }}>
+          {/* Completed */}
+          <div style={{ marginBottom:'30px' }}>
+            <h3 style={{ fontSize:'17px', color:'#333', marginBottom:'12px' }}>
               ✓ Completed ({completed.length})
             </h3>
-            {completed.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', backgroundColor: '#f5f5f5', borderRadius: '8px', color: '#999' }}>
-                No completed bookings yet
-              </div>
-            ) : (
-                completed.map(b => (
-                  <div key={b.id}>
-                    <BookingCard booking={b} isActive={false} />
-                    {/* rating/review section */}
-                    {b.status === 'completed' && !b.rating && (
-                      <div style={{ padding: '10px 15px', backgroundColor: '#f0f4ff', borderRadius: '6px', marginBottom: '12px' }}>
-                        <small style={{ color: '#333' }}>Rate this service:</small>
-                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                          {[1,2,3,4,5].map(star => (
-                            <span key={star} onClick={async()=>{
-                                try{ await updateDoc(doc(db,'bookings',b.id),{rating:star,review:''});
-                                    alert('Thank you for rating!');
-                                }catch(e){alert(e.message);} }}
-                                  style={{cursor:'pointer',fontSize:'18px',color:'#ffb400'}}>
-                              ★
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))
-            )}
+            {completed.length === 0
+              ? <div style={{ padding:'20px', textAlign:'center', background:'#f5f5f5', borderRadius:'8px', color:'#999' }}>No completed bookings</div>
+              : completed.map(b => <BookingCard key={b.id} booking={b} isActive={false} />)
+            }
           </div>
 
-          {/* Cancelled Bookings */}
+          {/* Cancelled */}
           {cancelled.length > 0 && (
             <div>
-              <h3 style={{ fontSize: '18px', color: '#333', marginBottom: '12px' }}>
+              <h3 style={{ fontSize:'17px', color:'#333', marginBottom:'12px' }}>
                 ✕ Cancelled ({cancelled.length})
               </h3>
               {cancelled.map(b => <BookingCard key={b.id} booking={b} isActive={false} />)}

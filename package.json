@@ -1,0 +1,11 @@
+{
+  "name": "gigto-tools",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "seed-emulator": "node seed_emulator.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.11.1"
+  }
+}

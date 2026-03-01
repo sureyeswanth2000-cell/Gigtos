@@ -1,0 +1,551 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { auth, db } from '../firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+
+function Auth() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  const [userType, setUserType] = useState(searchParams.get('mode') || 'user'); // 'user' or 'admin'
+  const [phase, setPhase] = useState('typeSelect'); // 'typeSelect', 'login', 'signup'
+  
+  // User (Phone) Fields
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  
+  // Common Fields
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  
+  // UI States
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // ============= USER PHONE LOGIN =============
+  const handleUserPhoneLogin = async (e) => {
+    e.preventDefault();
+    if (!phone) {
+      setError('Please enter your phone number');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const userDoc = await getDoc(doc(db, 'users_by_phone', phone));
+      if (!userDoc.exists()) {
+        throw new Error('Phone number not found. Please sign up first.');
+      }
+
+      const storedEmail = userDoc.data().email;
+      const storedPassword = userDoc.data().password;
+
+      if (otp) {
+        if (otp !== '101010') {
+          throw new Error('Invalid OTP. Test OTP: 101010');
+        }
+        await signInWithEmailAndPassword(auth, storedEmail, storedPassword);
+      } else {
+        if (!password) {
+          throw new Error('Please enter password or OTP');
+        }
+        await signInWithEmailAndPassword(auth, storedEmail, password);
+      }
+      navigate('/');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============= USER PHONE SIGNUP =============
+  const handleUserPhoneSignup = async (e) => {
+    e.preventDefault();
+    if (!phone || !email || !password || !confirmPassword) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    if (phone.length < 10) {
+      setError('Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const userCred = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCred.user.uid;
+
+      await setDoc(doc(db, 'users_by_phone', phone), {
+        uid: uid,
+        email: email,
+        password: password,
+        phone: phone,
+        createdAt: new Date()
+      });
+
+      await setDoc(doc(db, 'users', uid), {
+        phone: phone,
+        email: email,
+        name: '',
+        address: '',
+        createdAt: new Date()
+      });
+
+      navigate('/complete-profile-phone');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============= ADMIN LOGIN =============
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const userCred = await signInWithEmailAndPassword(auth, email, password);
+      const uid = userCred.user.uid;
+
+      const adminDoc = await getDoc(doc(db, 'admins', uid));
+      if (!adminDoc.exists()) {
+        await signOut(auth);
+        throw new Error('This account is not registered as an admin');
+      }
+
+      navigate('/admin/bookings');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============= TYPE SELECTION PHASE =============
+  if (phase === 'typeSelect') {
+    return (
+      <div style={{ maxWidth: '500px', margin: '60px auto', padding: '40px', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '32px', marginBottom: '10px', color: '#333' }}>
+          🏠 Welcome to Gigto
+        </h1>
+        <p style={{ color: '#666', marginBottom: '40px', fontSize: '16px' }}>
+          Choose how you'd like to access the platform
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <button
+            onClick={() => {
+              setUserType('user');
+              setPhase('login');
+              setError('');
+            }}
+            style={{
+              padding: '40px',
+              border: '2px solid #667eea',
+              borderRadius: '12px',
+              backgroundColor: '#f0f4ff',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              color: '#333',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#e8f0ff';
+              e.target.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#f0f4ff';
+              e.target.style.boxShadow = 'none';
+            }}
+          >
+            <div style={{ fontSize: '40px', marginBottom: '10px' }}>👤</div>
+            Book Services as a User
+            <div style={{ fontSize: '13px', color: '#666', marginTop: '10px', fontWeight: 'normal' }}>
+              Login with phone number & OTP
+            </div>
+          </button>
+
+          <button
+            onClick={() => {
+              setUserType('admin');
+              setPhase('login');
+              setError('');
+            }}
+            style={{
+              padding: '40px',
+              border: '2px solid #764ba2',
+              borderRadius: '12px',
+              backgroundColor: '#f8f0ff',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              color: '#333',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#faf0ff';
+              e.target.style.boxShadow = '0 4px 12px rgba(118, 75, 162, 0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#f8f0ff';
+              e.target.style.boxShadow = 'none';
+            }}
+          >
+            <div style={{ fontSize: '40px', marginBottom: '10px' }}>👨‍💼</div>
+            Manage Services as Admin
+            <div style={{ fontSize: '13px', color: '#666', marginTop: '10px', fontWeight: 'normal' }}>
+              Login with email & password
+            </div>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ============= LOGIN/SIGNUP FORM =============
+  return (
+    <div style={{
+      maxWidth: '420px',
+      margin: '40px auto',
+      padding: '30px',
+      border: '1px solid #e0e0e0',
+      borderRadius: '12px',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+      fontFamily: 'Arial, sans-serif'
+    }}>
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+        <h2 style={{ margin: '0 0 5px 0', fontSize: '24px', color: '#333' }}>
+          {userType === 'user' ? '👤 User' : '👨‍💼 Admin'} {phase === 'login' ? 'Login' : 'Sign Up'}
+        </h2>
+        <p style={{ color: '#666', margin: '5px 0', fontSize: '13px' }}>
+          {userType === 'user' ? 'Book services with phone & OTP' : 'Manage your service business'}
+        </p>
+      </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div style={{
+          padding: '12px 15px',
+          marginBottom: '20px',
+          backgroundColor: '#fee',
+          border: '1px solid #fcc',
+          borderRadius: '6px',
+          color: '#c00',
+          fontSize: '13px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <span>⚠️</span>
+          {error}
+        </div>
+      )}
+
+      {/* USER PHONE AUTH */}
+      {userType === 'user' && (
+        <form onSubmit={phase === 'login' ? handleUserPhoneLogin : handleUserPhoneSignup}>
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Phone Number:
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="10-digit phone number"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          {phase === 'signup' && (
+            <>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+                  Email:
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </>
+          )}
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              {phase === 'login' ? 'OTP or Password:' : 'Password:'}
+            </label>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={otp || password}
+              onChange={(e) => {
+                if (phase === 'login') {
+                  setOtp(e.target.value);
+                  setPassword('');
+                } else {
+                  setPassword(e.target.value);
+                }
+              }}
+              placeholder={phase === 'login' ? 'Enter OTP (101010) or password' : 'Minimum 6 characters'}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          {phase === 'signup' && (
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+                Confirm Password:
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter password"
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '11px',
+              backgroundColor: loading ? '#ccc' : '#667eea',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '15px',
+              fontWeight: 'bold',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              marginBottom: '12px'
+            }}
+          >
+            {loading ? '⏳ ' + (phase === 'login' ? 'Logging in...' : 'Signing up...') : (phase === 'login' ? 'Login' : 'Sign Up')}
+          </button>
+
+          <div style={{ textAlign: 'center', fontSize: '13px', color: '#666' }}>
+            {phase === 'login' ? (
+              <>
+                Don't have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhase('signup');
+                    setError('');
+                    setOtp('');
+                    setPassword('');
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#667eea',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  Sign up
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhase('login');
+                    setError('');
+                    setPassword('');
+                    setConfirmPassword('');
+                    setEmail('');
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#667eea',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  Login
+                </button>
+              </>
+            )}
+          </div>
+        </form>
+      )}
+
+      {/* ADMIN AUTH */}
+      {userType === 'admin' && (
+        <form onSubmit={handleAdminLogin}>
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Email:
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="admin@example.com"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Password:
+            </label>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '11px',
+              backgroundColor: loading ? '#ccc' : '#764ba2',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '15px',
+              fontWeight: 'bold',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              marginBottom: '12px'
+            }}
+          >
+            {loading ? '⏳ Logging in...' : 'Admin Login'}
+          </button>
+
+          <div style={{ textAlign: 'center', fontSize: '12px', color: '#999' }}>
+            Admin accounts are created by system administrators only.
+          </div>
+        </form>
+      )}
+
+      {/* Back Button */}
+      <button
+        onClick={() => {
+          setPhase('typeSelect');
+          setError('');
+          setOtp('');
+          setPassword('');
+          setConfirmPassword('');
+          setPhone('');
+          setEmail('');
+        }}
+        style={{
+          width: '100%',
+          padding: '10px',
+          backgroundColor: '#f0f0f0',
+          border: 'none',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          fontSize: '13px',
+          color: '#666',
+          marginTop: '20px'
+        }}
+      >
+        ← Back to Selection
+      </button>
+
+      {/* Test Credentials */}
+      <div style={{
+        marginTop: '20px',
+        padding: '12px',
+        backgroundColor: '#e8f5e9',
+        borderRadius: '6px',
+        fontSize: '12px',
+        color: '#2e7d32'
+      }}>
+        <strong>🧪 Test Credentials:</strong><br/>
+        User: Phone 8374532598 / OTP: 101010<br/>
+        Admin: sri@gmail.com / Sri123
+      </div>
+    </div>
+  );
+}
+
+export default Auth;

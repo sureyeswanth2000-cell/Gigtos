@@ -132,7 +132,7 @@ import { auth, db } from "../firebase.js";
 import { renderAdminHeader } from "./admin-menu.js";
 import { onAuthStateChanged, signOut }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, getDocs, doc, getDoc, updateDoc }
+import { collection, getDocs, doc, getDoc, updateDoc, onSnapshot }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let currentUser,currentRole,workers=[],bookings=[];
@@ -156,20 +156,27 @@ onAuthStateChanged(auth,async(user)=>{
 async function loadData(){
   workers=[]; bookings=[];
 
-  const workerSnap=await getDocs(collection(db,"gig_workers"));
-  workerSnap.forEach(docSnap=>{
-    const data=docSnap.data();
-    if(currentRole==="admin" && data.adminId!==currentUser.uid) return;
-    workers.push({id:docSnap.id,...data});
+  // real-time listener for workers
+  onSnapshot(collection(db,"gig_workers"), (snap)=>{
+    workers = [];
+    snap.forEach(docSnap=>{
+      const data = docSnap.data();
+      if(currentRole==="admin" && data.adminId!==currentUser.uid) return;
+      workers.push({id:docSnap.id,...data});
+    });
+    renderWorkers();
+    renderBookings();
   });
 
-  const bookingSnap=await getDocs(collection(db,"bookings"));
-  bookingSnap.forEach(docSnap=>{
-    bookings.push({id:docSnap.id,...docSnap.data()});
+  // real-time listener for bookings
+  onSnapshot(collection(db,"bookings"), (snap)=>{
+    bookings = [];
+    snap.forEach(docSnap=>{
+      bookings.push({id:docSnap.id,...docSnap.data()});
+    });
+    renderWorkers();
+    renderBookings();
   });
-
-  renderWorkers();
-  renderBookings();
 }
 
 /* ================= WORKERS ================= */
@@ -220,7 +227,7 @@ function renderBookings(){
   list.innerHTML="";
 
   bookings
-  .filter(b=>["pending","assigned","in_progress"].includes((b.status||"").toLowerCase()))
+  .filter(b=>["pending","assigned","in_progress","awaiting_confirmation"].includes((b.status||"").toLowerCase()))
   .forEach(booking=>{
 
     let workerOptions = workers.filter(worker=>{
@@ -256,15 +263,17 @@ function renderBookings(){
     }
 
     if(booking.status==="in_progress"){
+      // at this stage admin marks work finished, user must confirm
       actions += `
-        <button class="primary" onclick="markCompleted('${booking.id}')">Complete</button>
+        <button class="primary" onclick="markFinished('${booking.id}')">Mark Finished</button>
       `;
     }
 
+    const pretty = booking.status.replace(/_/g,' ').toUpperCase();
     list.innerHTML+=`
       <div class="booking-card">
         <div class="badge ${booking.status}">
-          ${booking.status.toUpperCase()}
+          ${pretty}
         </div>
         <div><b>Service:</b> ${booking.serviceType}</div>
         ${actions}
@@ -280,6 +289,7 @@ window.assignWorker=async function(id,workerId){
   await updateDoc(doc(db,"bookings",id),{
     assignedWorkerId:workerId,
     status:"assigned",
+    adminId: currentUser.uid,
     updatedAt:new Date()
   });
   loadData();
@@ -288,6 +298,17 @@ window.assignWorker=async function(id,workerId){
 window.startWork=async function(id){
   await updateDoc(doc(db,"bookings",id),{
     status:"in_progress",
+    updatedAt:new Date()
+  });
+  loadData();
+};
+
+// admin marks job finished; user still needs to confirm
+window.markFinished=async function(id){
+  await updateDoc(doc(db,"bookings",id),{
+    status:"awaiting_confirmation",
+    // free the worker as the job is done from admin perspective
+    assignedWorkerId: null,
     updatedAt:new Date()
   });
   loadData();
@@ -302,11 +323,28 @@ window.markCompleted=async function(id){
 };
 
 window.cancelBooking=async function(id){
-  await updateDoc(doc(db,"bookings",id),{
-    status:"cancelled",
-    assignedWorkerId:null,
-    updatedAt:new Date()
-  });
+  // fetch current status first
+  const ref = doc(db,"bookings",id);
+  const snap = await getDoc(ref);
+  if(!snap.exists()) return;
+  const data = snap.data();
+
+  if(["assigned","in_progress","awaiting_confirmation"].includes((data.status||"").toLowerCase())){
+    // reopen the booking so it becomes available for any admin
+    await updateDoc(ref,{
+      status:"pending",
+      assignedWorkerId:null,
+      adminId:null,
+      updatedAt:new Date()
+    });
+  } else {
+    // normal cancel
+    await updateDoc(ref,{
+      status:"cancelled",
+      assignedWorkerId:null,
+      updatedAt:new Date()
+    });
+  }
   loadData();
 };
 

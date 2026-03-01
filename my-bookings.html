@@ -9,6 +9,7 @@
 
 <body>
 
+
 <div id="header-placeholder"></div>
 
 <div class="container">
@@ -16,10 +17,13 @@
   <div class="section-title">Active Bookings</div>
   <div class="count" id="activeCount"></div>
   <div id="activeBookings"></div>
+  <div class="section-title">Completed Bookings</div>
+  <div class="count" id="completedCount"></div>
+  <div id="completedBookings"></div>
 
-  <div class="section-title">Booking History</div>
-  <div class="count" id="historyCount"></div>
-  <div id="historyBookings"></div>
+  <div class="section-title">Cancelled Bookings</div>
+  <div class="count" id="cancelledCount"></div>
+  <div id="cancelledBookings"></div>
 
 </div>
 
@@ -41,7 +45,7 @@ initModal();
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged } 
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, query, where, getDocs, doc, updateDoc } 
+import { collection, query, where, doc, updateDoc, onSnapshot } 
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let currentUser = null;
@@ -60,31 +64,61 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 async function loadBookings() {
-
   const activeDiv = document.getElementById("activeBookings");
-  const historyDiv = document.getElementById("historyBookings");
+  const completedDiv = document.getElementById("completedBookings");
+  const cancelledDiv = document.getElementById("cancelledBookings");
 
   activeDiv.innerHTML = "";
-  historyDiv.innerHTML = "";
 
   let activeCount = 0;
-  let historyCount = 0;
+  let completedCount = 0;
+  let cancelledCount = 0;
 
   const q = query(
-    collection(db,"bookings"), 
+    collection(db,"bookings"),
     where("userId","==",currentUser.uid)
   );
 
-  const snapshot = await getDocs(q);
+  // real-time listener
+  onSnapshot(q, (snapshot) => {
+    renderSnapshot(snapshot);
+  });
+  return;
+
+
+function renderSnapshot(snapshot) {
+  const activeDiv = document.getElementById("activeBookings");
+  const completedDiv = document.getElementById("completedBookings");
+  const cancelledDiv = document.getElementById("cancelledBookings");
+
+  activeDiv.innerHTML = "";
+  completedDiv.innerHTML = "";
+  cancelledDiv.innerHTML = "";
+
+  let activeCount = 0;
+  let completedCount = 0;
+  let cancelledCount = 0;
 
   if(snapshot.empty){
     activeDiv.innerHTML = "<div class='empty'>No bookings found</div>";
+    document.getElementById("activeCount").innerText = "0 active booking(s)";
+    document.getElementById("completedCount").innerText = "0 completed";
+    document.getElementById("cancelledCount").innerText = "0 cancelled";
     return;
   }
 
-  snapshot.forEach(docSnap => {
+  // convert to array and sort
+  const docs = [];
+  snapshot.forEach(docSnap=> docs.push({id:docSnap.id,data:docSnap.data()}));
+  docs.sort((a,b)=>{
+    const ta = a.data.updatedAt?.seconds || 0;
+    const tb = b.data.updatedAt?.seconds || 0;
+    return tb - ta;
+  });
 
-    const data = docSnap.data();
+  docs.forEach(item=>{
+    const docSnap = {id:item.id};
+    const data = item.data;
 
     const createdTime = data.createdAt?.seconds
       ? new Date(data.createdAt.seconds * 1000).toLocaleString()
@@ -93,12 +127,13 @@ async function loadBookings() {
     const card = document.createElement("div");
     card.classList.add("card");
 
-    if(["pending","assigned","in_progress"].includes(data.status)){
+    if(["pending","assigned","in_progress","awaiting_confirmation"].includes(data.status)){
       card.classList.add("active-highlight");
     }
 
+    const prettyStatus = data.status.replace(/_/g,' ').toUpperCase();
     card.innerHTML = `
-      <div class="badge ${data.status}">${data.status.toUpperCase()}</div>
+      <div class="badge ${data.status}">${prettyStatus}</div>
       <div class="service">${data.serviceType}</div>
       <div class="address">${data.address}</div>
       <div class="time">${createdTime}</div>
@@ -108,11 +143,29 @@ async function loadBookings() {
       </div>
     `;
 
+    if(data.status === "awaiting_confirmation"){
+      const note = document.createElement("div");
+      note.style.marginTop = "10px";
+      note.style.fontSize = "13px";
+      note.style.color = "#d97706";
+      note.innerText = "⏳ Waiting for your confirmation to complete the job.";
+      card.appendChild(note);
+    }
+
     card.onclick = () => {
       const details = card.querySelector(".details");
       details.style.display = 
         details.style.display === "block" ? "none" : "block";
     };
+
+    // timeline information
+    const timeline = document.createElement("div");
+    timeline.classList.add("timeline");
+    timeline.innerHTML = `
+      <div class="line-item"><span>Created:</span> ${createdTime}</div>
+      <div class="line-item"><span>Last&nbsp;update:</span> ${data.updatedAt?.seconds ? new Date(data.updatedAt.seconds*1000).toLocaleString() : "-"}</div>
+    `;
+    card.appendChild(timeline);
 
     if(data.status === "pending"){
       const cancelBtn = document.createElement("button");
@@ -123,33 +176,52 @@ async function loadBookings() {
 
         openModal("Are you sure you want to cancel this booking?", async () => {
           await updateDoc(doc(db,"bookings",docSnap.id),{
-  status:"cancelled",
-  assignedWorkerId:null,
-  updatedAt:new Date()
-});
-          loadBookings();
+            status:"cancelled",
+            assignedWorkerId:null,
+            updatedAt:new Date()
+          });
         });
       };
       card.appendChild(cancelBtn);
     }
 
-    if(["pending","assigned","in_progress"].includes(data.status)){
-      activeDiv.appendChild(card);
-      activeCount++;
-    } else {
-      historyDiv.appendChild(card);
-      historyCount++;
+    if(data.status === "awaiting_confirmation"){
+      const confirmBtn = document.createElement("button");
+      confirmBtn.classList.add("cancel-btn");
+      confirmBtn.innerText = "Confirm Completion";
+      confirmBtn.onclick = (e) => {
+        e.stopPropagation();
+        openModal("Have you received the service and want to mark this booking complete?", async () => {
+          await updateDoc(doc(db,"bookings",docSnap.id),{
+            status:"completed",
+            updatedAt:new Date()
+          });
+        });
+      };
+      card.appendChild(confirmBtn);
     }
 
+    if(["pending","assigned","in_progress","awaiting_confirmation"].includes(data.status)){
+      activeDiv.appendChild(card);
+      activeCount++;
+    } else if(data.status === "completed"){
+      completedDiv.appendChild(card);
+      completedCount++;
+    } else if(data.status === "cancelled"){
+      cancelledDiv.appendChild(card);
+      cancelledCount++;
+    }
   });
 
   document.getElementById("activeCount").innerText =
     activeCount + " active booking(s)";
-
-  document.getElementById("historyCount").innerText =
-    historyCount + " completed / cancelled";
+  document.getElementById("completedCount").innerText =
+    completedCount + " completed";
+  document.getElementById("cancelledCount").innerText =
+    cancelledCount + " cancelled";
 }
-</script>
+}</script>
+ 
 
 </body>
 </html>

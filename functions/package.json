@@ -1,0 +1,13 @@
+{
+  "name": "gigto-functions",
+  "description": "Firebase Cloud Functions for the Gigto app (notifications, future payments, etc.)",
+  "private": true,
+  "engines": {
+    "node": "16"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.9.0",
+    "firebase-functions": "^4.3.0",
+    "nodemailer": "^6.9.3"
+  }
+}

@@ -61,7 +61,7 @@ import { auth, db } from "../firebase.js";
   import { renderAdminHeader } from "./admin-menu.js";
 import { onAuthStateChanged, signOut }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, getDocs, addDoc, doc, getDoc, updateDoc, deleteDoc }
+import { collection, getDocs, addDoc, doc, getDoc, updateDoc, deleteDoc, onSnapshot }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let currentUser,currentRole;
@@ -79,7 +79,10 @@ onAuthStateChanged(auth,async(user)=>{
 
   currentRole=snap.data().role;
   renderAdminHeader(user.email);
-  loadWorkers();
+  // realtime listener for workers
+  onSnapshot(collection(db,"gig_workers"), () => {
+    loadWorkers();
+  });
 });
 
 async function loadWorkers(){
@@ -88,13 +91,29 @@ async function loadWorkers(){
   const search=document.getElementById("searchWorker").value.toLowerCase().trim();
   list.innerHTML="";
 
+  console.log("loadWorkers called", { currentRole, currentUser: currentUser?.uid, search });
+  console.log("worker snapshot count", snapshot.size);
+  snapshot.forEach(docSnap=>{
+    const d = docSnap.data();
+    console.log("worker doc", docSnap.id, "adminId", d.adminId, "status", d.status);
+  });
+
+  let shownCount = 0;
+
   snapshot.forEach(docSnap=>{
     const data=docSnap.data();
     const id=docSnap.id;
 
-    if(currentRole==="admin" && data.adminId!==currentUser.uid) return;
+    // only show workers belonging to this admin (unless superadmin)
+    if(currentRole==="admin" && data.adminId!==currentUser.uid) {
+      console.log("skipping worker not owned by admin", id, data.adminId);
+      return;
+    }
+    // debug: log worker data on filter check
+    // console.log('worker', id, data);
     if(search && !data.name.toLowerCase().includes(search)) return;
 
+    shownCount++;
     list.innerHTML+=`
       <tr>
         <td>${data.name}</td>
@@ -110,6 +129,9 @@ async function loadWorkers(){
       </tr>
     `;
   });
+  if(shownCount===0 && snapshot.size>0){
+    alert("No workers shown for this admin – please check console for details.");
+  }
 }
 
 window.createWorker = async function(){
@@ -132,6 +154,12 @@ window.createWorker = async function(){
     return;
   }
 
+  if(!currentUser){
+    alert("User not initialized. Try again later.");
+    return;
+  }
+
+  console.log("creating worker for admin", currentUser.uid);
   try {
 
     await addDoc(collection(db,"gig_workers"),{
@@ -148,7 +176,7 @@ window.createWorker = async function(){
 
     alert("Worker created successfully");
 
-    loadWorkers();
+    // snapshot listener will refresh automatically
 
   } catch(error){
     console.error(error);

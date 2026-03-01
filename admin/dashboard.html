@@ -117,7 +117,7 @@ import { auth, db } from "../firebase.js";
 import { renderAdminHeader } from "./admin-menu.js";
 import { onAuthStateChanged, signOut }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { doc, getDoc, collection, getDocs }
+import { doc, getDoc, collection, getDocs, onSnapshot }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let currentUser;
@@ -145,11 +145,13 @@ onAuthStateChanged(auth, async(user)=>{
   renderAdminHeader(user.email);
 
   loadDashboardStats();
+  // real-time updates
+  onSnapshot(collection(db,"gig_workers"), loadDashboardStats);
+  onSnapshot(collection(db,"bookings"), loadDashboardStats);
 });
 
 
 async function loadDashboardStats(){
-
   const workerSnap = await getDocs(collection(db,"gig_workers"));
   const bookingSnap = await getDocs(collection(db,"bookings"));
 

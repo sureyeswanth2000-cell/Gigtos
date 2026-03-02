@@ -2,10 +2,19 @@
   "name": "gigto-tools",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://sureyeswanth2000-cell.github.io/Gigtos",
   "scripts": {
-    "seed-emulator": "node seed_emulator.js"
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "deploy": "gh-pages -d build",
+    "predeploy": "npm run build"
   },
   "dependencies": {
     "firebase-admin": "^11.11.1"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
   }
 }

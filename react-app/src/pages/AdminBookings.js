@@ -6,16 +6,19 @@ import {
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db } from '../firebase';
 
+// Status colors for visual differentiation in the admin panel
 const STATUS_COLORS = {
-  pending: '#ff9800',
-  assigned: '#2196f3',
-  in_progress: '#9c27b0',
-  awaiting_confirmation: '#f44336',
-  completed: '#4caf50',
-  cancelled: '#757575',
+  pending: '#ff9800',                // Orange for new unassigned requests
+  scheduled: '#0ea5e9',              // Sky blue for future bookings
+  assigned: '#2196f3',               // Blue for assigned but not started
+  in_progress: '#9c27b0',            // Purple for ongoing work
+  awaiting_confirmation: '#f44336',  // Red for jobs marked done by worker but not user
+  completed: '#4caf50',              // Green for successfully closed jobs
+  cancelled: '#757575',              // Gray for aborted jobs
 };
 
-const ACTIVE_STATUSES = ['pending', 'assigned', 'in_progress', 'awaiting_confirmation'];
+// Define which statuses are considered "Active" for primary workflow management
+const ACTIVE_STATUSES = ['pending', 'scheduled', 'assigned', 'in_progress', 'awaiting_confirmation'];
 
 export default function AdminBookings() {
   const [bookings, setBookings] = useState([]);
@@ -81,43 +84,50 @@ export default function AdminBookings() {
     if (!workerId) return;
     const worker = workers.find(w => w.id === workerId);
     await updateDoc(doc(db, 'bookings', b.id), {
-      assignedWorkerId: workerId,
-      assignedWorker: worker?.name || '',
-      adminId: uid,
-      status: 'assigned',
-      updatedAt: new Date(),
+      assignedWorkerId: workerId, // Link worker's unique ID
+      assignedWorker: worker?.name || '', // Store name for quick display
+      adminId: uid, // Track which admin handled this assignment (crucial for hierarchy)
+      status: 'assigned', // Transition to assigned phase
+      updatedAt: new Date(), // Timestamp the assignment
     });
+    // Log the assignment event for transparency
     await logActivity(b.id, 'admin_assigned_worker', { workerName: worker?.name });
   };
 
   const startWork = async (b) => {
+    // Move booking to in_progress and record start date
     await updateDoc(doc(db, 'bookings', b.id), {
       status: 'in_progress',
-      workStartDate: new Date().toISOString().split('T')[0],
+      workStartDate: new Date().toISOString().split('T')[0], // Track start of multi-day work
       updatedAt: new Date(),
     });
+    // Log work start event
     await logActivity(b.id, 'admin_started_work');
   };
 
   const markFinished = async (b) => {
+    // Complete local work phase and notify user for final confirmation
     await updateDoc(doc(db, 'bookings', b.id), {
       status: 'awaiting_confirmation',
-      assignedWorkerId: null,
+      assignedWorkerId: null, // Release worker for other jobs
       updatedAt: new Date(),
     });
+    // Log completion marking event
     await logActivity(b.id, 'admin_marked_finished');
   };
 
   const cancelBooking = async (b) => {
+    // If work was already in progress, revert to pending so someone else can take it
     if (['assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status)) {
       await updateDoc(doc(db, 'bookings', b.id), {
-        status: 'pending',
-        assignedWorkerId: null,
-        adminId: null,
+        status: 'pending', // Reset status
+        assignedWorkerId: null, // Clear worker
+        adminId: null, // Clear admin mapping to allow re-assignment by others
         updatedAt: new Date(),
       });
       await logActivity(b.id, 'admin_cancelled_reopened');
     } else {
+      // Direct cancellation for pending/scheduled jobs
       await updateDoc(doc(db, 'bookings', b.id), {
         status: 'cancelled',
         updatedAt: new Date(),
@@ -127,71 +137,79 @@ export default function AdminBookings() {
   };
 
   const resolveDispute = async (b) => {
+    // Toggle dispute status to resolved after admin review
     await updateDoc(doc(db, 'bookings', b.id), {
       'dispute.status': 'resolved',
       updatedAt: new Date(),
     });
+    // Log dispute resolution event
     await logActivity(b.id, 'admin_resolved_dispute');
     alert('Dispute marked as resolved.');
   };
 
-  /* ── Daily note ── */
+  /* ── Daily note progress tracking ── */
   const submitNote = async (bookingId) => {
-    if (!noteText.trim()) return;
+    if (!noteText.trim()) return; // Prevent empty notes
     const entry = {
-      date: new Date().toLocaleDateString('en-IN'),
+      date: new Date().toLocaleDateString('en-IN'), // Standard Indian date format
       note: noteText.trim(),
-      addedBy: uid,
+      addedBy: uid, // Track note creator
     };
+    // Append to dailyNotes array in Firestore
     await updateDoc(doc(db, 'bookings', bookingId), {
       dailyNotes: arrayUnion(entry),
       updatedAt: new Date(),
     });
+    // Log note addition
     await logActivity(bookingId, 'admin_added_note', { note: noteText });
-    setNoteId(null);
-    setNoteText('');
+    setNoteId(null); // Close note input field
+    setNoteText(''); // Reset text
   };
 
-  /* ── Photo upload ── */
+  /* ── Photo upload system for progress validation ── */
   const uploadPhoto = async (bookingId, label, file) => {
     if (!file) return;
-    setUploading(prev => ({ ...prev, [bookingId]: true }));
+    setUploading(prev => ({ ...prev, [bookingId]: true })); // Show loading for this specific booking
     try {
       const storage = getStorage();
+      // Generate unique path in Firebase Storage
       const path = `bookings/${bookingId}/${label}_${Date.now()}_${file.name}`;
       const snap = await uploadBytes(storageRef(storage, path), file);
-      const url = await getDownloadURL(snap.ref);
+      const url = await getDownloadURL(snap.ref); // Get public/access URL
+      // Append photo metadata to Firestore booking doc
       await updateDoc(doc(db, 'bookings', bookingId), {
         photos: arrayUnion({ label, url, uploadedAt: new Date().toISOString() }),
         updatedAt: new Date(),
       });
+      // Log successful upload
       await logActivity(bookingId, 'admin_uploaded_photo', { label });
       alert(`✓ ${label} photo uploaded!`);
     } catch (e) {
-      alert('Upload failed: ' + e.message);
+      alert('Upload failed: ' + e.message); // Error feedback
     } finally {
-      setUploading(prev => ({ ...prev, [bookingId]: false }));
+      setUploading(prev => ({ ...prev, [bookingId]: false })); // Stop loading
     }
   };
 
-  /* ── Filter bookings ── */
+  /* ── Filter logic for the dashboard views ── */
   const shown = bookings.filter(b => {
     if (filter === 'active') return ACTIVE_STATUSES.includes(b.status);
     if (filter === 'completed') return b.status === 'completed';
     if (filter === 'cancelled') return b.status === 'cancelled';
     if (filter === 'disputes') return b.dispute?.status === 'open';
-    return true;
+    return true; // Show all for 'all' filter
   });
 
-  /* ── Dispute count ── */
+  /* ── Open dispute counter for UI badges ── */
   const disputeCount = bookings.filter(b => b.dispute?.status === 'open').length;
 
-  /* ── Render ── */
+  /* ── Component Main Render ── */
   return (
     <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '20px' }}>
+      {/* Page header */}
       <h2 style={{ fontSize: '24px', marginBottom: '20px', color: '#333' }}>📋 Booking Management</h2>
 
-      {/* Filter tabs */}
+      {/* Responsive Filter Tab Navigation */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
         {[
           { key: 'active', label: `Active (${bookings.filter(b => ACTIVE_STATUSES.includes(b.status)).length})`, color: '#f59e0b' },
@@ -203,43 +221,51 @@ export default function AdminBookings() {
           <button key={tab.key} onClick={() => setFilter(tab.key)}
             style={{
               padding: '8px 16px',
-              background: filter === tab.key ? tab.color : '#f3f4f6',
+              background: filter === tab.key ? tab.color : '#f3f4f6', // Highlight active tab
               color: filter === tab.key ? 'white' : '#333',
               border: 'none', borderRadius: '20px', cursor: 'pointer',
               fontWeight: filter === tab.key ? 'bold' : 'normal',
               fontSize: '13px',
+              transition: 'background 0.3s'
             }}>
             {tab.label}
           </button>
         ))}
       </div>
 
+      {/* Empty State Feedback */}
       {shown.length === 0 && (
         <div style={{ padding: '40px', textAlign: 'center', color: '#999', background: '#f9f9f9', borderRadius: '8px' }}>
-          No bookings in this category.
+          No bookings match your selected filter.
         </div>
       )}
 
+      {/* List of Booking Cards */}
       {shown.map(b => {
+        // Filter out workers who are already busy on other jobs
         const busyWorkerIds = bookings
           .filter(bk => ['assigned', 'in_progress'].includes(bk.status) && bk.id !== b.id)
           .map(bk => bk.assignedWorkerId);
+        // Find workers that match exact service type AND are currently available
         const availableWorkers = workers.filter(w =>
           w.status === 'active' &&
           !busyWorkerIds.includes(w.id) &&
-          (w.gigType || '').toLowerCase() === (b.serviceType || '').toLowerCase()
+          (
+            (b.serviceType || 'Service').toLowerCase() === 'service' ||
+            (w.gigType || '').toLowerCase() === (b.serviceType || '').toLowerCase()
+          )
         );
 
         return (
           <div key={b.id} style={{
             background: 'white',
-            border: `2px solid ${STATUS_COLORS[b.status] || '#ddd'}`,
+            border: `2px solid ${STATUS_COLORS[b.status] || '#ddd'}`, // Dynamic border color matching status
             borderRadius: '12px',
             padding: '16px',
             marginBottom: '16px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
           }}>
-            {/* Booking header */}
+            {/* Unified Header with Details and Status Tags */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
               <div>
                 <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#333' }}>
@@ -248,7 +274,13 @@ export default function AdminBookings() {
                 <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
                   📞 {b.phone} | 📍 {b.address}
                 </div>
-                <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
+                {/* Visual display for Future/Scheduled booking details */}
+                {b.scheduledDate && (
+                  <div style={{ fontSize: '12px', color: '#0284c7', fontWeight: 'bold', marginTop: '4px', background: '#e0f2fe', padding: '4px 8px', borderRadius: '4px', display: 'inline-block' }}>
+                    🗓️ Scheduled: {b.scheduledDate} at {b.timeSlot}
+                  </div>
+                )}
+                <div style={{ fontSize: '11px', color: '#999', marginTop: '4px' }}>
                   Created: {b.createdAt?.toDate?.()?.toLocaleString?.() || '—'}
                 </div>
               </div>

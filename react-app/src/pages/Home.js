@@ -2,29 +2,35 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 
-export default function Home(){
+export default function Home() {
   const navigate = useNavigate();
   const [selectedService, setSelectedService] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
+  // Define available services with their metadata (icon, price, description)
   const services = [
-    { id: 1, name: 'Plumber', icon: '🧰', price: '₹200', desc: 'Pipe repairs, leak fixing, installation' },
-    { id: 2, name: 'Electrician', icon: '⚡', price: '₹200', desc: 'Wiring, repairs, switch installation' },
-    { id: 3, name: 'Carpenter', icon: '🪛', price: '₹200', desc: 'Furniture, doors, shelves, fixtures' },
-    { id: 4, name: 'Painter', icon: '🎨', price: '₹200', desc: 'Interior & exterior painting' }
+    { id: 1, name: 'Plumber', icon: '🧰', price: '₹150', desc: 'Pipe repairs, leak fixing, installation' },    // Updated to ₹150
+    { id: 2, name: 'Electrician', icon: '⚡', price: '₹150', desc: 'Wiring, repairs, switch installation' },    // Updated to ₹150
+    { id: 3, name: 'Carpenter', icon: '🪛', price: '₹150', desc: 'Furniture, doors, shelves, fixtures' },    // Updated to ₹150
+    { id: 4, name: 'Painter', icon: '🎨', price: '₹150', desc: 'Interior & exterior painting' }             // Updated to ₹150
   ];
 
+  // Handle service selection and login check
   const handleBookService = (service) => {
+    // If not logged in, redirect to auth with user mode
     if (!auth.currentUser) {
       navigate('/auth?mode=user');
       return;
     }
+    // Set selected service and show confirmation modal
     setSelectedService(service);
     setShowModal(true);
   };
 
+  // Confirm selection and navigate to the detailed booking page
   const confirmBooking = () => {
     if (selectedService) {
+      // Pass service type as a query parameter
       navigate(`/service?type=${selectedService.name}`);
       setShowModal(false);
     }
@@ -32,7 +38,7 @@ export default function Home(){
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: '20px' }}>
-      {/* Header */}
+      {/* Visual Header Section */}
       <div style={{ textAlign: 'center', marginBottom: '30px' }}>
         <h1 style={{ fontSize: '28px', marginBottom: '10px', color: '#333' }}>
           🏠 Home Services in Kavali
@@ -40,8 +46,9 @@ export default function Home(){
         <p style={{ fontSize: '16px', color: '#666', marginBottom: '5px' }}>
           Book trusted professionals instantly
         </p>
-        <p style={{ fontSize: '14px', color: '#999' }}>
-          All services start with ₹200 visiting charge
+        {/* Global visiting charge announcement */}
+        <p style={{ fontSize: '14px', color: '#0284c7', fontWeight: 'bold' }}>
+          ✨ All services now start with a ₹150 visiting charge
         </p>
       </div>
 
@@ -148,9 +155,9 @@ export default function Home(){
 
             <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f0f4ff', borderRadius: '8px' }}>
               <p style={{ margin: '0', color: '#333', fontSize: '14px' }}>
-                ✓ Quick booking process<br/>
-                ✓ Professional & verified workers<br/>
-                ✓ Easy payment options (coming soon)<br/>
+                ✓ Quick booking process<br />
+                ✓ Professional & verified workers<br />
+                ✓ Easy payment options (coming soon)<br />
                 ✓ Real-time tracking
               </p>
             </div>

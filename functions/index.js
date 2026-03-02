@@ -114,12 +114,27 @@ exports.onBookingStatusChange = functions.firestore
       await logActivity(bookingId, 'rating_submitted', 'system', { rating: after.rating });
     }
 
-    // Daily note added
-    const prevNoteCount = (before.dailyNotes || []).length;
-    const newNoteCount = (after.dailyNotes || []).length;
-    if (newNoteCount > prevNoteCount) {
-      const latestNote = after.dailyNotes[newNoteCount - 1];
-      await logActivity(bookingId, 'daily_note_added', 'system', { note: latestNote?.note });
+    // Commission calculation on completion
+    // The visiting charge is ₹150, split as: ₹80 worker, ₹20 local admin, ₹50 Gigto
+    if (before.status !== 'completed' && after.status === 'completed') {
+      const commissionData = {
+        totalVisitingCharge: 150,
+        workerShare: 80,
+        localAdminShare: 20,
+        gigtoShare: 50,
+        calculatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      // Update the booking document with commission details
+      await change.after.ref.update({
+        commissions: commissionData,
+        isCommissionProcessed: true
+      });
+
+      // Log the commission event for auditing
+      await logActivity(bookingId, 'commission_processed', 'system', {
+        split: `Worker:₹80, Local:₹20, Gigto:₹50`
+      });
     }
 
     return null;

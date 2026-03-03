@@ -15,10 +15,12 @@ import Admin from './pages/Admin';
 import Workers from './pages/Workers';
 import AdminBookings from './pages/AdminBookings';
 import Chat from './pages/Chat';
+import SuperAdmin from './pages/SuperAdmin';
 
-function App(){
+function App() {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,9 +28,12 @@ function App(){
       setUser(currentUser);
       if (currentUser) {
         const adminDoc = await getDoc(doc(db, 'admins', currentUser.uid));
-        setIsAdmin(adminDoc.exists());
+        const isAdminUser = adminDoc.exists();
+        setIsAdmin(isAdminUser);
+        setIsSuperAdmin(isAdminUser && adminDoc.data()?.role === 'superadmin');
       } else {
         setIsAdmin(false);
+        setIsSuperAdmin(false);
       }
       setLoading(false);
     });
@@ -50,8 +55,9 @@ function App(){
     );
   }
 
-  const ProtectedRoute = ({ children, requireAdmin = false }) => {
+  const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }) => {
     if (!user) return <Navigate to="/auth" />;
+    if (requireSuperAdmin && !isSuperAdmin) return <Navigate to="/" />;
     if (requireAdmin && !isAdmin) return <Navigate to="/" />;
     return children;
   };
@@ -76,6 +82,9 @@ function App(){
           <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
           <Route path="/admin/workers" element={<ProtectedRoute requireAdmin><Workers /></ProtectedRoute>} />
           <Route path="/admin/bookings" element={<ProtectedRoute requireAdmin><AdminBookings /></ProtectedRoute>} />
+
+          {/* Protected SuperAdmin Route */}
+          <Route path="/admin/super" element={<ProtectedRoute requireSuperAdmin><SuperAdmin /></ProtectedRoute>} />
         </Routes>
       </main>
       <Footer />

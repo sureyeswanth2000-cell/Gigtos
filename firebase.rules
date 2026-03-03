@@ -148,9 +148,12 @@ service cloud.firestore {
     ============================ */
     match /admins/{adminId} {
       // An admin can read their own profile, and higher-level admins can read child profiles
-      allow read: if isLoggedIn() && (request.auth.uid == adminId || isParentOf(adminId));
+      // SuperAdmin can read ALL admin profiles (for region performance overview)
+      allow read: if isLoggedIn() && (request.auth.uid == adminId || isParentOf(adminId) || isSuperAdmin());
       // Hierarchical provisioning (SuperAdmin only for root, Parents for local)
       allow create, delete: if isSuperAdmin();
+      // Admins can update their own profile, superadmin can update any admin
+      // This allows superadmin to set regionStatus, probationStatus etc.
       allow update: if isAdmin() && (request.auth.uid == adminId || isSuperAdmin());
     }
 
@@ -166,11 +169,27 @@ service cloud.firestore {
       );
       // Local admins create workers; parents manage them
       allow create: if isAdmin() && request.resource.data.adminId == request.auth.uid;
+      // Allow admin owner or parent to update; superadmin can set fraud flags
       allow update: if isLoggedIn() && (
         resource.data.adminId == request.auth.uid ||
-        isParentOf(resource.data.adminId)
-      ) && request.resource.data.adminId == resource.data.adminId; // Ensure admin ownership is stable
+        isParentOf(resource.data.adminId) ||
+        isSuperAdmin()
+      );
       allow delete: if isSuperAdmin();
+    }
+
+    /* ============================
+       CASHBACKS COLLECTION
+    ============================ */
+    match /cashbacks/{cashbackId} {
+      // Users can read their own cashbacks
+      allow read: if isLoggedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      // Only admin SDK (Cloud Functions) creates/updates cashbacks
+      // Client-side writes are prohibited
+      allow create, update, delete: if false;
     }
 
   }

@@ -17,12 +17,17 @@ This document summarizes the features in the Gigto project, indicating which ite
   - Booking system (create, view active bookings, history)
   - Cancel booking (only if pending) with modal confirmation
   - Bookings grouped into Active / Completed / Cancelled
+  - Consumer confirmation system (User confirm/resolves awaiting_confirmation)
+  - Sort history by updatedAt
+  - Reopen booking from history
 
 - **Admin Features**
-  - Booking lifecycle management (pending → assigned → in_progress → completed/cancelled)
+  - Booking lifecycle management (pending → assigned → in_progress → awaiting_confirmation → completed/cancelled)
   - Assign worker, start work, mark completed, cancel booking
   - Automatic worker freeing on cancellation
   - View worker availability (free/busy logic)
+  - Real-time updates using onSnapshot
+  - Admin cancel → reopen logic (reverts to pending if assigned worker cancelled)
 
 - **Worker Management**
   - Create, disable/enable workers
@@ -37,6 +42,26 @@ This document summarizes the features in the Gigto project, indicating which ite
   - Responsive design
   - Header menu system & clean admin navigation
   - Availability counter display
+  - Directions links (Google Maps) in all portals
+
+- **Governance & Escrow**
+  - Region performance scoring (fraud, resolution time, disputes)
+  - Auto-escalation of disputes to SuperAdmin after 24h
+  - Escrow payment system (hold on dispute, auto-release on completion)
+  - Worker top-listing (badge earned after 3 completed jobs)
+  - Region probation logic (triggers if dispute rate >= 15%)
+  - User cashback system (₹9 reward with 15-day expiry)
+  - 1-Star call/visit protocol for region leads
+  - Activity log tracking for all critical transitions
+  - Dispute state & escalation workflow (Cloud Functions)
+  - Rating system & Performance metrics (Automated)
+  - Booking timeline visualization (Activity log UI)
+
+- **Advanced Workflows**
+  - Multi-day job handling (logic and state tracking)
+  - Photo progress system (Firebase Storage based)
+  - Statistics dashboard (Admin dashboard counters)
+  - Statistics dashboard (SuperAdmin region overview)
 
 - **Security**
   - Firestore security rules enforcing role-based read/write access
@@ -46,54 +71,14 @@ This document summarizes the features in the Gigto project, indicating which ite
 
 ---
 
-## 🚧 In-Progress / Partially Designed
+## 🚧 Last Phase Features (Deferred)
 
-- **Advanced Booking Workflow**
-  - New status flow (pending → assigned → in_progress → awaiting_confirmation → completed → cancelled)
-
-- **Consumer Confirmation System**
-  - Admin marks work "Finished" (status → awaiting_confirmation)
-  - User must confirm to transition to completed
-  - Prevents forced completion by admins
-
-- **Admin Cancel → Reopen Logic**
-  - If admin cancels after assignment, revert to pending, clear assignedWorkerId & adminId, expose booking externally until user cancels
-
-- **History Improvements**
-  - Sort history by `updatedAt` (latest first)
-  - Separate Completed / Cancelled lists
-  - Allow reopening booking from history
-
-- **Multi-Day Work Support**
-  - Track start date, daily updates, prevent immediate completion, require user confirmation
-
-- **Photo Progress System (planned)**
-  - Worker uploads before/progress/after photos, user complaint photos
-  - Firebase structure with `progressPhotos` array
-  - Phase 1: Firebase Storage, Phase 2: migrate to S3 with expiry/compression/watermark
-
-- **Admin System Improvements**
-  - Real-time updates using `onSnapshot`
-  - Statistics dashboard (total bookings today, completed, cancelled, active, worker load)
-
-- **Future Booking System**
-  - Scheduling for future dates
-  - Worker assignment calendar
-  - Day-based booking control
-
-- **Business Features**
+- **Business & Integrations**
   - Call masking (last-phase)
   - WhatsApp link/automation (deferred)
-  - Aadhaar verification (mandatory)
-  - Commission tracking
   - Payment gateway integration (last-phase)
-  - Region‑based admin control, multi-admin hierarchy
-
-- **System Control Features**
-  - Activity logs
-  - Dispute state & escalation workflow
-  - Rating system, worker performance metrics
-  - Booking timeline visualization
+  - Aadhaar verification (mandatory validation logic)
+  - Commission tracking automation
 
 ---
 
@@ -108,25 +93,8 @@ Transition from a **Basic Booking App** to a **Work Lifecycle Management Platfor
 
 ---
 
-## 🚀 Development Priority Order
+## 🚀 Priority Status: Complete (Pre-Final Phase)
 
-1. Consumer confirmation system
-2. Awaiting confirmation state
-3. Admin cancel → reopen logic
-4. History sorting
-5. Real-time updates
-6. Admin stats dashboard
-7. Multi-day job handling
-8. Photo upload system
-9. Timeline view
-10. Dispute handling
-11. Call masking
-12. Aadhaar validation
-13. Payments
-14. WhatsApp automation
-
-> **Note:** WhatsApp link, call masking, and payment features will be added in the last phase.
+All core lifecycle, governance, and UX features are verified and implemented. The system is ready for the final integration phase (Payments, WhatsApp, Aadhaar).
 
 ---
-
-Feel free to copy this into `README.md`, `PROJECT_SCOPE.md`, or another documentation file as needed.

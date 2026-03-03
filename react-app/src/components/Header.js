@@ -9,6 +9,7 @@ export default function Header() {
   const navigate = useNavigate();
   const [user, setUser] = React.useState(null);
   const [isAdmin, setIsAdmin] = React.useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -17,9 +18,11 @@ export default function Header() {
       if (currentUser) {
         getDoc(doc(db, 'admins', currentUser.uid)).then(d => {
           setIsAdmin(d.exists());
-        }).catch(()=>{});
+          setIsSuperAdmin(d.exists() && d.data()?.role === 'superadmin');
+        }).catch(() => { });
       } else {
         setIsAdmin(false);
+        setIsSuperAdmin(false);
       }
     });
     return unsubscribe;
@@ -67,6 +70,11 @@ export default function Header() {
             {isAdmin && (
               <Link to="/admin" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '4px' }}>
                 👨‍💼 Admin
+              </Link>
+            )}
+            {isSuperAdmin && (
+              <Link to="/admin/super" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,200,0,0.3)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(255,200,0,0.5)' }}>
+                🛡️ SuperAdmin
               </Link>
             )}
           </div>

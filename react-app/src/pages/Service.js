@@ -1,3 +1,15 @@
+/**
+ * SERVICE BOOKING PAGE - CONSUMER INTERFACE
+ * 
+ * Logic Overview:
+ * - Fetches user profile to pre-fill booking details (Name, Address, Phone).
+ * - Implements dual-booking modes: 
+ *   1. Immediate (Status: 'pending') - for urgent needs.
+ *   2. Scheduled (Status: 'scheduled') - for future appointments with specific time slots.
+ * - Enforces ₹150 visiting charge policy across all service types.
+ * - Validates profile completeness before allowing document creation in Firestore.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { collection, addDoc } from 'firebase/firestore';
@@ -228,7 +240,14 @@ export default function Service() {
         <div style={{ marginBottom: '20px' }}>
           <span style={{ fontWeight: 'bold', color: '#666', fontSize: '13px' }}>📍 Address:</span>
           <p style={{ margin: '5px 0 0 0', fontSize: '15px', color: '#333', whiteSpace: 'pre-wrap' }}>
-            {address || 'Not set'}
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: '#667eea', textDecoration: 'none' }}
+            >
+              {address || 'Not set'} ↗
+            </a>
           </p>
         </div>
 

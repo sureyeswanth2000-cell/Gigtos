@@ -1,21 +1,33 @@
+/**
+ * MY BOOKINGS PAGE - CONSUMER INTERFACE
+ * 
+ * Logic Overview:
+ * - Fetches and displays all bookings for the authenticated user.
+ * - Categorizes bookings into Active, Completed, and Cancelled.
+ * - Provides interactive actions: Edit, Cancel, Confirm Completion, Rate, Dispute, and Rebook.
+ * - Real-time listeners (onSnapshot) ensure UI syncs with backend status changes (e.g. worker assignment).
+ */
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection, query, where, onSnapshot,
-  doc, updateDoc, addDoc, serverTimestamp
+  doc, updateDoc, addDoc, serverTimestamp, getDoc
 } from 'firebase/firestore';
 
+// UI CONFIG: Color mapping for visual differentiation of booking states
 const statusColors = {
-  'pending': '#ff9800',
-  'assigned': '#2196f3',
-  'in_progress': '#9c27b0',
-  'awaiting_confirmation': '#f44336',
-  'completed': '#4caf50',
-  'cancelled': '#757575',
+  'pending': '#ff9800',           // Awaiting worker assignment
+  'assigned': '#2196f3',          // Worker matched to job
+  'in_progress': '#9c27b0',       // Work currently underway
+  'awaiting_confirmation': '#f44336', // Worker done, waiting for user approval
+  'completed': '#4caf50',         // Successfully closed
+  'cancelled': '#757575',         // Discarded/Invalidated
 };
 
+// UI CONFIG: Human-readable labels for the user interface
 const statusLabels = {
   'pending': '⏳ Pending',
   'assigned': '👷 Assigned',
@@ -25,6 +37,7 @@ const statusLabels = {
   'cancelled': '✕ Cancelled',
 };
 
+// UI CONFIG: Category-specific iconography
 const serviceIcons = {
   'Plumber': '🧰',
   'Electrician': '⚡',
@@ -44,14 +57,19 @@ export default function MyBookings() {
   const [ratingId, setRatingId] = useState(null);
   const [reviewText, setReviewText] = useState('');
   const [selectedStar, setSelectedStar] = useState(0);
+  const [cashbacks, setCashbacks] = useState([]);
+  const [workerDetails, setWorkerDetails] = useState({});
 
-  /* ── Auth ── */
+  /* ── Auth Listener ── */
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => setUser(u));
     return unsub;
   }, []);
 
-  /* ── Real-time bookings ── */
+  /* ── Real-time Bookings Listener ── 
+     Logic: Fetches live updates for all bookings belonging to the user.
+     Includes sorting by latest and lazy-loading worker profile details.
+  */
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, 'bookings'), where('userId', '==', user.uid));
@@ -59,34 +77,58 @@ export default function MyBookings() {
       const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       items.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
       setBookings(items);
+
+      // Fetch worker details for top-listing badge (Governance feature)
+      items.forEach(item => {
+        if (item.assignedWorkerId && !workerDetails[item.assignedWorkerId]) {
+          getDoc(doc(db, 'gig_workers', item.assignedWorkerId)).then(wDoc => {
+            if (wDoc.exists()) {
+              setWorkerDetails(prev => ({ ...prev, [item.assignedWorkerId]: wDoc.data() }));
+            }
+          }).catch(() => { });
+        }
+      });
     }, err => console.error('snapshot error', err));
     return unsub;
   }, [user]);
 
-  /* ── Helpers ── */
+  /* ── Cashback Earnt Listener ── */
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'cashbacks'), where('userId', '==', user.uid));
+    const unsub = onSnapshot(q, snap => {
+      setCashbacks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, err => console.error('cashback error', err));
+    return unsub;
+  }, [user]);
+
+  /* ── Audit Helpers ── */
   const logActivity = (bookingId, action, extra = {}) =>
     addDoc(collection(db, 'activity_logs'), {
       bookingId,
       actorId: user?.uid,
       actorRole: 'user',
-      action,
+      action, // e.g., 'user_cancelled', 'user_rated'
       ...extra,
       timestamp: serverTimestamp(),
     }).catch(() => { });
 
+  // Formats Firestore Timestamps for the UI
   const fmt = ts => {
     if (!ts) return 'N/A';
     const ms = ts.seconds ? ts.seconds * 1000 : ts;
     return new Date(ms).toLocaleString();
   };
 
-  /* ── Cancel booking ── */
+  /* ── ACTION: Cancel Booking ── 
+     Logic: Only allowed for 'pending' jobs. Transitions status to 'cancelled'.
+  */
   async function cancelBooking(id) {
     if (!window.confirm('Cancel this booking?')) return;
     try {
       await updateDoc(doc(db, 'bookings', id), {
         status: 'cancelled',
-        userId: user.uid,      // must re-send userId so security rule passes
+        userId: user.uid,      // Re-send UID for security rules validation
         updatedAt: new Date(),
       });
       await logActivity(id, 'user_cancelled');
@@ -95,7 +137,10 @@ export default function MyBookings() {
     }
   }
 
-  /* ── Confirm completion ── */
+  /* ── ACTION: Confirm Completion ── 
+     Logic: Triggered when user confirms worker marked job as done ('awaiting_confirmation').
+     Changes status to 'completed', triggering cashback/payout functions.
+  */
   async function confirmCompletion(id) {
     if (!window.confirm('Confirm job is done?')) return;
     try {
@@ -111,7 +156,9 @@ export default function MyBookings() {
     }
   }
 
-  /* ── Edit pending booking ── */
+  /* ── ACTION: Save Inline Edit ── 
+     Logic: Allows user to update location/contact details for 'pending' bookings.
+  */
   async function saveEdit(id) {
     setUpdating(true);
     try {
@@ -131,7 +178,10 @@ export default function MyBookings() {
     }
   }
 
-  /* ── Rating ── */
+  /* ── ACTION: Submit Rating ── 
+     Logic: Saves user feedback. 
+     Governance: 1-star ratings automatically trigger a dispute.
+  */
   async function submitRating(id) {
     if (!selectedStar) { alert('Please select a star rating'); return; }
     try {
@@ -144,13 +194,19 @@ export default function MyBookings() {
       setRatingId(null);
       setReviewText('');
       setSelectedStar(0);
-      alert('✓ Thank you for your rating!');
+      if (selectedStar === 1) {
+        alert('⚠️ A dispute has been automatically raised due to your 1-star rating. Our region lead will contact you shortly.');
+      } else {
+        alert('✓ Thank you for your rating!');
+      }
     } catch (e) {
       alert('Failed to save rating: ' + e.message);
     }
   }
 
-  /* ── Dispute ── */
+  /* ── ACTION: Raise Manual Dispute ── 
+     Logic: Allows user to report issues with a service. Sets dispute status to 'open'.
+  */
   async function submitDispute(id) {
     if (!disputeReason.trim()) { alert('Please describe the issue'); return; }
     try {
@@ -173,15 +229,15 @@ export default function MyBookings() {
     }
   }
 
-  /* ── 1-tap Rebooking ── */
+  /* ── ACTION: 1-tap Rebooking ── 
+     Logic: Redirects to Service page with pre-filled state for seamless re-ordering.
+  */
   async function rebookService(booking) {
-    // Navigate back to service page with the same category pre-selected
-    // This provides a seamless "Book Again" experience for the user
     navigate('/service', {
       state: {
-        serviceType: booking.serviceType, // Carry over the service category
-        prefillAddress: booking.address,  // Carry over the previous location for convenience
-        prefillPhone: booking.phone       // Carry over the contact number
+        serviceType: booking.serviceType,
+        prefillAddress: booking.address,
+        prefillPhone: booking.phone
       }
     });
   }
@@ -191,7 +247,10 @@ export default function MyBookings() {
   const completed = bookings.filter(b => b.status === 'completed');
   const cancelled = bookings.filter(b => b.status === 'cancelled');
 
-  /* ── BookingCard Component ── */
+  /* ── COMPONENT: BookingCard ── 
+     Logic: Renders the details of an individual booking.
+     Dynamic Elements: Status badges, dispute alerts, worker profiles, and action buttons.
+  */
   const BookingCard = ({ booking, isActive }) => (
     <div style={{
       background: 'white',
@@ -201,23 +260,22 @@ export default function MyBookings() {
       border: `2px solid ${statusColors[booking.status] || '#ccc'}`,
       boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
     }}>
-      {/* Visual Header with Service Icon and Auto-Status Badge */}
+      {/* CARD HEADER: Service Identity & Live Status */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Display category-specific emoji icon */}
+          {/* Service Icon Representation */}
           <span style={{ fontSize: '30px' }}>{serviceIcons[booking.serviceType] || '🛠️'}</span>
           <div>
-            {/* Service title in uppercase */}
             <div style={{ fontWeight: 'bold', fontSize: '15px', color: '#333' }}>
               {(booking.serviceType || 'Service').toUpperCase()}
             </div>
-            {/* Timestamps for transparency */}
+            {/* AUDIT INFO: Showing update times for user transparency */}
             <div style={{ fontSize: '11px', color: '#999' }}>
               Created: {fmt(booking.createdAt)} | Updated: {fmt(booking.updatedAt)}
             </div>
           </div>
         </div>
-        {/* Colorful status badge */}
+        {/* Dynamic Status Badge */}
         <div style={{
           padding: '5px 10px',
           backgroundColor: statusColors[booking.status] || '#ccc',
@@ -230,7 +288,7 @@ export default function MyBookings() {
         </div>
       </div>
 
-      {/* Real-time Dispute Alerts */}
+      {/* DISPUTE NOTIFICATIONS: Highlighting issues for user awareness */}
       {booking.dispute?.status === 'open' && (
         <div style={{ padding: '6px 10px', background: '#fee2e2', borderRadius: '6px', fontSize: '12px', color: '#991b1b', marginBottom: '10px' }}>
           🚨 Dispute raised: "{booking.dispute.reason}"
@@ -242,9 +300,9 @@ export default function MyBookings() {
         </div>
       )}
 
-      {/* Dynamic Content Body (Edit Mode vs Display Mode) */}
+      {/* CORE DETAILS: Display Mode vs Inline Edit Mode */}
       {editingId === booking.id ? (
-        // Inline Edit Form for Pending Bookings
+        /* INLINE EDIT FORM */
         <div style={{ background: '#f5f5f5', padding: '12px', borderRadius: '6px', marginBottom: '12px' }}>
           <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Phone:</label>
           <input type="tel" value={editData.phone}
@@ -257,12 +315,10 @@ export default function MyBookings() {
             style={{ width: '100%', padding: '8px', marginTop: '4px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box' }}
           />
           <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-            {/* Cancel Edit Mode */}
             <button onClick={() => setEditingId(null)} disabled={updating}
               style={{ flex: 1, padding: '8px', background: '#ccc', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
               Cancel
             </button>
-            {/* Persist Changes to Firestore */}
             <button onClick={() => saveEdit(booking.id)} disabled={updating}
               style={{ flex: 1, padding: '8px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', opacity: updating ? 0.6 : 1 }}>
               {updating ? '⏳ Saving…' : '✓ Save'}
@@ -270,13 +326,23 @@ export default function MyBookings() {
           </div>
         </div>
       ) : (
-        // Standard View for Booking Details
+        /* STANDARD DATA DISPLAY */
         <div style={{ marginBottom: '12px' }}>
-          {/* User Contact Info */}
           <div><span style={{ fontWeight: 'bold', color: '#666', fontSize: '12px' }}>📞 Phone: </span>{booking.phone}</div>
-          <div style={{ marginTop: '4px' }}><span style={{ fontWeight: 'bold', color: '#666', fontSize: '12px' }}>📍 Address: </span>{booking.address}</div>
+          <div style={{ marginTop: '4px' }}>
+            <span style={{ fontWeight: 'bold', color: '#666', fontSize: '12px' }}>📍 Address: </span>
+            {/* NAVIGATION: Google Maps integration for address location */}
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(booking.address)}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: '#2196f3', textDecoration: 'none' }}
+            >
+              {booking.address} ↗
+            </a>
+          </div>
 
-          {/* Trust-Building Worker Profile Card */}
+          {/* WORKER ASSIGNMENT CARD */}
           {booking.assignedWorker && (
             <div style={{
               marginTop: '10px',
@@ -288,21 +354,26 @@ export default function MyBookings() {
               alignItems: 'center',
               gap: '12px'
             }}>
-              {/* Worker Avatar Placeholder */}
               <div style={{ width: '40px', height: '40px', background: '#e5e7eb', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
                 👷
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '11px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 'bold' }}>Assigned Professional</div>
                 <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#111827' }}>{booking.assignedWorker}</div>
-                {/* Visual Rating Indicator for Worker */}
-                <div style={{ fontSize: '12px', color: '#f59e0b' }}>
-                  ★★★★★ <span style={{ color: '#6b7280', fontSize: '11px' }}>(Top Rated)</span>
-                </div>
+                {/* Governance badge for veteran workers */}
+                {booking.assignedWorkerId && workerDetails[booking.assignedWorkerId]?.isTopListed ? (
+                  <div style={{ fontSize: '12px', color: '#f59e0b' }}>
+                    ⭐ <span style={{ fontWeight: 'bold' }}>Top Rated</span>
+                    <span style={{ color: '#6b7280', fontSize: '11px', marginLeft: '4px' }}>({workerDetails[booking.assignedWorkerId]?.completedJobs || 0}+ jobs)</span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '12px', color: '#6b7280' }}>👷 Professional Worker</div>
+                )}
               </div>
             </div>
           )}
-          {/* Multi-day notes */}
+
+          {/* Multi-day progress tracking */}
           {booking.dailyNotes?.length > 0 && (
             <div style={{ marginTop: '8px' }}>
               <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#555', marginBottom: '4px' }}>📋 Work Progress Notes:</div>
@@ -313,7 +384,8 @@ export default function MyBookings() {
               ))}
             </div>
           )}
-          {/* Photos */}
+
+          {/* Work Evidence Photos */}
           {booking.photos?.length > 0 && (
             <div style={{ marginTop: '8px' }}>
               <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#555', marginBottom: '4px' }}>📸 Photos:</div>
@@ -327,25 +399,66 @@ export default function MyBookings() {
               </div>
             </div>
           )}
-          {/* Existing rating display */}
+
+          {/* Rating Snapshot */}
           {booking.rating && (
             <div style={{ marginTop: '8px', fontSize: '13px' }}>
               <strong>Your Rating:</strong> {'★'.repeat(booking.rating)}{'☆'.repeat(5 - booking.rating)}
-              {booking.review && <div style={{ fontSize: '12px', color: '#555', marginTop: '2px' }}>"{booking.review}"</div>}
+              {booking.rating === 1 && (
+                <span style={{ marginLeft: '8px', color: '#dc2626', fontSize: '11px', fontWeight: 'bold' }}>🚨 Auto-dispute triggered</span>
+              )}
+            </div>
+          )}
+
+          {/* Cashback Status */}
+          {booking.status === 'completed' && (() => {
+            const cb = cashbacks.find(c => c.bookingId === booking.id);
+            if (!cb) return null;
+            const expiryDate = cb.cashbackExpiryDate?.toDate ? cb.cashbackExpiryDate.toDate() : new Date(cb.cashbackExpiryDate);
+            const isExpired = cb.cashbackStatus === 'expired' || new Date() > expiryDate;
+            return (
+              <div style={{
+                marginTop: '8px', padding: '8px 12px', borderRadius: '8px',
+                background: isExpired ? '#f1f5f9' : 'linear-gradient(135deg, #ecfdf5, #d1fae5)',
+                border: `1px solid ${isExpired ? '#e2e8f0' : '#86efac'}`,
+                fontSize: '12px',
+              }}>
+                {isExpired ? (
+                  <div style={{ color: '#94a3b8' }}>💸 ₹{cb.cashbackAmount} cashback expired</div>
+                ) : (
+                  <>
+                    <div style={{ color: '#166534', fontWeight: 'bold' }}>🎉 ₹{cb.cashbackAmount} cashback earned!</div>
+                    <div style={{ color: '#15803d', marginTop: '2px' }}>
+                      Status: {cb.cashbackStatus} | Expires: {expiryDate.toLocaleDateString('en-IN')}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Payment Lifecycle (Escrow Status) */}
+          {booking.escrowStatus && (
+            <div style={{
+              marginTop: '6px', fontSize: '11px', padding: '4px 8px', borderRadius: '4px', display: 'inline-block',
+              background: booking.escrowStatus === 'held' ? '#fef3c7' : booking.escrowStatus === 'refunded' ? '#dcfce7' : '#f1f5f9',
+              color: booking.escrowStatus === 'held' ? '#92400e' : booking.escrowStatus === 'refunded' ? '#166534' : '#64748b',
+            }}>
+              💰 Escrow: {booking.escrowStatus}
             </div>
           )}
         </div>
       )}
 
-      {/* Action Buttons */}
+      {/* FOOTER ACTIONS: Context-aware buttons */}
       {editingId !== booking.id && (
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {/* PENDING: edit + cancel */}
+          {/* ACTIONS: Pending jobs can be edited or cancelled */}
           {isActive && booking.status === 'pending' && (
             <>
               <button onClick={() => { setEditingId(booking.id); setEditData({ address: booking.address, phone: booking.phone }); }}
                 style={{ flex: '1 0 auto', padding: '8px 12px', background: '#2196f3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-                ✏️ Edit
+                ✏️ Edit Details
               </button>
               <button onClick={() => cancelBooking(booking.id)}
                 style={{ flex: '1 0 auto', padding: '8px 12px', background: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
@@ -354,7 +467,7 @@ export default function MyBookings() {
             </>
           )}
 
-          {/* AWAITING CONFIRMATION: confirm complete */}
+          {/* ACTIONS: Job verification */}
           {booking.status === 'awaiting_confirmation' && (
             <>
               <div style={{ width: '100%', padding: '8px', background: '#fff3cd', borderRadius: '6px', fontSize: '12px', color: '#856404', marginBottom: '4px' }}>
@@ -367,13 +480,13 @@ export default function MyBookings() {
             </>
           )}
 
-          {/* COMPLETED: rate + dispute + rebook */}
+          {/* ACTIONS: Feedback & Rebooking */}
           {booking.status === 'completed' && (
             <>
               {!booking.rating && (
                 <button onClick={() => { setRatingId(booking.id); setSelectedStar(0); setReviewText(''); }}
                   style={{ flex: '1 0 auto', padding: '8px 12px', background: '#ff9800', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-                  ⭐ Rate Service
+                  ⭐ Review Service
                 </button>
               )}
               {!booking.dispute && (
@@ -398,20 +511,21 @@ export default function MyBookings() {
             </button>
           )}
 
-          {/* Chat button for any active booking to enable communication */}
+          {/* NAVIGATION: Unified support chat */}
           {isActive && (
             <button onClick={() => navigate(`/chat?bookingId=${booking.id}`)}
               style={{ flex: '1 0 auto', padding: '8px 12px', background: '#667eea', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-              💬 Chat
+              💬 Chat with Support
             </button>
           )}
         </div>
       )}
 
-      {/* Rating Panel */}
+      {/* PANEL: User Feedback (Rating) */}
       {ratingId === booking.id && (
         <div style={{ marginTop: '12px', background: '#fffbeb', border: '1px solid #fcd34d', padding: '14px', borderRadius: '8px' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '8px', fontSize: '13px' }}>⭐ Rate this service</div>
+          {/* Star Selection Row */}
           <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
             {[1, 2, 3, 4, 5].map(star => (
               <span key={star} onClick={() => setSelectedStar(star)}
@@ -435,7 +549,7 @@ export default function MyBookings() {
         </div>
       )}
 
-      {/* Dispute Panel */}
+      {/* PANEL: Support Intervention (Dispute) */}
       {disputeId === booking.id && (
         <div style={{ marginTop: '12px', background: '#fef2f2', border: '1px solid #fca5a5', padding: '14px', borderRadius: '8px' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '8px', fontSize: '13px', color: '#dc2626' }}>🚨 Raise a Dispute</div>
@@ -471,7 +585,7 @@ export default function MyBookings() {
 
       {user && (
         <>
-          {/* Active */}
+          {/* SECTION: ACTIVE BOOKINGS (Jobs in progress or awaiting assignment) */}
           <div style={{ marginBottom: '30px' }}>
             <h3 style={{ fontSize: '17px', color: '#333', marginBottom: '12px' }}>
               🟡 Active Bookings ({active.length})
@@ -482,7 +596,7 @@ export default function MyBookings() {
             }
           </div>
 
-          {/* Completed */}
+          {/* SECTION: COMPLETED HISTORY (Successful past jobs) */}
           <div style={{ marginBottom: '30px' }}>
             <h3 style={{ fontSize: '17px', color: '#333', marginBottom: '12px' }}>
               ✓ Completed ({completed.length})
@@ -493,7 +607,7 @@ export default function MyBookings() {
             }
           </div>
 
-          {/* Cancelled */}
+          {/* SECTION: CANCELLED ARCHIVE (Discarded transactions) */}
           {cancelled.length > 0 && (
             <div>
               <h3 style={{ fontSize: '17px', color: '#333', marginBottom: '12px' }}>

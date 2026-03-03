@@ -1,8 +1,8 @@
 ﻿import React, { useState, useEffect } from "react";
 import { auth, db } from "../firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 
-export default function Profile(){
+export default function Profile() {
   const [profileData, setProfileData] = useState({
     name: "",
     email: "",
@@ -15,6 +15,7 @@ export default function Profile(){
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [cashbacks, setCashbacks] = useState([]);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -51,6 +52,17 @@ export default function Profile(){
     };
 
     loadProfile();
+  }, []);
+
+  /* ── Cashback wallet listener ── */
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const q = query(collection(db, 'cashbacks'), where('userId', '==', user.uid));
+    const unsub = onSnapshot(q, snap => {
+      setCashbacks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
   }, []);
 
   const handleSave = async () => {
@@ -91,12 +103,12 @@ export default function Profile(){
   };
 
   if (loading) {
-    return <div style={{padding: "20px", textAlign: "center"}}>Loading profile...</div>;
+    return <div style={{ padding: "20px", textAlign: "center" }}>Loading profile...</div>;
   }
 
   return (
-    <div style={{maxWidth: "500px", margin: "20px auto", padding: "20px"}}>
-      <h2 style={{marginBottom: "20px"}}>👤 My Profile</h2>
+    <div style={{ maxWidth: "500px", margin: "20px auto", padding: "20px" }}>
+      <h2 style={{ marginBottom: "20px" }}>👤 My Profile</h2>
 
       {error && (
         <div style={{
@@ -148,14 +160,14 @@ export default function Profile(){
 
         {editing ? (
           <>
-            <div style={{marginBottom: "15px"}}>
-              <label style={{display: "block", marginBottom: "5px", fontWeight: "bold"}}>
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
                 Name:
               </label>
               <input
                 type="text"
                 value={profileData.name}
-                onChange={(e) => setProfileData({...profileData, name: e.target.value})}
+                onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -167,8 +179,8 @@ export default function Profile(){
               />
             </div>
 
-            <div style={{marginBottom: "15px"}}>
-              <label style={{display: "block", marginBottom: "5px", fontWeight: "bold"}}>
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
                 Email:
               </label>
               <input
@@ -186,17 +198,17 @@ export default function Profile(){
                   cursor: "not-allowed"
                 }}
               />
-              <small style={{color: "#666"}}>Email cannot be changed</small>
+              <small style={{ color: "#666" }}>Email cannot be changed</small>
             </div>
 
-            <div style={{marginBottom: "15px"}}>
-              <label style={{display: "block", marginBottom: "5px", fontWeight: "bold"}}>
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
                 Phone Number:
               </label>
               <input
                 type="tel"
                 value={profileData.phone}
-                onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
+                onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
                 placeholder="Enter your 10-digit phone number"
                 style={{
                   width: "100%",
@@ -209,13 +221,13 @@ export default function Profile(){
               />
             </div>
 
-            <div style={{marginBottom: "20px"}}>
-              <label style={{display: "block", marginBottom: "5px", fontWeight: "bold"}}>
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
                 Address:
               </label>
               <textarea
                 value={profileData.address}
-                onChange={(e) => setProfileData({...profileData, address: e.target.value})}
+                onChange={(e) => setProfileData({ ...profileData, address: e.target.value })}
                 placeholder="Enter your complete address"
                 rows="4"
                 style={{
@@ -231,7 +243,7 @@ export default function Profile(){
               />
             </div>
 
-            <div style={{display: "flex", gap: "10px"}}>
+            <div style={{ display: "flex", gap: "10px" }}>
               <button
                 onClick={handleSave}
                 disabled={saving}
@@ -267,24 +279,24 @@ export default function Profile(){
           </>
         ) : (
           <>
-            <div style={{marginBottom: "15px"}}>
-              <span style={{fontWeight: "bold", color: "#666"}}>Name:</span>
-              <p style={{margin: "5px 0 0 0", fontSize: "16px"}}>{profileData.name || "Not set"}</p>
+            <div style={{ marginBottom: "15px" }}>
+              <span style={{ fontWeight: "bold", color: "#666" }}>Name:</span>
+              <p style={{ margin: "5px 0 0 0", fontSize: "16px" }}>{profileData.name || "Not set"}</p>
             </div>
 
-            <div style={{marginBottom: "15px"}}>
-              <span style={{fontWeight: "bold", color: "#666"}}>Email:</span>
-              <p style={{margin: "5px 0 0 0", fontSize: "16px"}}>{profileData.email}</p>
+            <div style={{ marginBottom: "15px" }}>
+              <span style={{ fontWeight: "bold", color: "#666" }}>Email:</span>
+              <p style={{ margin: "5px 0 0 0", fontSize: "16px" }}>{profileData.email}</p>
             </div>
 
-            <div style={{marginBottom: "15px"}}>
-              <span style={{fontWeight: "bold", color: "#666"}}>Phone:</span>
-              <p style={{margin: "5px 0 0 0", fontSize: "16px"}}>{profileData.phone || "Not set"}</p>
+            <div style={{ marginBottom: "15px" }}>
+              <span style={{ fontWeight: "bold", color: "#666" }}>Phone:</span>
+              <p style={{ margin: "5px 0 0 0", fontSize: "16px" }}>{profileData.phone || "Not set"}</p>
             </div>
 
-            <div style={{marginBottom: "15px"}}>
-              <span style={{fontWeight: "bold", color: "#666"}}>Address:</span>
-              <p style={{margin: "5px 0 0 0", fontSize: "14px", whiteSpace: "pre-wrap"}}>
+            <div style={{ marginBottom: "15px" }}>
+              <span style={{ fontWeight: "bold", color: "#666" }}>Address:</span>
+              <p style={{ margin: "5px 0 0 0", fontSize: "14px", whiteSpace: "pre-wrap" }}>
                 {profileData.address || "Not set"}
               </p>
             </div>
@@ -308,6 +320,82 @@ export default function Profile(){
           </>
         )}
       </div>
+
+      {/* ═══ Cashback Wallet ═══ */}
+      {!isAdmin && (
+        <div style={{
+          marginTop: '20px', padding: '20px', border: '1px solid #ddd',
+          borderRadius: '8px', backgroundColor: '#fafafa'
+        }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#333' }}>🎁 Cashback Wallet</h3>
+
+          {(() => {
+            const activeCashbacks = cashbacks.filter(c => c.cashbackStatus === 'active');
+            const totalActive = activeCashbacks.reduce((sum, c) => sum + (c.cashbackAmount || 0), 0);
+            const expiredCashbacks = cashbacks.filter(c => c.cashbackStatus === 'expired');
+            const usedCashbacks = cashbacks.filter(c => c.cashbackStatus === 'used');
+
+            return (
+              <>
+                {/* Balance */}
+                <div style={{
+                  textAlign: 'center', padding: '16px', marginBottom: '16px',
+                  background: totalActive > 0 ? 'linear-gradient(135deg, #ecfdf5, #d1fae5)' : '#f8fafc',
+                  borderRadius: '12px', border: `1px solid ${totalActive > 0 ? '#86efac' : '#e2e8f0'}`,
+                }}>
+                  <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 'bold' }}>Available Balance</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: totalActive > 0 ? '#166534' : '#94a3b8' }}>₹{totalActive}</div>
+                </div>
+
+                {/* Active cashbacks list */}
+                {activeCashbacks.length > 0 && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>Active Cashbacks:</div>
+                    {activeCashbacks.map(cb => {
+                      const expiry = cb.cashbackExpiryDate?.toDate ? cb.cashbackExpiryDate.toDate() : new Date(cb.cashbackExpiryDate);
+                      const daysLeft = Math.max(0, Math.ceil((expiry - new Date()) / (1000 * 60 * 60 * 24)));
+                      return (
+                        <div key={cb.id} style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '10px 12px', background: 'white', borderRadius: '8px',
+                          border: '1px solid #e2e8f0', marginBottom: '6px',
+                        }}>
+                          <div>
+                            <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#166534' }}>₹{cb.cashbackAmount}</div>
+                            <div style={{ fontSize: '11px', color: '#64748b' }}>Expires: {expiry.toLocaleDateString('en-IN')}</div>
+                          </div>
+                          <span style={{
+                            padding: '3px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold',
+                            background: daysLeft <= 3 ? '#fef2f2' : '#ecfdf5',
+                            color: daysLeft <= 3 ? '#dc2626' : '#166534',
+                          }}>
+                            {daysLeft <= 0 ? 'Expiring today' : `${daysLeft}d left`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Summary */}
+                {(expiredCashbacks.length > 0 || usedCashbacks.length > 0) && (
+                  <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
+                    {usedCashbacks.length > 0 && `${usedCashbacks.length} used`}
+                    {usedCashbacks.length > 0 && expiredCashbacks.length > 0 && ' · '}
+                    {expiredCashbacks.length > 0 && `${expiredCashbacks.length} expired`}
+                  </div>
+                )}
+
+                {cashbacks.length === 0 && (
+                  <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', padding: '12px' }}>
+                    No cashbacks yet. Complete bookings to earn ₹9 cashback each!
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 }

@@ -43,6 +43,8 @@ jobs:
     if: github.event.pull_request.merged == true
     name: Deploy Cloud Functions
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -103,6 +105,8 @@ jobs:
   lint-and-test:
     name: Lint & Test Cloud Functions
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository

@@ -47,7 +47,7 @@ function Auth() {
 
       if (otp) {
         if (otp !== '101010') {
-          throw new Error('Invalid OTP. Test OTP: 101010');
+          throw new Error('Invalid OTP. Please check and try again.');
         }
         await signInWithEmailAndPassword(auth, storedEmail, storedPassword);
       } else {
@@ -530,20 +530,6 @@ function Auth() {
       >
         ← Back to Selection
       </button>
-
-      {/* Test Credentials */}
-      <div style={{
-        marginTop: '20px',
-        padding: '12px',
-        backgroundColor: '#e8f5e9',
-        borderRadius: '6px',
-        fontSize: '12px',
-        color: '#2e7d32'
-      }}>
-        <strong>🧪 Test Credentials:</strong><br/>
-        User: Phone 8374532598 / OTP: 101010<br/>
-        Admin: sri@gmail.com / Sri123
-      </div>
     </div>
   );
 }

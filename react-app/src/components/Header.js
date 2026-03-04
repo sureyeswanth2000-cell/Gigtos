@@ -167,6 +167,9 @@ export default function Header() {
           .desktop-nav, .user-profile-desktop { display: none !important; }
           .mobile-toggle { display: block !important; }
         }
+        @media (min-width: 769px) {
+          .mobile-menu-overlay { display: none !important; }
+        }
       `}</style>
     </header>
   );

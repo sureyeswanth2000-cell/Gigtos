@@ -8,7 +8,7 @@
  * - Real-time listeners (onSnapshot) ensure UI syncs with backend status changes (e.g. worker assignment).
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db, functionsInstance } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -64,6 +64,7 @@ export default function MyBookings() {
   const [selectedStar, setSelectedStar] = useState(0);
   const [cashbacks, setCashbacks] = useState([]);
   const [workerDetails, setWorkerDetails] = useState({});
+  const fetchedWorkerIds = useRef(new Set()); // Track already-fetched worker IDs to avoid stale closure
 
   /* ── Auth Listener ── */
   useEffect(() => {
@@ -85,7 +86,8 @@ export default function MyBookings() {
 
       // Fetch worker details for top-listing badge (Governance feature)
       items.forEach(item => {
-        if (item.assignedWorkerId && !workerDetails[item.assignedWorkerId]) {
+        if (item.assignedWorkerId && !fetchedWorkerIds.current.has(item.assignedWorkerId)) {
+          fetchedWorkerIds.current.add(item.assignedWorkerId);
           getDoc(doc(db, 'gig_workers', item.assignedWorkerId)).then(wDoc => {
             if (wDoc.exists()) {
               setWorkerDetails(prev => ({ ...prev, [item.assignedWorkerId]: wDoc.data() }));
@@ -94,7 +96,10 @@ export default function MyBookings() {
         }
       });
     }, err => console.error('snapshot error', err));
-    return unsub;
+    return () => {
+      unsub();
+      fetchedWorkerIds.current.clear(); // Reset on cleanup so worker details reload on remount or user change
+    };
   }, [user]);
 
   /* ── Cashback Earnt Listener ── */

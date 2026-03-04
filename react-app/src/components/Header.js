@@ -63,6 +63,7 @@ export default function Header() {
             {/* Desktop Menu */}
             <nav className="desktop-nav" style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
               <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>Home</Link>
+              <Link to="/search" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>🔍 Search</Link>
               <Link to="/my-bookings" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>My Bookings</Link>
               {isAdmin && (
                 <Link to="/admin" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '4px' }}>
@@ -140,6 +141,7 @@ export default function Header() {
                 }}
               >
                 <Link to="/" onClick={() => setMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', fontSize: '18px' }}>Home</Link>
+                <Link to="/search" onClick={() => setMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', fontSize: '18px' }}>🔍 Search Services</Link>
                 <Link to="/my-bookings" onClick={() => setMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', fontSize: '18px' }}>My Bookings</Link>
                 {isAdmin && <Link to="/admin" onClick={() => setMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', fontSize: '18px' }}>👨‍💼 Admin Dashboard</Link>}
                 {isSuperAdmin && <Link to="/admin/super" onClick={() => setMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', fontSize: '18px' }}>🛡️ SuperAdmin Dashboard</Link>}

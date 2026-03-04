@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, query, where } from 'firebase/firestore';
 
 function Auth() {
   const navigate = useNavigate();
@@ -118,11 +118,17 @@ function Auth() {
     }
   };
 
-  // ============= ADMIN LOGIN =============
+  // ============= ADMIN LOGIN (Email + OTP) =============
   const handleAdminLogin = async (e) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError('Please fill in all fields');
+    if (!email || !otp) {
+      setError('Please enter your email and OTP');
+      return;
+    }
+
+    // Verify OTP (test OTP: 202020)
+    if (otp !== '202020') {
+      setError('Invalid OTP. Test OTP: 202020');
       return;
     }
 
@@ -130,15 +136,16 @@ function Auth() {
     setLoading(true);
 
     try {
-      const userCred = await signInWithEmailAndPassword(auth, email, password);
-      const uid = userCred.user.uid;
-
-      const adminDoc = await getDoc(doc(db, 'admins', uid));
-      if (!adminDoc.exists()) {
-        await signOut(auth);
-        throw new Error('This account is not registered as an admin');
+      // Look up admin record by email to get the stored password for Firebase Auth
+      const snap = await getDocs(query(collection(db, 'admins'), where('email', '==', email)));
+      if (snap.empty) {
+        throw new Error('No admin account found for this email');
       }
-
+      const adminData = snap.docs[0].data();
+      if (!adminData.password) {
+        throw new Error('Admin account not configured correctly. Contact support.');
+      }
+      await signInWithEmailAndPassword(auth, email, adminData.password);
       navigate('/admin/bookings');
     } catch (err) {
       setError(err.message);
@@ -221,7 +228,7 @@ function Auth() {
             <div style={{ fontSize: '40px', marginBottom: '10px' }}>👨‍💼</div>
             Manage Services as Admin
             <div style={{ fontSize: '13px', color: '#666', marginTop: '10px', fontWeight: 'normal' }}>
-              Login with email & password
+              Login with email & OTP
             </div>
           </button>
         </div>
@@ -462,22 +469,27 @@ function Auth() {
 
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
-              Password:
+              OTP:
             </label>
             <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
+              type="text"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="Enter 6-digit OTP"
               style={{
                 width: '100%',
                 padding: '10px',
                 border: '1px solid #ddd',
                 borderRadius: '6px',
                 fontSize: '14px',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                letterSpacing: '4px',
+                fontWeight: 'bold'
               }}
             />
+            <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
+              An OTP will be sent to your registered email. (Test OTP: 202020)
+            </div>
           </div>
 
           <button
@@ -496,7 +508,7 @@ function Auth() {
               marginBottom: '12px'
             }}
           >
-            {loading ? '⏳ Logging in...' : 'Admin Login'}
+            {loading ? '⏳ Verifying OTP...' : '🔐 Verify OTP & Login'}
           </button>
 
           <div style={{ textAlign: 'center', fontSize: '12px', color: '#999' }}>
@@ -530,6 +542,21 @@ function Auth() {
       >
         ← Back to Selection
       </button>
+
+      {/* Test Credentials */}
+      <div style={{
+        marginTop: '20px',
+        padding: '12px',
+        backgroundColor: '#e8f5e9',
+        borderRadius: '6px',
+        fontSize: '12px',
+        color: '#2e7d32'
+      }}>
+        <strong>🧪 Test Credentials:</strong><br/>
+        User: Phone 8374532598 / OTP: 101010<br/>
+        Admin: sri@gmail.com / OTP: 202020
+      </div>
+
     </div>
   );
 }

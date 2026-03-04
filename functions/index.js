@@ -6,50 +6,77 @@
  * 2. Governance Scoring & Regions lead performance tracking
  * 3. Lifecycle automation (Escrow hold, Cashback, Worker badges)
  * 4. Automated Task Scheduling (Escalations & Expiry)
+ * 5. Security middleware (validation, rate limiting, audit logging)
  */
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+
+const { getGmailCredentials, getTwilioCredentials } = require('./security/secretManager');
+const { validate, submitQuoteSchema, acceptQuoteSchema, updateBookingSchema, createWorkerSchema } = require('./security/validation');
+const { checkRateLimit } = require('./security/rateLimiter');
+const { logSecurityEvent, extractCallerInfo, EVENT_TYPES } = require('./security/audit');
 
 admin.initializeApp();
 const db = admin.firestore();
+
+// HMAC secret for OTP hashing. Set in production via:
+//   firebase functions:config:set otp.secret="<strong-random-secret>"
+// A missing/dev value is intentionally loud in logs so it is not overlooked.
+const OTP_HMAC_SECRET = (() => {
+  const secret = functions.config().otp?.secret;
+  if (!secret) {
+    console.warn('[SECURITY] otp.secret is not configured. Set it with: firebase functions:config:set otp.secret="<random-secret>"');
+    return 'insecure-dev-secret-replace-in-production';
+  }
+  return secret;
+})();
 
 /* ──────────────────────────────────────────────────────────────────────────
    SECTION 1: COMMUNICATION HELPERS
    Logic for sending transactional emails and SMS notifications.
    ────────────────────────────────────────────────────────────────────────── */
 
-// Email transporter (set via firebase functions:config:set gmail.user="..." gmail.pass="...")
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: functions.config().gmail?.user,
-    pass: functions.config().gmail?.pass,
-  },
-});
+// Email transporter - credentials loaded lazily from Secret Manager
+let _transporter = null;
+async function getTransporter() {
+  if (_transporter) return _transporter;
+  const { user, pass } = await getGmailCredentials();
+  _transporter = nodemailer.createTransport({ service: 'gmail', auth: { user, pass } });
+  return _transporter;
+}
 
 /**
  * Sends a transactional email using Nodemailer.
- * Requires "gmail.user" and "gmail.pass" in functions config.
+ * Credentials are retrieved from Google Secret Manager (or functions.config() fallback).
  */
-function sendEmail(to, subject, text) {
-  if (!functions.config().gmail?.user || !to) return Promise.resolve();
-  return transporter
-    .sendMail({ from: functions.config().gmail?.user, to, subject, text })
-    .catch(err => console.error('Email error:', err));
+async function sendEmail(to, subject, text) {
+  try {
+    const { user } = await getGmailCredentials();
+    if (!user || !to) return;
+    const transport = await getTransporter();
+    await transport.sendMail({ from: user, to, subject, text });
+  } catch (err) {
+    console.error('Email error:', err);
+  }
 }
 
 /**
  * Sends an SMS using Twilio if configured, or logs to console if not.
- * Requires twilio.sid, twilio.token, and twilio.phone in config.
+ * Credentials are retrieved from Google Secret Manager (or functions.config() fallback).
  */
-function sendSms(phone, message) {
-  const { sid, token, phone: twilioPhone } = functions.config().twilio || {};
-  if (sid && token && twilioPhone) {
-    return require('twilio')(sid, token)
-      .messages.create({ body: message, from: twilioPhone, to: phone })
-      .catch(err => console.error('SMS error:', err));
+async function sendSms(phone, message) {
+  try {
+    const { sid, token, phone: twilioPhone } = await getTwilioCredentials();
+    if (sid && token && twilioPhone) {
+      return require('twilio')(sid, token)
+        .messages.create({ body: message, from: twilioPhone, to: phone })
+        .catch(err => console.error('SMS error:', err));
+    }
+  } catch {
+    // Credentials not configured; log instead
   }
   console.log('[SMS to', phone, ']', message);
   return Promise.resolve();
@@ -70,6 +97,59 @@ async function logActivity(bookingId, action, actorRole, extra = {}) {
     });
   } catch (e) {
     console.error('Failed to log activity:', e);
+  }
+}
+
+/**
+ * Firestore-based sliding-window rate limiter.
+ * Returns true if the request is within the allowed limit, false if exceeded.
+ * Uses the admin SDK so it bypasses client Firestore rules.
+ *
+ * @param {string} type       - Logical name for the limit (e.g. 'otp_send', 'quote')
+ * @param {string} identifier - Per-user/phone key (uid, phone number, etc.)
+ * @param {number} maxRequests - Maximum requests allowed within the window
+ * @param {number} windowSeconds - Length of the sliding window in seconds
+ */
+async function checkRateLimit(type, identifier, maxRequests, windowSeconds) {
+  const limitRef = db.collection('rate_limits').doc(`${type}:${identifier}`);
+  const now = Date.now();
+  const windowMs = windowSeconds * 1000;
+
+  try {
+    return await db.runTransaction(async (txn) => {
+      const doc = await txn.get(limitRef);
+
+      if (!doc.exists) {
+        txn.set(limitRef, {
+          count: 1,
+          windowStart: now,
+          // TTL field – used by a Firestore TTL policy to auto-delete stale records
+          ttl: admin.firestore.Timestamp.fromMillis(now + windowMs * 2),
+        });
+        return true;
+      }
+
+      const { count, windowStart } = doc.data();
+
+      if (now - windowStart > windowMs) {
+        // Previous window has expired – reset counter
+        txn.set(limitRef, {
+          count: 1,
+          windowStart: now,
+          ttl: admin.firestore.Timestamp.fromMillis(now + windowMs * 2),
+        });
+        return true;
+      }
+
+      if (count >= maxRequests) return false;
+
+      txn.update(limitRef, { count: admin.firestore.FieldValue.increment(1) });
+      return true;
+    });
+  } catch (e) {
+    console.error('[RateLimit] Error checking rate limit:', e);
+    // Fail open to avoid denying legitimate traffic if Firestore is temporarily unavailable
+    return true;
   }
 }
 
@@ -375,6 +455,31 @@ exports.onBookingStatusChange = functions.firestore
       }
     }
 
+    // LOGIC: Multi-day job — auto-complete when all days confirmed
+    // When a new dailyConfirmation is added, check if all days are confirmed.
+    const prevConfirmCount = (before.dailyConfirmations || []).length;
+    const newConfirmCount = (after.dailyConfirmations || []).length;
+    if (
+      after.isMultiDay &&
+      newConfirmCount > prevConfirmCount &&
+      after.status === 'in_progress'
+    ) {
+      const totalDays = after.jobDuration || 1;
+      if (newConfirmCount >= totalDays) {
+        // All days confirmed — move to awaiting_confirmation for final user approval
+        await bookingRef.update({
+          status: 'awaiting_confirmation',
+          finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await logActivity(bookingId, 'all_days_confirmed_auto_finished', 'system', { confirmedDays: newConfirmCount, totalDays });
+
+        const msg = `All ${totalDays} days of your multi-day ${after.serviceType} job have been confirmed. Please give your final confirmation. Booking ID: ${bookingId}`;
+        await sendEmail(after.email, 'Multi-Day Job Complete – Gigto', msg);
+        await sendSms(after.phone, msg);
+      }
+    }
+
     return null;
   });
 
@@ -498,6 +603,42 @@ exports.checkCashbackExpiry = functions.pubsub
    Endpoints to handle all state transitions, removing logic from the frontend.
    ────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * SCHEDULED: Runs every evening at 6 PM IST.
+ * LOGIC: For active multi-day jobs where the user hasn't confirmed today's work,
+ * sends an SMS/email reminder to confirm daily work.
+ */
+exports.dailyJobReminder = functions.pubsub
+  .schedule('0 18 * * *')
+  .timeZone('Asia/Kolkata')
+  .onRun(async (context) => {
+    const today = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' });
+    try {
+      const snapshot = await db.collection('bookings')
+        .where('isMultiDay', '==', true)
+        .where('status', '==', 'in_progress')
+        .get();
+
+      let reminderCount = 0;
+      for (const docSnap of snapshot.docs) {
+        const booking = docSnap.data();
+        const bookingId = docSnap.id;
+        const confirmedDays = (booking.dailyConfirmations || []).map(c => c.dateLabel);
+        // Send reminder if today hasn't been confirmed yet
+        if (!confirmedDays.includes(today)) {
+          const msg = `Reminder: Please confirm today's work for your ${booking.serviceType} multi-day job. Booking ID: ${bookingId}`;
+          await sendEmail(booking.email, 'Daily Work Confirmation Reminder – Gigto', msg);
+          await sendSms(booking.phone, msg);
+          reminderCount++;
+        }
+      }
+      console.log(`[DAILY_REMINDER] Sent ${reminderCount} daily confirmation reminders.`);
+    } catch (e) {
+      console.error('Daily job reminder failed:', e);
+    }
+    return null;
+  });
+
 const verifyAuth = (context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
@@ -510,14 +651,21 @@ const verifyAuth = (context) => {
  */
 exports.submitQuote = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
-  const { bookingId, price } = data;
-  if (!bookingId || !price || isNaN(price) || price <= 0) {
-    throw new functions.https.HttpsError('invalid-argument', 'Invalid quote parameters.');
-  }
+  // Validate input with Joi schema
+  const { bookingId, price } = validate(submitQuoteSchema, data);
+  // Enforce rate limit: 10 per minute per user
+  await checkRateLimit('submitQuote', context.auth.uid);
+
+  // Audit log attempt
+  const { ip, userAgent } = extractCallerInfo(context);
+
+  // Audit log
+  await logSecurityEvent({ event: EVENT_TYPES.ADMIN_ACTION, actorId: context.auth.uid, targetId: bookingId, ip, userAgent, outcome: 'attempted', details: { function: 'submitQuote' } });
 
   // Verify the caller is an admin
   const adminDoc = await db.collection('admins').doc(context.auth.uid).get();
   if (!adminDoc.exists) {
+    await logSecurityEvent({ event: EVENT_TYPES.AUTHZ_FAILURE, actorId: context.auth.uid, targetId: null, ip, userAgent, outcome: 'blocked', details: { reason: 'Non-admin attempted submitQuote' } });
     throw new functions.https.HttpsError('permission-denied', 'Only admins can submit quotes.');
   }
   const adminName = adminDoc.data().name || 'Regional Pro';
@@ -573,9 +721,7 @@ exports.submitQuote = functions.https.onCall(async (data, context) => {
  */
 exports.acceptQuote = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
-  const { bookingId, adminId } = data;
-
-  if (!bookingId || !adminId) throw new functions.https.HttpsError('invalid-argument', 'Missing parameters.');
+  const { bookingId, adminId } = validate(acceptQuoteSchema, data);
 
   const bookingRef = db.collection('bookings').doc(bookingId);
 
@@ -626,8 +772,9 @@ exports.acceptQuote = functions.https.onCall(async (data, context) => {
  */
 exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
-  const { bookingId, action, extraArgs } = data;
-  if (!bookingId || !action) throw new functions.https.HttpsError('invalid-argument', 'Missing parameters.');
+  const { bookingId, action, extraArgs } = validate(updateBookingSchema, data);
+  // Enforce rate limit: 20 per hour per user
+  await checkRateLimit('updateBookingStatus', context.auth.uid);
 
   const bookingRef = db.collection('bookings').doc(bookingId);
 
@@ -789,6 +936,14 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
         updates.photos = admin.firestore.FieldValue.arrayUnion({
           label, url, uploadedAt: new Date().toISOString()
         });
+        // Also populate dailyPhotos for multi-day job tracking
+        updates.dailyPhotos = admin.firestore.FieldValue.arrayUnion({
+          dateLabel: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }),
+          label: label || 'progress',
+          url: url,
+          uploadedBy: context.auth.uid,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
         logAction = 'admin_uploaded_photo';
         logExtra = { label };
         break;
@@ -804,6 +959,71 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
         };
         logAction = 'user_raised_dispute';
         logExtra = { reason };
+        break;
+
+      case 'daily_add_note':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        if (!['in_progress'].includes(booking.status)) throw new functions.https.HttpsError('failed-precondition', 'Can only add daily notes when job is in progress.');
+        const { note: dailyNote, dateLabel: noteDateLabel } = extraArgs || {};
+        if (!dailyNote) throw new functions.https.HttpsError('invalid-argument', 'Note text is required.');
+        updates.dailyNotes = admin.firestore.FieldValue.arrayUnion({
+          dateLabel: noteDateLabel || new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }),
+          note: dailyNote,
+          addedBy: context.auth.uid,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        logAction = 'daily_note_added';
+        logExtra = { note: dailyNote };
+        break;
+
+      case 'daily_upload_photo':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        if (!['in_progress'].includes(booking.status)) throw new functions.https.HttpsError('failed-precondition', 'Can only upload photos when job is in progress.');
+        const { label: photoLabel, url: photoUrl, dateLabel: photoDatelabel } = extraArgs || {};
+        if (!photoUrl) throw new functions.https.HttpsError('invalid-argument', 'Photo URL is required.');
+        updates.dailyPhotos = admin.firestore.FieldValue.arrayUnion({
+          dateLabel: photoDatelabel || new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }),
+          label: photoLabel || 'progress',
+          url: photoUrl,
+          uploadedBy: context.auth.uid,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        logAction = 'daily_photo_uploaded';
+        logExtra = { label: photoLabel };
+        break;
+
+      case 'daily_user_confirmation':
+        if (!isOwner) throw new functions.https.HttpsError('permission-denied', 'Only the booking owner can confirm daily work.');
+        if (!['in_progress'].includes(booking.status)) throw new functions.https.HttpsError('failed-precondition', 'Can only confirm daily work when job is in progress.');
+        const { dateLabel, workQuality, notes: confirmNotes } = extraArgs || {};
+        if (!dateLabel) throw new functions.https.HttpsError('invalid-argument', 'Date label is required.');
+        const existingConfirmations = booking.dailyConfirmations || [];
+        if (existingConfirmations.some(c => c.dateLabel === dateLabel)) {
+          throw new functions.https.HttpsError('already-exists', 'You have already confirmed work for this day.');
+        }
+        updates.dailyConfirmations = admin.firestore.FieldValue.arrayUnion({
+          date: admin.firestore.FieldValue.serverTimestamp(),
+          dateLabel: dateLabel,
+          confirmedBy: context.auth.uid,
+          workQuality: typeof workQuality === 'number' ? Math.min(5, Math.max(1, workQuality)) : 3,
+          notes: confirmNotes || '',
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        logAction = 'daily_work_confirmed';
+        logExtra = { dateLabel, workQuality };
+        break;
+
+      case 'mark_day_complete':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        if (!['in_progress'].includes(booking.status)) throw new functions.https.HttpsError('failed-precondition', 'Can only mark day complete when job is in progress.');
+        const { dayDate } = extraArgs || {};
+        updates.completedDays = admin.firestore.FieldValue.arrayUnion({
+          date: dayDate || new Date().toLocaleDateString('en-IN'),
+          markedBy: context.auth.uid,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        logAction = 'day_marked_complete';
+        logExtra = { dayDate };
         break;
 
       default:
@@ -831,8 +1051,9 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
  */
 exports.secureLogActivity = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
-  const { bookingId, action, extraArgs } = data;
-  if (!bookingId || !action) throw new functions.https.HttpsError('invalid-argument', 'Missing parameters.');
+
+  // Input validation
+  const { bookingId, action, extraArgs } = validate(updateBookingSchema, data);
 
   // Validate only specific actions are allowed this way
   const allowedActions = [
@@ -853,4 +1074,44 @@ exports.secureLogActivity = functions.https.onCall(async (data, context) => {
   });
 
   return { success: true };
+});
+
+/**
+ * Callable: createWorker
+ * Securely creates a gig worker record with input validation.
+ * Only authenticated admins may call this endpoint.
+ */
+exports.createWorker = functions.https.onCall(async (data, context) => {
+  verifyAuth(context);
+  const { name, phone, serviceType, skills } = validate(createWorkerSchema, data);
+
+  // Verify the caller is an admin
+  const adminDoc = await db.collection('admins').doc(context.auth.uid).get();
+  if (!adminDoc.exists) {
+    throw new functions.https.HttpsError('permission-denied', 'Only admins can create workers.');
+  }
+
+  const workerRef = db.collection('gig_workers').doc();
+  await workerRef.set({
+    name,
+    phone,
+    serviceType,
+    skills,
+    adminId: context.auth.uid,
+    approvalStatus: 'pending',
+    isAvailable: false,
+    isFraud: false,
+    completedJobs: 0,
+    isTopListed: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  await logActivity('system', 'worker_created', 'admin', {
+    workerId: workerRef.id,
+    adminId: context.auth.uid,
+    name,
+  });
+
+  return { success: true, workerId: workerRef.id };
 });

@@ -13,19 +13,26 @@ service cloud.firestore {
         get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "superadmin";
     }
 
-    // Check if the current user is an admin of any level
+    // Check if the current user is an admin of any level AND is active (not suspended/deactivated)
     function isAdmin() {
-      return isLoggedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isLoggedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isActive != false;
     }
 
     // New: Check if the current admin is the parent of another admin (to support hierarchy)
     function isParentOf(targetAdminId) {
       let adminData = get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
       let targetData = get(/databases/$(database)/documents/admins/$(targetAdminId)).data;
-      return isAdmin() && (
+      return isActiveAdmin() && (
         adminData.role == "superadmin" || // Superadmin is parent to everyone
         targetData.parentAdminId == request.auth.uid // Direct parent-child link
       );
+    }
+
+    // Check if a gig worker has been approved by an admin
+    function isApprovedWorker(workerData) {
+      return workerData.approvalStatus == "approved" && workerData.isFraud != true;
     }
 
     /* ============================
@@ -38,11 +45,14 @@ service cloud.firestore {
     }
 
     match /users_by_phone/{phoneNumber} {
-      // Public read for login verification; strict write for specific phone owner
+      // Public read is needed for the phone-to-email lookup during login.
+      // Write is restricted to the authenticated owner and must not include
+      // a plaintext password field (passwords must be managed by Firebase Auth only).
       allow read: if true;
       allow create, update: if request.auth != null
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.phone == phoneNumber;
+        && request.resource.data.phone == phoneNumber
+        && !('password' in request.resource.data);
       allow delete: if false;
     }
 
@@ -96,6 +106,9 @@ service cloud.firestore {
       // Only authorized parties can send messages
       allow create: if isLoggedIn() && (
         request.resource.data.senderId == request.auth.uid
+        && request.resource.data.senderId != null
+        && request.resource.data.text != null
+        && request.resource.data.text.size() <= 5000
         && (
           get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
           get(/databases/$(database)/documents/bookings/$(bookingId)).data.adminId == request.auth.uid ||
@@ -125,6 +138,32 @@ service cloud.firestore {
     }
 
     /* ============================
+       SECURITY LOGS
+    ============================ */
+    match /security_logs/{logId} {
+      // Security logs are write-only from backend (Admin SDK bypasses rules).
+      // Only superadmins can read them.
+      allow read: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    /* ============================
+       RATE LIMITS
+    ============================ */
+    match /rate_limits/{docId} {
+      // Rate limit records are managed exclusively by Cloud Functions (Admin SDK).
+      allow read, write: if false;
+    }
+
+    /* ============================
+       OTP RECORDS
+    ============================ */
+    match /otp_records/{phone} {
+      // OTP records are managed exclusively by Cloud Functions (Admin SDK).
+      allow read, write: if false;
+    }
+
+    /* ============================
        ADMINS COLLECTION
     ============================ */
     match /admins/{adminId} {
@@ -135,7 +174,14 @@ service cloud.firestore {
       allow create, delete: if isSuperAdmin();
       // Admins can update their own profile, superadmin can update any admin
       // This allows superadmin to set regionStatus, probationStatus etc.
-      allow update: if isAdmin() && (request.auth.uid == adminId || isSuperAdmin());
+      // Protect critical fields: role and parentAdminId can only be set by superadmin
+      allow update: if isAdmin() && (
+        request.auth.uid == adminId ||
+        isSuperAdmin()
+      ) && (
+        isSuperAdmin() ||
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'parentAdminId', 'probationStatus', 'regionScore', 'fraudCount', 'isActive'])
+      );
     }
 
     /* ============================
@@ -143,18 +189,30 @@ service cloud.firestore {
     ============================ */
     match /gig_workers/{workerId} {
       // Workers are visible to their managing admin and the entire hierarchy above them
+      // Only approved, non-fraudulent workers are visible for assignment lookups
       allow read: if isLoggedIn() && (
-        resource.data.adminId == request.auth.uid ||
+        (resource.data.adminId == request.auth.uid && isAdmin()) ||
         (resource.data.adminId != null && isParentOf(resource.data.adminId)) ||
-        isAdmin() // Default to allow any admin to see for assignment lookups
+        (isAdmin() && isApprovedWorker(resource.data))
       );
       // Local admins create workers; parents manage them
-      allow create: if isAdmin() && request.resource.data.adminId == request.auth.uid;
+      // New workers start with approvalStatus = "pending"
+      allow create: if isAdmin()
+        && request.resource.data.adminId == request.auth.uid
+        && request.resource.data.approvalStatus == "pending";
       // Allow admin owner or parent to update; superadmin can set fraud flags
+      // Restrict who can change approvalStatus (only superadmin or parent)
       allow update: if isLoggedIn() && (
-        resource.data.adminId == request.auth.uid ||
-        isParentOf(resource.data.adminId) ||
+        (resource.data.adminId == request.auth.uid && isAdmin() &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isFraud', 'adminId'])) ||
+        (isParentOf(resource.data.adminId) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isFraud', 'adminId'])) ||
         isSuperAdmin()
+      ) && (
+        // Only superadmin or parent can approve/reject workers
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['approvalStatus', 'isFraud'])
+        || isParentOf(resource.data.adminId)
+        || isSuperAdmin()
       );
       allow delete: if isSuperAdmin();
     }
@@ -173,5 +231,23 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    /* ============================
+       OTP VERIFICATIONS COLLECTION
+       All access is via the admin SDK (Cloud Functions) only.
+       Client SDK reads/writes are blocked to protect OTP hashes.
+    ============================ */
+    match /otp_verifications/{phone} {
+      allow read, write: if false;
+    }
+
+    /* ============================
+       RATE LIMITS COLLECTION
+       Managed exclusively by Cloud Functions via the admin SDK.
+    ============================ */
+    match /rate_limits/{limitId} {
+      allow read, write: if false;
+    }
+
   }
 }
+

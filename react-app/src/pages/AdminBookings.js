@@ -123,7 +123,7 @@ export default function AdminBookings() {
     await callBackend('updateBookingStatus', {
       bookingId: b.id,
       action: 'admin_assign_worker',
-      extraArgs: { workerId, workerName: worker?.name, workerPhone: worker?.phone }
+      extraArgs: { workerId, workerName: worker?.name, workerPhone: worker?.contact }
     });
   };
 
@@ -329,6 +329,21 @@ export default function AdminBookings() {
               </div>
             )}
 
+            {/* MULTI-DAY JOB INFO */}
+            {b.isMultiDay && b.startDate && (
+              <div style={{ padding: '8px 12px', background: '#f0f4ff', borderRadius: '8px', border: '1px solid #c7d2fe', fontSize: '12px', marginBottom: '12px' }}>
+                <span style={{ fontWeight: 'bold', color: '#4338ca' }}>📅 Multi-Day Job</span>
+                {' · '}{b.startDate?.toDate ? b.startDate.toDate().toLocaleDateString('en-IN') : b.startDate}
+                {' → '}{b.endDate?.toDate ? b.endDate.toDate().toLocaleDateString('en-IN') : b.endDate}
+                {b.jobDuration && <span> · {b.jobDuration} day{b.jobDuration > 1 ? 's' : ''}</span>}
+                {b.isPricePerDay && b.dailyRate && <span> · ₹{b.dailyRate}/day</span>}
+                {b.totalEstimatedCost && <span> · Est. ₹{b.totalEstimatedCost}</span>}
+                <div style={{ marginTop: '4px', color: '#6366f1' }}>
+                  Confirmations: {(b.dailyConfirmations || []).length}/{b.jobDuration || 1} days confirmed
+                </div>
+              </div>
+            )}
+
             {/* ACTION BUTTONS: Drive the backend triggers */}
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               {(b.status === 'pending' || b.status === 'scheduled') && (
@@ -381,6 +396,105 @@ export default function AdminBookings() {
                     </select>
                     <button onClick={() => resolveDispute(b)} style={{ padding: '4px 8px', fontSize: '11px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '4px' }}>Resolve</button>
                   </div>
+                </div>
+              )}
+
+              {/* DAILY PROGRESS CONTROLS (for in_progress bookings) */}
+              {b.status === 'in_progress' && (
+                <div style={{ width: '100%', marginTop: '10px', padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>📋 Daily Progress</div>
+
+                  {/* Note input */}
+                  {noteId === b.id ? (
+                    <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                      <input
+                        type="text"
+                        value={noteText}
+                        onChange={e => setNoteText(e.target.value)}
+                        placeholder="Add today's progress note..."
+                        style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                      />
+                      <button onClick={() => submitNote(b.id)}
+                        style={{ padding: '6px 10px', background: '#475569', color: 'white', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+                        Save
+                      </button>
+                      <button onClick={() => { setNoteId(null); setNoteText(''); }}
+                        style={{ padding: '6px 10px', background: '#e5e7eb', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setNoteId(b.id)}
+                      style={{ padding: '5px 10px', background: '#64748b', color: 'white', border: 'none', borderRadius: '4px', fontSize: '11px', marginRight: '6px', cursor: 'pointer' }}>
+                      ✏️ Add Note
+                    </button>
+                  )}
+
+                  {/* Photo upload */}
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {['before', 'progress', 'after'].map(label => (
+                      <div key={label}>
+                        <input
+                          ref={el => fileInputRefs.current[`${b.id}_${label}`] = el}
+                          type="file" accept="image/*" style={{ display: 'none' }}
+                          onChange={e => uploadPhoto(b.id, label, e.target.files[0])}
+                        />
+                        <button
+                          onClick={() => fileInputRefs.current[`${b.id}_${label}`]?.click()}
+                          disabled={uploading[b.id]}
+                          style={{ padding: '5px 10px', background: '#0ea5e9', color: 'white', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                          📷 {label}
+                        </button>
+                      </div>
+                    ))}
+                    {uploading[b.id] && <span style={{ fontSize: '11px', color: '#64748b' }}>⏳ Uploading…</span>}
+                  </div>
+
+                  {/* Daily photos display */}
+                  {b.dailyPhotos?.length > 0 && (
+                    <div style={{ marginTop: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {b.dailyPhotos.map((p, i) => (
+                        <a key={i} href={p.url} target="_blank" rel="noreferrer">
+                          <img src={p.url} alt={p.label || 'photo'} title={p.label || ''}
+                            style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }} />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {/* Legacy photos (non-multi-day) */}
+                  {!b.dailyPhotos?.length && b.photos?.length > 0 && (
+                    <div style={{ marginTop: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {b.photos.map((p, i) => (
+                        <a key={i} href={p.url} target="_blank" rel="noreferrer">
+                          <img src={p.url} alt={p.label || 'photo'} title={p.label || ''}
+                            style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }} />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Daily notes display */}
+                  {b.dailyNotes?.length > 0 && (
+                    <div style={{ marginTop: '8px' }}>
+                      {b.dailyNotes.map((n, i) => (
+                        <div key={i} style={{ fontSize: '11px', color: '#475569', padding: '3px 6px', background: '#f1f5f9', borderRadius: '4px', marginBottom: '2px' }}>
+                          <strong>{n.date || (n.timestamp?.toDate?.().toLocaleDateString())}</strong>: {n.note}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Daily confirmations status (multi-day jobs) */}
+                  {b.isMultiDay && b.dailyConfirmations?.length > 0 && (
+                    <div style={{ marginTop: '8px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', marginBottom: '4px' }}>✅ User Confirmations:</div>
+                      {b.dailyConfirmations.map((c, i) => (
+                        <div key={i} style={{ fontSize: '11px', color: '#065f46', padding: '3px 6px', background: '#dcfce7', borderRadius: '4px', marginBottom: '2px' }}>
+                          {c.dateLabel} — Quality: {'★'.repeat(c.workQuality || 0)} {c.notes && `"${c.notes}"`}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -8,7 +8,7 @@
  * - Real-time listeners (onSnapshot) ensure UI syncs with backend status changes (e.g. worker assignment).
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db, functionsInstance } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -17,6 +17,7 @@ import {
   doc, updateDoc, getDoc
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import DailyProgressTracker from '../components/DailyProgressTracker';
 
 // UI CONFIG: Color mapping for visual differentiation of booking states
 const statusColors = {
@@ -64,6 +65,7 @@ export default function MyBookings() {
   const [selectedStar, setSelectedStar] = useState(0);
   const [cashbacks, setCashbacks] = useState([]);
   const [workerDetails, setWorkerDetails] = useState({});
+  const fetchedWorkerIds = useRef(new Set()); // Track already-fetched worker IDs to avoid stale closure
 
   /* ── Auth Listener ── */
   useEffect(() => {
@@ -85,7 +87,8 @@ export default function MyBookings() {
 
       // Fetch worker details for top-listing badge (Governance feature)
       items.forEach(item => {
-        if (item.assignedWorkerId && !workerDetails[item.assignedWorkerId]) {
+        if (item.assignedWorkerId && !fetchedWorkerIds.current.has(item.assignedWorkerId)) {
+          fetchedWorkerIds.current.add(item.assignedWorkerId);
           getDoc(doc(db, 'gig_workers', item.assignedWorkerId)).then(wDoc => {
             if (wDoc.exists()) {
               setWorkerDetails(prev => ({ ...prev, [item.assignedWorkerId]: wDoc.data() }));
@@ -94,7 +97,10 @@ export default function MyBookings() {
         }
       });
     }, err => console.error('snapshot error', err));
-    return unsub;
+    return () => {
+      unsub();
+      fetchedWorkerIds.current.clear(); // Reset on cleanup so worker details reload on remount or user change
+    };
   }, [user]);
 
   /* ── Cashback Earnt Listener ── */
@@ -234,6 +240,23 @@ export default function MyBookings() {
       alert('✓ Quote accepted! Your regional pro will assign a worker shortly.');
     } catch (e) {
       // Error handled by callBackend
+    }
+  }
+
+  /* ── ACTION: Confirm a single day's work (multi-day jobs) ──
+     Logic: User confirms the worker completed work for a specific day.
+     Adds entry to dailyConfirmations; backend checks if all days done.
+  */
+  async function confirmDay(bookingId, dateLabel, workQuality, notes) {
+    try {
+      await callBackend('updateBookingStatus', {
+        bookingId,
+        action: 'daily_user_confirmation',
+        extraArgs: { dateLabel, workQuality, notes }
+      });
+    } catch (e) {
+      // Error handled by callBackend
+      throw e;
     }
   }
 
@@ -377,6 +400,31 @@ export default function MyBookings() {
                   <strong>{n.date}</strong>: {n.note}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Multi-day job progress tracker */}
+          {booking.isMultiDay && (
+            <DailyProgressTracker
+              booking={booking}
+              isOwner={true}
+              onConfirmDay={(dateLabel, workQuality, notes) => confirmDay(booking.id, dateLabel, workQuality, notes)}
+            />
+          )}
+
+          {/* Multi-day job header info */}
+          {booking.isMultiDay && booking.startDate && (
+            <div style={{ marginTop: '8px', padding: '8px 12px', background: '#f0f4ff', borderRadius: '8px', border: '1px solid #c7d2fe', fontSize: '12px' }}>
+              <span style={{ fontWeight: 'bold', color: '#4338ca' }}>📅 Multi-Day Job</span>
+              {' · '}{booking.startDate?.toDate ? booking.startDate.toDate().toLocaleDateString('en-IN') : booking.startDate}
+              {' → '}{booking.endDate?.toDate ? booking.endDate.toDate().toLocaleDateString('en-IN') : booking.endDate}
+              {booking.jobDuration && <span> · {booking.jobDuration} day{booking.jobDuration > 1 ? 's' : ''}</span>}
+              {booking.isPricePerDay && booking.dailyRate && (
+                <span> · ₹{booking.dailyRate}/day</span>
+              )}
+              {booking.totalEstimatedCost && (
+                <span> · Est. ₹{booking.totalEstimatedCost}</span>
+              )}
             </div>
           )}
 

@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { auth, db } from '../firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithCustomToken, signOut } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functionsInstance } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+
+// Cloud Function references for secure OTP authentication
+const sendOtpFn = httpsCallable(functionsInstance, 'sendOtp');
+const verifyOtpFn = httpsCallable(functionsInstance, 'verifyOtp');
 
 function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
   const [userType, setUserType] = useState(searchParams.get('mode') || 'user'); // 'user' or 'admin'
-  const [phase, setPhase] = useState('typeSelect'); // 'typeSelect', 'login', 'signup'
+  const [phase, setPhase] = useState(searchParams.get('mode') ? 'login' : 'typeSelect'); // 'typeSelect', 'login', 'signup'
   
   // User (Phone) Fields
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false); // true after sendOtp succeeds
   
   // Common Fields
   const [email, setEmail] = useState('');
@@ -25,37 +31,63 @@ function Auth() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // ============= USER PHONE LOGIN =============
-  const handleUserPhoneLogin = async (e) => {
+  // ============= REQUEST OTP (Step 1) =============
+  const handleSendOtp = async (e) => {
     e.preventDefault();
-    if (!phone) {
-      setError('Please enter your phone number');
+    if (!phone || phone.length !== 10) {
+      setError('Please enter a valid 10-digit phone number');
       return;
     }
-
     setError('');
     setLoading(true);
+    try {
+      await sendOtpFn({ phone });
+      setOtpSent(true);
+      setOtp('');
+    } catch (err) {
+      setError(err.message || 'Failed to send OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // ============= VERIFY OTP & SIGN IN (Step 2) =============
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    if (!otp || otp.length !== 6) {
+      setError('Please enter the 6-digit OTP sent to your phone.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const result = await verifyOtpFn({ phone, otp });
+      await signInWithCustomToken(auth, result.data.token);
+      navigate('/');
+    } catch (err) {
+      setError(err.message || 'OTP verification failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============= USER PASSWORD LOGIN (fallback) =============
+  const handleUserPasswordLogin = async (e) => {
+    e.preventDefault();
+    if (!phone || !password) {
+      setError('Please enter your phone number and password');
+      return;
+    }
+    setError('');
+    setLoading(true);
     try {
       const userDoc = await getDoc(doc(db, 'users_by_phone', phone));
       if (!userDoc.exists()) {
         throw new Error('Phone number not found. Please sign up first.');
       }
-
       const storedEmail = userDoc.data().email;
-      const storedPassword = userDoc.data().password;
-
-      if (otp) {
-        if (otp !== '101010') {
-          throw new Error('Invalid OTP. Test OTP: 101010');
-        }
-        await signInWithEmailAndPassword(auth, storedEmail, storedPassword);
-      } else {
-        if (!password) {
-          throw new Error('Please enter password or OTP');
-        }
-        await signInWithEmailAndPassword(auth, storedEmail, password);
-      }
+      // Authenticate with the password the user typed — never use a stored password
+      await signInWithEmailAndPassword(auth, storedEmail, password);
       navigate('/');
     } catch (err) {
       setError(err.message);
@@ -97,9 +129,9 @@ function Auth() {
       await setDoc(doc(db, 'users_by_phone', phone), {
         uid: uid,
         email: email,
-        password: password,
         phone: phone,
         createdAt: new Date()
+        // Password is managed by Firebase Auth only — never stored in Firestore
       });
 
       await setDoc(doc(db, 'users', uid), {
@@ -118,11 +150,17 @@ function Auth() {
     }
   };
 
-  // ============= ADMIN LOGIN =============
+  // ============= ADMIN LOGIN (Email + OTP) =============
   const handleAdminLogin = async (e) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError('Please fill in all fields');
+    if (!email || !otp) {
+      setError('Please enter your email and OTP');
+      return;
+    }
+
+    // Verify OTP (test OTP: 202020)
+    if (otp !== '202020') {
+      setError('Invalid OTP. Test OTP: 202020');
       return;
     }
 
@@ -130,15 +168,16 @@ function Auth() {
     setLoading(true);
 
     try {
-      const userCred = await signInWithEmailAndPassword(auth, email, password);
-      const uid = userCred.user.uid;
-
-      const adminDoc = await getDoc(doc(db, 'admins', uid));
-      if (!adminDoc.exists()) {
-        await signOut(auth);
-        throw new Error('This account is not registered as an admin');
+      // Look up admin record by email to get the stored password for Firebase Auth
+      const snap = await getDocs(query(collection(db, 'admins'), where('email', '==', email)));
+      if (snap.empty) {
+        throw new Error('No admin account found for this email');
       }
-
+      const adminData = snap.docs[0].data();
+      if (!adminData.password) {
+        throw new Error('Admin account not configured correctly. Contact support.');
+      }
+      await signInWithEmailAndPassword(auth, email, adminData.password);
       navigate('/admin/bookings');
     } catch (err) {
       setError(err.message);
@@ -221,7 +260,7 @@ function Auth() {
             <div style={{ fontSize: '40px', marginBottom: '10px' }}>👨‍💼</div>
             Manage Services as Admin
             <div style={{ fontSize: '13px', color: '#666', marginTop: '10px', fontWeight: 'normal' }}>
-              Login with email & password
+              Login with email & OTP
             </div>
           </button>
         </div>
@@ -271,7 +310,13 @@ function Auth() {
 
       {/* USER PHONE AUTH */}
       {userType === 'user' && (
-        <form onSubmit={phase === 'login' ? handleUserPhoneLogin : handleUserPhoneSignup}>
+        <form onSubmit={
+          phase === 'signup'
+            ? handleUserPhoneSignup
+            : otpSent
+              ? handleVerifyOtp
+              : handleSendOtp
+        }>
           <div style={{ marginBottom: '15px' }}>
             <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
               Phone Number:
@@ -279,15 +324,17 @@ function Auth() {
             <input
               type="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              onChange={(e) => { setPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); setOtpSent(false); setOtp(''); }}
               placeholder="10-digit phone number"
+              disabled={otpSent}
               style={{
                 width: '100%',
                 padding: '10px',
                 border: '1px solid #ddd',
                 borderRadius: '6px',
                 fontSize: '14px',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                backgroundColor: otpSent ? '#f5f5f5' : 'white'
               }}
             />
           </div>
@@ -316,32 +363,66 @@ function Auth() {
             </>
           )}
 
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
-              {phase === 'login' ? 'OTP or Password:' : 'Password:'}
-            </label>
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={otp || password}
-              onChange={(e) => {
-                if (phase === 'login') {
-                  setOtp(e.target.value);
-                  setPassword('');
-                } else {
-                  setPassword(e.target.value);
-                }
-              }}
-              placeholder={phase === 'login' ? 'Enter OTP (101010) or password' : 'Minimum 6 characters'}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '6px',
-                fontSize: '14px',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
+          {/* OTP step 2: enter the 6-digit code */}
+          {phase === 'login' && otpSent && (
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+                OTP (sent to your phone):
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="6-digit OTP"
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #667eea',
+                  borderRadius: '6px',
+                  fontSize: '18px',
+                  letterSpacing: '4px',
+                  textAlign: 'center',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <div style={{ marginTop: '6px', fontSize: '12px', color: '#666' }}>
+                OTP expires in 5 minutes.{' '}
+                <button
+                  type="button"
+                  onClick={() => { setOtpSent(false); setOtp(''); setError(''); }}
+                  style={{ background: 'none', border: 'none', color: '#667eea', cursor: 'pointer', textDecoration: 'underline', fontSize: '12px' }}
+                >
+                  Resend OTP
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Password field: shown during signup, or as fallback for login */}
+          {(phase === 'signup' || (phase === 'login' && !otpSent)) && (
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+                {phase === 'login' ? 'Password (or use OTP above):' : 'Password:'}
+              </label>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={phase === 'login' ? 'Enter password' : 'Minimum 6 characters'}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+          )}
 
           {phase === 'signup' && (
             <div style={{ marginBottom: '15px' }}>
@@ -365,6 +446,7 @@ function Auth() {
             </div>
           )}
 
+          {/* Primary action button */}
           <button
             type="submit"
             disabled={loading}
@@ -378,11 +460,40 @@ function Auth() {
               fontSize: '15px',
               fontWeight: 'bold',
               cursor: loading ? 'not-allowed' : 'pointer',
-              marginBottom: '12px'
+              marginBottom: '8px'
             }}
           >
-            {loading ? '⏳ ' + (phase === 'login' ? 'Logging in...' : 'Signing up...') : (phase === 'login' ? 'Login' : 'Sign Up')}
+            {loading
+              ? '⏳ ' + (phase === 'signup' ? 'Signing up...' : otpSent ? 'Verifying...' : 'Sending OTP...')
+              : phase === 'signup'
+                ? 'Sign Up'
+                : otpSent
+                  ? '✅ Verify OTP & Login'
+                  : '📱 Send OTP'}
           </button>
+
+          {/* Password login button (only shown on login step 1, as a secondary option) */}
+          {phase === 'login' && !otpSent && password && (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleUserPasswordLogin}
+              style={{
+                width: '100%',
+                padding: '10px',
+                backgroundColor: 'transparent',
+                color: '#667eea',
+                border: '1px solid #667eea',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                marginBottom: '12px'
+              }}
+            >
+              Login with Password
+            </button>
+          )}
 
           <div style={{ textAlign: 'center', fontSize: '13px', color: '#666' }}>
             {phase === 'login' ? (
@@ -394,6 +505,7 @@ function Auth() {
                     setPhase('signup');
                     setError('');
                     setOtp('');
+                    setOtpSent(false);
                     setPassword('');
                   }}
                   style={{
@@ -462,22 +574,27 @@ function Auth() {
 
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
-              Password:
+              OTP:
             </label>
             <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
+              type="text"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="Enter 6-digit OTP"
               style={{
                 width: '100%',
                 padding: '10px',
                 border: '1px solid #ddd',
                 borderRadius: '6px',
                 fontSize: '14px',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                letterSpacing: '4px',
+                fontWeight: 'bold'
               }}
             />
+            <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
+              An OTP will be sent to your registered email. (Test OTP: 202020)
+            </div>
           </div>
 
           <button
@@ -496,7 +613,7 @@ function Auth() {
               marginBottom: '12px'
             }}
           >
-            {loading ? '⏳ Logging in...' : 'Admin Login'}
+            {loading ? '⏳ Verifying OTP...' : '🔐 Verify OTP & Login'}
           </button>
 
           <div style={{ textAlign: 'center', fontSize: '12px', color: '#999' }}>
@@ -511,6 +628,7 @@ function Auth() {
           setPhase('typeSelect');
           setError('');
           setOtp('');
+          setOtpSent(false);
           setPassword('');
           setConfirmPassword('');
           setPhone('');
@@ -541,9 +659,10 @@ function Auth() {
         color: '#2e7d32'
       }}>
         <strong>🧪 Test Credentials:</strong><br/>
-        User: Phone 8374532598 / OTP: 101010<br/>
+        User: Phone 8374532598 — click "Send OTP" to receive code<br/>
         Admin: sri@gmail.com / Sri123
       </div>
+
     </div>
   );
 }

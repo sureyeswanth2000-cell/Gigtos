@@ -1,5 +1,5 @@
 /**
- * GIGTO SECURITY — SECRET MANAGER UTILITY
+ * GIGTOS SECURITY — SECRET MANAGER UTILITY
  *
  * Provides secure retrieval of secrets from Google Secret Manager
  * with an in-memory cache to minimise API calls per cold-start.

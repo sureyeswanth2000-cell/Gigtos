@@ -1,5 +1,5 @@
 /**
- * GIGTO SECURITY — INPUT VALIDATION & SANITISATION
+ * GIGTOS SECURITY — INPUT VALIDATION & SANITISATION
  *
  * Centralised Joi schemas for every Cloud Function callable endpoint.
  * Call validate(schema, data) before processing any user-supplied input.

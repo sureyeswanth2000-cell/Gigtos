@@ -1,5 +1,5 @@
 /**
- * GIGTO SECURITY — CLIENT-SIDE INPUT SANITISATION
+ * GIGTOS SECURITY — CLIENT-SIDE INPUT SANITISATION
  *
  * Provides XSS prevention utilities for all user-supplied text
  * before it is rendered in the React UI or sent to the backend.

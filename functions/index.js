@@ -15,11 +15,6 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
 const { getGmailCredentials, getTwilioCredentials } = require('./security/secretManager');
-const { validate, submitQuoteSchema, acceptQuoteSchema, updateBookingStatusSchema, secureLogActivitySchema } = require('./security/validation');
-const { enforceRateLimit } = require('./security/rateLimiter');
-const { logSecurityEvent, logRateLimitViolation, SECURITY_EVENTS } = require('./security/audit');
-
-// Security utilities
 const { validate, submitQuoteSchema, acceptQuoteSchema, updateBookingSchema, createWorkerSchema } = require('./security/validation');
 const { checkRateLimit } = require('./security/rateLimiter');
 const { logSecurityEvent, extractCallerInfo, EVENT_TYPES } = require('./security/audit');
@@ -664,11 +659,8 @@ exports.submitQuote = functions.https.onCall(async (data, context) => {
   // Audit log attempt
   const { ip, userAgent } = extractCallerInfo(context);
 
-  // Input validation
-  const { bookingId, price } = validate(data, submitQuoteSchema, functions.https.HttpsError);
-
   // Audit log
-  await logSecurityEvent(SECURITY_EVENTS.FUNCTION_INVOKED, { function: 'submitQuote', bookingId }, context);
+  await logSecurityEvent({ event: EVENT_TYPES.ADMIN_ACTION, actorId: context.auth.uid, targetId: bookingId, ip, userAgent, outcome: 'attempted', details: { function: 'submitQuote' } });
 
   // Verify the caller is an admin
   const adminDoc = await db.collection('admins').doc(context.auth.uid).get();
@@ -1061,7 +1053,7 @@ exports.secureLogActivity = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
 
   // Input validation
-  const { bookingId, action, extraArgs } = validate(data, secureLogActivitySchema, functions.https.HttpsError);
+  const { bookingId, action, extraArgs } = validate(updateBookingSchema, data);
 
   // Validate only specific actions are allowed this way
   const allowedActions = [

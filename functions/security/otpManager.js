@@ -1,5 +1,5 @@
 /**
- * GIGTO SECURITY — OTP MANAGER
+ * GIGTOS SECURITY — OTP MANAGER
  *
  * Secure OTP lifecycle management:
  *   - bcrypt-hashed OTP storage (never stored in plaintext)

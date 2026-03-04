@@ -1,5 +1,5 @@
 /**
- * GIGTO SECURITY — AUDIT LOGGER
+ * GIGTOS SECURITY — AUDIT LOGGER
  *
  * Writes security-relevant events to the `security_logs` Firestore collection.
  * All writes use the Admin SDK so client rules cannot suppress them.

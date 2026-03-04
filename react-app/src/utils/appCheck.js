@@ -1,5 +1,5 @@
 /**
- * GIGTO SECURITY — FIREBASE APP CHECK INITIALISATION
+ * GIGTOS SECURITY — FIREBASE APP CHECK INITIALISATION
  *
  * Initialises Firebase App Check with reCAPTCHA v3 to prove that requests
  * originate from genuine Gigto web clients.

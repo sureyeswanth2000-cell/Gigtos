@@ -1,5 +1,5 @@
 /**
- * GIGTO SECURITY — AES-256-GCM FIELD-LEVEL ENCRYPTION
+ * GIGTOS SECURITY — AES-256-GCM FIELD-LEVEL ENCRYPTION
  *
  * Provides encrypt / decrypt helpers for PII fields stored in Firestore.
  *

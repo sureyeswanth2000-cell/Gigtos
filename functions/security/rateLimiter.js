@@ -1,5 +1,5 @@
 /**
- * GIGTO SECURITY — FIRESTORE-BASED RATE LIMITER
+ * GIGTOS SECURITY — FIRESTORE-BASED RATE LIMITER
  *
  * Prevents abuse by enforcing per-user (and per-phone) request caps
  * using a `rate_limits` Firestore collection as a sliding-window counter.

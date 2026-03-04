@@ -1,6 +1,8 @@
-# Gigto
+# Gigtos
 
 Home services app (Plumbing, Electrical, etc.) for Kavali — with customer booking, admin management, and a React front-end.
+
+> 📄 **Full Business Model & Technical Architecture:** See [`GIGTOS_ARCHITECTURE.md`](./GIGTOS_ARCHITECTURE.md) for the comprehensive platform document covering all roles, flows, dashboards, payment/escrow design, security framework, and implementation roadmap.
 
 ---
 

@@ -16,6 +16,7 @@ import Workers from './pages/Workers';
 import AdminBookings from './pages/AdminBookings';
 import Chat from './pages/Chat';
 import SuperAdmin from './pages/SuperAdmin';
+import SearchServices from './pages/SearchServices';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -72,6 +73,7 @@ function App() {
           <Route path="/auth" element={user ? <Navigate to={isAdmin ? "/admin/bookings" : "/"} /> : <Auth />} />
 
           {/* Protected User Routes */}
+          <Route path="/search" element={<SearchServices />} />
           <Route path="/service" element={<ProtectedRoute><Service /></ProtectedRoute>} />
           <Route path="/my-bookings" element={<ProtectedRoute><MyBookings /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />

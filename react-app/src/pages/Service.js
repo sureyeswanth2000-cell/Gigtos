@@ -12,8 +12,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { collection, addDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functionsInstance } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 const serviceIcons = {
@@ -104,22 +104,21 @@ export default function Service() {
       const user = auth.currentUser;
       if (!user) throw new Error('Not authenticated'); // Safety check for auth session
 
-      // Construct booking document payload
-      const bookingPayload = {
-        userId: user.uid, // Map booking to user ID
-        serviceType: type, // Category (Plumber, Electrician, etc.)
-        customerName: name, // Customer name at time of booking
-        address: address, // Service location
-        phone: userPhone, // Contact number
-        status: isScheduled ? 'scheduled' : 'pending', // Set status based on timing choice
-        scheduledDate: isScheduled ? scheduledDate : null, // Future date if applicable
-        timeSlot: isScheduled ? timeSlot : null, // Future slot if applicable
-        createdAt: new Date(), // Permanent record of submission
-        updatedAt: new Date() // Record of latest status change
-      };
+      // Call the Cloud Function to securely create the booking
+      const createBooking = httpsCallable(functionsInstance, 'createBooking');
+      const result = await createBooking({
+        serviceType: type,
+        customerName: name,
+        address: address,
+        phone: userPhone,
+        email: user.email || '',
+        isScheduled: isScheduled,
+        scheduledDate: isScheduled ? scheduledDate : null,
+        timeSlot: isScheduled ? timeSlot : null,
+      });
 
-      // Write document to Firestore 'bookings' collection
-      await addDoc(collection(db, 'bookings'), bookingPayload);
+      const { bookingId } = result.data;
+      console.log('Booking created with ID:', bookingId);
 
       setSuccess(`Success! Your request has been sent. Our regional professionals will review it and provide price quotes shortly. You can track this in 'My Bookings'.`); // Show success UI
       setShowConfirm(false); // Close confirmation modal

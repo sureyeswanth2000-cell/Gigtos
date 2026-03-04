@@ -854,3 +854,59 @@ exports.secureLogActivity = functions.https.onCall(async (data, context) => {
 
   return { success: true };
 });
+
+/**
+ * Callable: createBooking
+ * Secure endpoint for users to create a new booking.
+ * Uses Admin SDK to bypass Firestore security rules that block direct client writes.
+ */
+exports.createBooking = functions.https.onCall(async (data, context) => {
+  verifyAuth(context);
+
+  // Required fields: serviceType, customerName, phone, address
+  // Optional fields: email, price, startDate, endDate, scheduledDate, timeSlot, isScheduled
+  const { serviceType, customerName, phone, email, address, price, startDate, endDate, scheduledDate, timeSlot, isScheduled } = data;
+
+  // Validate required fields
+  if (!serviceType || typeof serviceType !== 'string' || serviceType.trim() === '') {
+    throw new functions.https.HttpsError('invalid-argument', 'serviceType is required.');
+  }
+  if (!customerName || typeof customerName !== 'string' || customerName.trim() === '') {
+    throw new functions.https.HttpsError('invalid-argument', 'customerName is required.');
+  }
+  if (!phone || typeof phone !== 'string' || phone.trim() === '') {
+    throw new functions.https.HttpsError('invalid-argument', 'phone is required.');
+  }
+  if (!address || typeof address !== 'string' || address.trim() === '') {
+    throw new functions.https.HttpsError('invalid-argument', 'address is required.');
+  }
+  if (isScheduled && (!scheduledDate || !timeSlot)) {
+    throw new functions.https.HttpsError('invalid-argument', 'scheduledDate and timeSlot are required for scheduled bookings.');
+  }
+
+  const status = isScheduled ? 'scheduled' : 'pending';
+
+  const bookingData = {
+    userId: context.auth.uid,
+    serviceType: serviceType.trim(),
+    customerName: customerName.trim(),
+    phone: phone.trim(),
+    email: email ? email.trim() : (context.auth.token.email || ''),
+    address: address.trim(),
+    price: price ? Number(price) : null,
+    startDate: startDate || null,
+    endDate: endDate || null,
+    scheduledDate: isScheduled ? scheduledDate : null,
+    timeSlot: isScheduled ? timeSlot : null,
+    status,
+    quotes: [],
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  };
+
+  const bookingRef = await db.collection('bookings').add(bookingData);
+
+  console.log(`Booking created: ${bookingRef.id} by user ${context.auth.uid}`);
+
+  return { success: true, bookingId: bookingRef.id };
+});

@@ -6,6 +6,7 @@
  * - Implements dual-booking modes: 
  *   1. Immediate (Status: 'pending') - for urgent needs.
  *   2. Scheduled (Status: 'scheduled') - for future appointments with specific time slots.
+ * - Supports multi-day job booking with start/end date selection and per-day pricing.
  * - Enforces ₹150 visiting charge policy across all service types.
  * - Validates profile completeness before allowing document creation in Firestore.
  */
@@ -43,12 +44,29 @@ export default function Service() {
   const [scheduledDate, setScheduledDate] = useState(''); // User selected date (YYYY-MM-DD)
   const [timeSlot, setTimeSlot] = useState(''); // User selected slot: 9-12, 12-3, 3-6
 
+  // State variables for multi-day job support
+  const [isMultiDay, setIsMultiDay] = useState(false); // Toggle for multi-day job mode
+  const [startDate, setStartDate] = useState(''); // Start date for multi-day job
+  const [endDate, setEndDate] = useState(''); // End date for multi-day job
+  const [isPricePerDay, setIsPricePerDay] = useState(false); // Whether pricing is per day
+  const [dailyRate, setDailyRate] = useState(''); // Rate per day in ₹
+
   // UI and feedback states
   const [loading, setLoading] = useState(false); // Spinner state during Firestore write
   const [error, setError] = useState(''); // Error message display
   const [success, setSuccess] = useState(''); // Success message display
   const [showConfirm, setShowConfirm] = useState(false); // State for the final confirmation modal
   const [profileIncomplete, setProfileIncomplete] = useState(false); // Flag if name/address/phone is missing
+
+  // Computed: days between start and end dates for multi-day jobs
+  const jobDuration = isMultiDay && startDate && endDate
+    ? Math.max(1, Math.round((new Date(endDate + 'T00:00:00') - new Date(startDate + 'T00:00:00')) / (1000 * 60 * 60 * 24)) + 1)
+    : null;
+
+  // Computed: total estimated cost for multi-day per-day pricing
+  const totalEstimatedCost = isMultiDay && isPricePerDay && dailyRate && jobDuration
+    ? jobDuration * Number(dailyRate)
+    : null;
 
   // Effect to load existing user profile data from Firestore on mount
   useEffect(() => {
@@ -97,6 +115,27 @@ export default function Service() {
       return;
     }
 
+    // Validation: Multi-day job date checks
+    if (isMultiDay) {
+      if (!startDate || !endDate) {
+        setError('Please select both a start date and an end date for the multi-day job.');
+        return;
+      }
+      const today = new Date().toISOString().split('T')[0];
+      if (startDate < today) {
+        setError('Start date cannot be in the past.');
+        return;
+      }
+      if (endDate < startDate) {
+        setError('End date must be on or after the start date.');
+        return;
+      }
+      if (isPricePerDay && (!dailyRate || isNaN(dailyRate) || Number(dailyRate) <= 0)) {
+        setError('Please enter a valid daily rate.');
+        return;
+      }
+    }
+
     setLoading(true); // Start loading spinner
     setError(''); // Clear previous errors
 
@@ -114,6 +153,17 @@ export default function Service() {
         status: isScheduled ? 'scheduled' : 'pending', // Set status based on timing choice
         scheduledDate: isScheduled ? scheduledDate : null, // Future date if applicable
         timeSlot: isScheduled ? timeSlot : null, // Future slot if applicable
+        // Multi-day job fields
+        isMultiDay: isMultiDay,
+        startDate: isMultiDay ? startDate : null,
+        endDate: isMultiDay ? endDate : null,
+        jobDuration: isMultiDay ? jobDuration : null,
+        isPricePerDay: isMultiDay ? isPricePerDay : false,
+        dailyRate: isMultiDay && isPricePerDay ? Number(dailyRate) : null,
+        totalEstimatedCost: isMultiDay && isPricePerDay ? totalEstimatedCost : null,
+        dailyNotes: [],
+        dailyPhotos: [],
+        dailyConfirmations: [],
         createdAt: new Date(), // Permanent record of submission
         updatedAt: new Date() // Record of latest status change
       };
@@ -254,7 +304,7 @@ export default function Service() {
         <div style={{ borderTop: '1px solid #ddd', paddingTop: '20px' }}>
           {/* Checkbox to enable/disable scheduled booking */}
           <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '15px' }}>
-            <input type="checkbox" checked={isScheduled} onChange={e => setIsScheduled(e.target.checked)} />
+            <input type="checkbox" checked={isScheduled} onChange={e => { setIsScheduled(e.target.checked); if (e.target.checked) setIsMultiDay(false); }} />
             <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#333' }}>🗓️ Book for a future date/time?</span>
           </label>
 
@@ -286,6 +336,74 @@ export default function Service() {
                   <option value="3 PM - 6 PM">Evening (3 PM - 6 PM)</option>
                 </select>
               </div>
+            </div>
+          )}
+
+          {/* Multi-day Job Toggle */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginTop: '15px', marginBottom: '15px' }}>
+            <input type="checkbox" checked={isMultiDay} onChange={e => { setIsMultiDay(e.target.checked); if (e.target.checked) setIsScheduled(false); }} />
+            <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#333' }}>📅 This is a multi-day job?</span>
+          </label>
+
+          {/* Multi-day Job Configuration */}
+          {isMultiDay && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '15px', background: '#f0f4ff', borderRadius: '8px', border: '1px solid #c7d2fe' }}>
+              <div style={{ fontSize: '13px', color: '#4338ca', fontWeight: 'bold' }}>📅 Multi-Day Job Details</div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#666', display: 'block', marginBottom: '5px' }}>Start Date:</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => { setStartDate(e.target.value); if (endDate && e.target.value > endDate) setEndDate(''); }}
+                    min={new Date().toISOString().split('T')[0]}
+                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #c7d2fe', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#666', display: 'block', marginBottom: '5px' }}>End Date:</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    min={startDate || new Date().toISOString().split('T')[0]}
+                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #c7d2fe', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              {/* Duration Display */}
+              {jobDuration && (
+                <div style={{ padding: '8px 12px', background: '#e0e7ff', borderRadius: '6px', fontSize: '13px', color: '#3730a3', fontWeight: 'bold' }}>
+                  ⏱️ Duration: {jobDuration} day{jobDuration > 1 ? 's' : ''}
+                </div>
+              )}
+
+              {/* Per-day Pricing Toggle */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+                <input type="checkbox" checked={isPricePerDay} onChange={e => setIsPricePerDay(e.target.checked)} />
+                <span style={{ fontWeight: 'bold', color: '#333' }}>💰 Enable per-day pricing?</span>
+              </label>
+
+              {isPricePerDay && (
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#666', display: 'block', marginBottom: '5px' }}>Daily Rate (₹):</label>
+                  <input
+                    type="number"
+                    value={dailyRate}
+                    onChange={e => setDailyRate(e.target.value)}
+                    placeholder="e.g. 500"
+                    min="1"
+                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #c7d2fe', boxSizing: 'border-box' }}
+                  />
+                  {totalEstimatedCost && (
+                    <div style={{ marginTop: '8px', padding: '8px 12px', background: '#d1fae5', borderRadius: '6px', fontSize: '13px', color: '#065f46', fontWeight: 'bold' }}>
+                      💵 Estimated Total: ₹{totalEstimatedCost} ({jobDuration} days × ₹{dailyRate}/day)
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -396,6 +514,17 @@ export default function Service() {
                 <>
                   <div style={{ marginTop: '8px' }}><strong>🗓️ Date:</strong> {scheduledDate}</div>
                   <div><strong>🕒 Time Slot:</strong> {timeSlot}</div>
+                </>
+              )}
+              {/* Conditional display for Multi-day info */}
+              {isMultiDay && (
+                <>
+                  <div style={{ marginTop: '8px' }}><strong>📅 Start Date:</strong> {startDate}</div>
+                  <div><strong>📅 End Date:</strong> {endDate}</div>
+                  <div><strong>⏱️ Duration:</strong> {jobDuration} day{jobDuration > 1 ? 's' : ''}</div>
+                  {isPricePerDay && totalEstimatedCost && (
+                    <div><strong>💵 Est. Cost:</strong> ₹{totalEstimatedCost} (₹{dailyRate}/day)</div>
+                  )}
                 </>
               )}
             </div>

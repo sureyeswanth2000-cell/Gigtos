@@ -13,6 +13,11 @@ const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
+const { getGmailCredentials, getTwilioCredentials } = require('./security/secretManager');
+const { validate, submitQuoteSchema, acceptQuoteSchema, updateBookingStatusSchema, secureLogActivitySchema } = require('./security/validation');
+const { enforceRateLimit } = require('./security/rateLimiter');
+const { logSecurityEvent, logRateLimitViolation, SECURITY_EVENTS } = require('./security/audit');
+
 admin.initializeApp();
 const db = admin.firestore();
 
@@ -33,36 +38,44 @@ const OTP_HMAC_SECRET = (() => {
    Logic for sending transactional emails and SMS notifications.
    ────────────────────────────────────────────────────────────────────────── */
 
-// Email transporter (set via firebase functions:config:set gmail.user="..." gmail.pass="...")
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: functions.config().gmail?.user,
-    pass: functions.config().gmail?.pass,
-  },
-});
+// Email transporter - credentials loaded lazily from Secret Manager
+let _transporter = null;
+async function getTransporter() {
+  if (_transporter) return _transporter;
+  const { user, pass } = await getGmailCredentials();
+  _transporter = nodemailer.createTransport({ service: 'gmail', auth: { user, pass } });
+  return _transporter;
+}
 
 /**
  * Sends a transactional email using Nodemailer.
- * Requires "gmail.user" and "gmail.pass" in functions config.
+ * Credentials are retrieved from Google Secret Manager (or functions.config() fallback).
  */
-function sendEmail(to, subject, text) {
-  if (!functions.config().gmail?.user || !to) return Promise.resolve();
-  return transporter
-    .sendMail({ from: functions.config().gmail?.user, to, subject, text })
-    .catch(err => console.error('Email error:', err));
+async function sendEmail(to, subject, text) {
+  try {
+    const { user } = await getGmailCredentials();
+    if (!user || !to) return;
+    const transport = await getTransporter();
+    await transport.sendMail({ from: user, to, subject, text });
+  } catch (err) {
+    console.error('Email error:', err);
+  }
 }
 
 /**
  * Sends an SMS using Twilio if configured, or logs to console if not.
- * Requires twilio.sid, twilio.token, and twilio.phone in config.
+ * Credentials are retrieved from Google Secret Manager (or functions.config() fallback).
  */
-function sendSms(phone, message) {
-  const { sid, token, phone: twilioPhone } = functions.config().twilio || {};
-  if (sid && token && twilioPhone) {
-    return require('twilio')(sid, token)
-      .messages.create({ body: message, from: twilioPhone, to: phone })
-      .catch(err => console.error('SMS error:', err));
+async function sendSms(phone, message) {
+  try {
+    const { sid, token, phone: twilioPhone } = await getTwilioCredentials();
+    if (sid && token && twilioPhone) {
+      return require('twilio')(sid, token)
+        .messages.create({ body: message, from: twilioPhone, to: phone })
+        .catch(err => console.error('SMS error:', err));
+    }
+  } catch {
+    // Credentials not configured; log instead
   }
   console.log('[SMS to', phone, ']', message);
   return Promise.resolve();
@@ -638,16 +651,19 @@ const verifyAuth = (context) => {
 exports.submitQuote = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
 
-  // Rate limit: max 10 quote submissions per admin per minute
-  const quoteLimitOk = await checkRateLimit('quote', context.auth.uid, 10, 60);
-  if (!quoteLimitOk) {
-    throw new functions.https.HttpsError('resource-exhausted', 'Too many quote submissions. Please wait a moment.');
+  // Rate limiting
+  try {
+    await enforceRateLimit(context, 'submitQuote', functions.https.HttpsError);
+  } catch (err) {
+    await logRateLimitViolation('submitQuote', context.auth?.uid || 'unknown', context);
+    throw err;
   }
 
-  const { bookingId, price } = data;
-  if (!bookingId || !price || isNaN(price) || price <= 0) {
-    throw new functions.https.HttpsError('invalid-argument', 'Invalid quote parameters.');
-  }
+  // Input validation
+  const { bookingId, price } = validate(data, submitQuoteSchema, functions.https.HttpsError);
+
+  // Audit log
+  await logSecurityEvent(SECURITY_EVENTS.FUNCTION_INVOKED, { function: 'submitQuote', bookingId }, context);
 
   // Verify the caller is an admin
   const adminDoc = await db.collection('admins').doc(context.auth.uid).get();
@@ -707,9 +723,12 @@ exports.submitQuote = functions.https.onCall(async (data, context) => {
  */
 exports.acceptQuote = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
-  const { bookingId, adminId } = data;
 
-  if (!bookingId || !adminId) throw new functions.https.HttpsError('invalid-argument', 'Missing parameters.');
+  // Input validation
+  const { bookingId, adminId } = validate(data, acceptQuoteSchema, functions.https.HttpsError);
+
+  // Audit log
+  await logSecurityEvent(SECURITY_EVENTS.FUNCTION_INVOKED, { function: 'acceptQuote', bookingId }, context);
 
   const bookingRef = db.collection('bookings').doc(bookingId);
 
@@ -761,14 +780,19 @@ exports.acceptQuote = functions.https.onCall(async (data, context) => {
 exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
 
-  // Rate limit: max 30 status-update actions per user per minute (prevents spam)
-  const actionLimitOk = await checkRateLimit('booking_action', context.auth.uid, 30, 60);
-  if (!actionLimitOk) {
-    throw new functions.https.HttpsError('resource-exhausted', 'Too many requests. Please slow down.');
+  // Rate limiting
+  try {
+    await enforceRateLimit(context, 'updateBookingStatus', functions.https.HttpsError);
+  } catch (err) {
+    await logRateLimitViolation('updateBookingStatus', context.auth?.uid || 'unknown', context);
+    throw err;
   }
 
-  const { bookingId, action, extraArgs } = data;
-  if (!bookingId || !action) throw new functions.https.HttpsError('invalid-argument', 'Missing parameters.');
+  // Input validation
+  const { bookingId, action, extraArgs } = validate(data, updateBookingStatusSchema, functions.https.HttpsError);
+
+  // Audit log
+  await logSecurityEvent(SECURITY_EVENTS.FUNCTION_INVOKED, { function: 'updateBookingStatus', bookingId, action }, context);
 
   const bookingRef = db.collection('bookings').doc(bookingId);
 
@@ -1045,8 +1069,9 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
  */
 exports.secureLogActivity = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
-  const { bookingId, action, extraArgs } = data;
-  if (!bookingId || !action) throw new functions.https.HttpsError('invalid-argument', 'Missing parameters.');
+
+  // Input validation
+  const { bookingId, action, extraArgs } = validate(data, secureLogActivitySchema, functions.https.HttpsError);
 
   // Validate only specific actions are allowed this way
   const allowedActions = [

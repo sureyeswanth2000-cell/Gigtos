@@ -13,9 +13,11 @@ service cloud.firestore {
         get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "superadmin";
     }
 
-    // Check if the current user is an admin of any level
+    // Check if the current user is an active admin of any level
     function isAdmin() {
-      return isLoggedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isLoggedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isActive != false;
     }
 
     // Check that the admin account is active (not suspended/deactivated).
@@ -34,6 +36,12 @@ service cloud.firestore {
         adminData.role == "superadmin" || // Superadmin is parent to everyone
         targetData.parentAdminId == request.auth.uid // Direct parent-child link
       );
+    }
+
+    // Check if a worker is approved (not suspended, not fraud)
+    function isApprovedWorker(workerId) {
+      let workerData = get(/databases/$(database)/documents/gig_workers/$(workerId)).data;
+      return workerData.isFraud != true && workerData.status != 'suspended';
     }
 
     /* ============================
@@ -107,6 +115,9 @@ service cloud.firestore {
       // Only authorized parties can send messages
       allow create: if isLoggedIn() && (
         request.resource.data.senderId == request.auth.uid
+        && request.resource.data.senderId != null
+        && request.resource.data.text != null
+        && request.resource.data.text.size() <= 5000
         && (
           get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
           get(/databases/$(database)/documents/bookings/$(bookingId)).data.adminId == request.auth.uid ||
@@ -136,6 +147,24 @@ service cloud.firestore {
     }
 
     /* ============================
+       SECURITY LOGS
+    ============================ */
+    match /security_logs/{logId} {
+      // Security logs are write-only from the backend (Cloud Functions with Admin SDK)
+      // Only superadmins can read them
+      allow read: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    /* ============================
+       RATE LIMITS
+    ============================ */
+    match /rate_limits/{docId} {
+      // Rate limit documents are managed exclusively by Cloud Functions
+      allow read, write: if false;
+    }
+
+    /* ============================
        ADMINS COLLECTION
     ============================ */
     match /admins/{adminId} {
@@ -146,28 +175,39 @@ service cloud.firestore {
       allow create, delete: if isSuperAdmin();
       // Admins can update their own profile, superadmin can update any admin
       // This allows superadmin to set regionStatus, probationStatus etc.
-      allow update: if isActiveAdmin() && (request.auth.uid == adminId || isSuperAdmin());
+      // Protect critical fields: role and parentAdminId can only be set by superadmin
+      allow update: if isAdmin() && (
+        request.auth.uid == adminId ||
+        isSuperAdmin()
+      ) && (
+        isSuperAdmin() ||
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'parentAdminId', 'probationStatus', 'regionScore', 'fraudCount', 'isActive'])
+      );
     }
 
     /* ============================
        GIG WORKERS COLLECTION
     ============================ */
     match /gig_workers/{workerId} {
-      // Worker owner or parent hierarchy can see all workers regardless of approval.
-      // Other admins (e.g. for assignment lookups) only see approved workers.
-      // Default is restrictive: workers without an approvalStatus field are treated
-      // as 'pending' so they are not visible to non-owner admins.
+      // Only approved (non-fraud, non-suspended) workers are visible to clients
+      // Admins can see all workers for management; superadmin sees all
       allow read: if isLoggedIn() && (
-        resource.data.adminId == request.auth.uid ||
+        (resource.data.adminId == request.auth.uid && isAdmin()) ||
         (resource.data.adminId != null && isParentOf(resource.data.adminId)) ||
-        (isActiveAdmin() && resource.data.get('approvalStatus', 'pending') == 'approved')
+        isSuperAdmin()
       );
-      // Only active local admins create workers under their own adminId
-      allow create: if isActiveAdmin() && request.resource.data.adminId == request.auth.uid;
+      // Local admins create workers; must set themselves as adminId
+      allow create: if isAdmin() &&
+        request.resource.data.adminId == request.auth.uid &&
+        request.resource.data.isFraud != true &&
+        request.resource.data.status != 'suspended';
       // Allow admin owner or parent to update; superadmin can set fraud flags
+      // Only superadmin can set isFraud or status = 'suspended'
       allow update: if isLoggedIn() && (
-        resource.data.adminId == request.auth.uid ||
-        isParentOf(resource.data.adminId) ||
+        (resource.data.adminId == request.auth.uid && isAdmin() &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isFraud', 'adminId'])) ||
+        (isParentOf(resource.data.adminId) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isFraud', 'adminId'])) ||
         isSuperAdmin()
       );
       allow delete: if isSuperAdmin();

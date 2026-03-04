@@ -9,7 +9,7 @@ function Auth() {
   const [searchParams] = useSearchParams();
   
   const [userType, setUserType] = useState(searchParams.get('mode') || 'user'); // 'user' or 'admin'
-  const [phase, setPhase] = useState('typeSelect'); // 'typeSelect', 'login', 'signup'
+  const [phase, setPhase] = useState(searchParams.get('mode') ? 'login' : 'typeSelect'); // 'typeSelect', 'login', 'signup'
   
   // User (Phone) Fields
   const [phone, setPhone] = useState('');

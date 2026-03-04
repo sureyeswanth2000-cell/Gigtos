@@ -57,112 +57,117 @@ export default function Header() {
       </Link>
 
       {/* Navigation */}
-      {user ? (
-        <nav style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-          {/* Desktop Menu */}
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-            <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>
-              Home
-            </Link>
-            <Link to="/my-bookings" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>
-              My Bookings
-            </Link>
-            {isAdmin && (
-              <Link to="/admin" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '4px' }}>
-                👨‍💼 Admin
-              </Link>
-            )}
-            {isSuperAdmin && (
-              <Link to="/admin/super" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,200,0,0.3)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(255,200,0,0.5)' }}>
-                🛡️ SuperAdmin
-              </Link>
-            )}
-          </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+        {user ? (
+          <>
+            {/* Desktop Menu */}
+            <nav className="desktop-nav" style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+              <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>Home</Link>
+              <Link to="/my-bookings" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>My Bookings</Link>
+              {isAdmin && (
+                <Link to="/admin" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '4px' }}>
+                  👨‍💼 Admin
+                </Link>
+              )}
+              {isSuperAdmin && (
+                <Link to="/admin/super" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,200,0,0.3)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(255,200,0,0.5)' }}>
+                  🛡️ SuperAdmin
+                </Link>
+              )}
+            </nav>
 
-          {/* User Menu Dropdown */}
-          <div style={{ position: 'relative' }}>
+            {/* Mobile Menu Toggle */}
             <button
+              className="mobile-toggle"
               onClick={() => setMenuOpen(!menuOpen)}
               style={{
-                padding: '8px 12px',
-                backgroundColor: 'rgba(255,255,255,0.2)',
-                color: '#fff',
-                border: '1px solid rgba(255,255,255,0.4)',
-                borderRadius: '6px',
+                display: 'none',
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                fontSize: '24px',
                 cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
+                padding: '5px'
               }}
             >
-              👤 {user.email?.split('@')[0]}
-              <span>{menuOpen ? '▲' : '▼'}</span>
+              {menuOpen ? '✕' : '☰'}
             </button>
 
-            {menuOpen && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: '8px',
-                backgroundColor: 'white',
-                borderRadius: '8px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                zIndex: 1000,
-                minWidth: '200px',
-                overflow: 'hidden'
-              }}>
-                <Link to="/profile" style={{ textDecoration: 'none' }}>
-                  <div style={{
-                    padding: '12px 16px',
-                    color: '#333',
-                    borderBottom: '1px solid #eee',
-                    cursor: 'pointer',
-                    fontSize: '14px'
-                  }} onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'} onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
-                    ✏️ Edit Profile
-                  </div>
-                </Link>
-                <div
-                  onClick={handleLogout}
-                  style={{
-                    padding: '12px 16px',
-                    color: '#f44336',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '500'
-                  }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = '#ffebee'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                >
-                  🚪 Logout
+            {/* User Profile (Desktop) */}
+            <div className="user-profile-desktop" style={{ position: 'relative' }}>
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                style={{
+                  padding: '8px 12px',
+                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.4)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                👤 {user.email?.split('@')[0]}
+                <span>▼</span>
+              </button>
+
+              {menuOpen && (
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: '8px',
+                  backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  zIndex: 1000, minWidth: '180px', overflow: 'hidden'
+                }}>
+                  <Link to="/profile" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none' }}>
+                    <div style={{ padding: '12px 16px', color: '#333', borderBottom: '1px solid #eee', fontSize: '14px' }}>✏️ Edit Profile</div>
+                  </Link>
+                  <div onClick={handleLogout} style={{ padding: '12px 16px', color: '#f44336', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}>🚪 Logout</div>
                 </div>
+              )}
+            </div>
+
+            {/* Mobile Sidebar/Overlay */}
+            {menuOpen && (
+              <div
+                className="mobile-menu-overlay"
+                style={{
+                  position: 'fixed', top: '60px', left: 0, right: 0, bottom: 0,
+                  backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 999,
+                  display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px'
+                }}
+              >
+                <Link to="/" onClick={() => setMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', fontSize: '18px' }}>Home</Link>
+                <Link to="/my-bookings" onClick={() => setMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', fontSize: '18px' }}>My Bookings</Link>
+                {isAdmin && <Link to="/admin" onClick={() => setMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', fontSize: '18px' }}>👨‍💼 Admin Dashboard</Link>}
+                {isSuperAdmin && <Link to="/admin/super" onClick={() => setMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', fontSize: '18px' }}>🛡️ SuperAdmin Dashboard</Link>}
+                <Link to="/profile" onClick={() => setMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', fontSize: '18px' }}>✏️ Edit Profile</Link>
+                <div onClick={handleLogout} style={{ color: '#ff5252', fontSize: '18px', fontWeight: 'bold' }}>🚪 Logout</div>
               </div>
             )}
-          </div>
-        </nav>
-      ) : (
-        <button
-          onClick={() => navigate('/auth')}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: 'rgba(255,255,255,0.3)',
-            color: '#fff',
-            border: '2px solid white',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            transition: 'background 0.2s'
-          }}
-          onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255,255,255,0.5)'}
-          onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(255,255,255,0.3)'}
-        >
-          🔐 Login / Sign Up
-        </button>
-      )}
+          </>
+        ) : (
+          <button
+            onClick={() => navigate('/auth')}
+            style={{
+              padding: '8px 16px', backgroundColor: 'rgba(255,255,255,0.3)',
+              color: '#fff', border: '2px solid white', borderRadius: '6px',
+              cursor: 'pointer', fontWeight: 'bold', fontSize: '14px'
+            }}
+          >
+            🔐 Login
+          </button>
+        )}
+      </div>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .desktop-nav, .user-profile-desktop { display: none !important; }
+          .mobile-toggle { display: block !important; }
+        }
+      `}</style>
     </header>
   );
 }

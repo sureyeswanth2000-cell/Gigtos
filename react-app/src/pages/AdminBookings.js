@@ -26,10 +26,12 @@ const STATUS_COLORS = {
   awaiting_confirmation: '#f44336',  // Red: Finished by worker, waiting for customer OK
   completed: '#4caf50',              // Green: Job closed successfully
   cancelled: '#757575',              // Gray: Job terminated
+  quoted: '#6366f1',                 // Indigo: Price sent to user
+  accepted: '#ec4899',               // Pink: User agreed to price
 };
 
 // All statuses that require active attention from admins
-const ACTIVE_STATUSES = ['pending', 'scheduled', 'assigned', 'in_progress', 'awaiting_confirmation'];
+const ACTIVE_STATUSES = ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'];
 
 export default function AdminBookings() {
   /* ──────────────────────────────────────────────────────────────────────────
@@ -46,6 +48,7 @@ export default function AdminBookings() {
   const [callLogId, setCallLogId] = useState(null);    // ID for call logging modal
   const [callNotes, setCallNotes] = useState('');      // Notes from the customer phone call
   const [disputeDecisions, setDisputeDecisions] = useState({}); // Tracking selected resolution types
+  const [quotes, setQuotes] = useState({});            // Temporary quote prices being entered
   const fileInputRefs = useRef({});                    // Dynamic refs for hidden file inputs
 
   const uid = auth.currentUser?.uid;
@@ -279,6 +282,36 @@ export default function AdminBookings() {
     };
   };
 
+  /**
+   * Action: Admin sets a price quote for the job.
+   * Logic: Appends to a "quotes" array so multiple admins can bid.
+   */
+  const setPriceQuote = async (bookingId) => {
+    const price = quotes[bookingId];
+    if (!price || isNaN(price) || price <= 0) {
+      alert('Please enter a valid amount.');
+      return;
+    }
+
+    // Fetch current admin name for the quote
+    const adminDoc = await getDoc(doc(db, 'admins', uid));
+    const adminName = adminDoc.data()?.name || auth.currentUser?.email || 'Regional Pro';
+
+    await updateDoc(doc(db, 'bookings', bookingId), {
+      quotes: arrayUnion({
+        adminId: uid,
+        adminName: adminName,
+        price: Number(price),
+        createdAt: new Date().toISOString()
+      }),
+      updatedAt: new Date(),
+    });
+
+    await logActivity(bookingId, 'admin_submitted_quote', { price, adminName });
+    setQuotes(prev => { const n = { ...prev }; delete n[bookingId]; return n; });
+    alert('Quote sent! User will be notified.');
+  };
+
   /* ──────────────────────────────────────────────────────────────────────────
      UI RENDER LOGIC
      ────────────────────────────────────────────────────────────────────────── */
@@ -302,6 +335,7 @@ export default function AdminBookings() {
           { key: 'completed', label: 'Completed', color: '#10b981' },
           { key: 'cancelled', label: 'Cancelled', color: '#6b7280' },
           { key: 'disputes', label: '🚨 Disputes', color: '#dc2626' },
+          { key: 'quoted', label: '💰 Quoted', color: '#6366f1' },
           { key: 'escalated', label: '⏰ Escalated', color: '#7c3aed' },
           { key: 'all', label: 'All', color: '#667eea' },
         ].map(tab => (
@@ -357,11 +391,36 @@ export default function AdminBookings() {
 
             {/* ACTION BUTTONS: Drive the backend triggers */}
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {b.status === 'pending' && (
-                <select onChange={e => assignWorker(b, e.target.value)} style={{ padding: '6px', borderRadius: '4px' }}>
-                  <option value="">Assign Worker…</option>
-                  {availableWorkers.map(w => <option key={w.id} value={w.id}>{w.name} [{w.completedJobs || 0} jobs]</option>)}
-                </select>
+              {(b.status === 'pending' || b.status === 'scheduled') && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569' }}>💰 Submit Bid</div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input
+                      type="number"
+                      placeholder="Your Quote ₹"
+                      value={quotes[b.id] || ''}
+                      onChange={e => setQuotes(prev => ({ ...prev, [b.id]: e.target.value }))}
+                      disabled={b.quotes?.some(q => q.adminId === uid)}
+                      style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                    />
+                    <button
+                      onClick={() => setPriceQuote(b.id)}
+                      disabled={b.quotes?.some(q => q.adminId === uid)}
+                      style={{
+                        background: b.quotes?.some(q => q.adminId === uid) ? '#94a3b8' : '#6366f1',
+                        color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px',
+                        fontSize: '12px', fontWeight: 'bold', cursor: 'pointer'
+                      }}
+                    >
+                      {b.quotes?.some(q => q.adminId === uid) ? 'Bid Sent' : 'Send Quote'}
+                    </button>
+                  </div>
+                  {b.quotes?.length > 0 && (
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>
+                      {b.quotes.length} bid(s) already received for this job.
+                    </div>
+                  )}
+                </div>
               )}
               {b.status === 'assigned' && <button onClick={() => startWork(b)} style={{ background: '#9c27b0', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px' }}>Start Work</button>}
               {b.status === 'in_progress' && <button onClick={() => markFinished(b)} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px' }}>Mark Finished</button>}

@@ -63,7 +63,7 @@ function App() {
   };
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/Gigtos">
       <Header />
       <main style={{ minHeight: '70vh' }}>
         <Routes>

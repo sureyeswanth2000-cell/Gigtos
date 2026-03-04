@@ -9,10 +9,10 @@ export default function Home() {
 
   // Define available services with their metadata (icon, price, description)
   const services = [
-    { id: 1, name: 'Plumber', icon: '🧰', price: '₹150', desc: 'Pipe repairs, leak fixing, installation' },    // Updated to ₹150
-    { id: 2, name: 'Electrician', icon: '⚡', price: '₹150', desc: 'Wiring, repairs, switch installation' },    // Updated to ₹150
-    { id: 3, name: 'Carpenter', icon: '🪛', price: '₹150', desc: 'Furniture, doors, shelves, fixtures' },    // Updated to ₹150
-    { id: 4, name: 'Painter', icon: '🎨', price: '₹150', desc: 'Interior & exterior painting' }             // Updated to ₹150
+    { id: 1, name: 'Plumber', icon: '🧰', price: 'Quote Based', desc: 'Pipe repairs, leak fixing, installation' },
+    { id: 2, name: 'Electrician', icon: '⚡', price: 'Quote Based', desc: 'Wiring, repairs, switch installation' },
+    { id: 3, name: 'Carpenter', icon: '🪛', price: 'Quote Based', desc: 'Furniture, doors, shelves, fixtures' },
+    { id: 4, name: 'Painter', icon: '🎨', price: 'Quote Based', desc: 'Interior & exterior painting' }
   ];
 
   // Handle service selection and login check
@@ -48,7 +48,7 @@ export default function Home() {
         </p>
         {/* Global visiting charge announcement */}
         <p style={{ fontSize: '14px', color: '#0284c7', fontWeight: 'bold' }}>
-          ✨ All services now start with a ₹150 visiting charge
+          ✨ Transparent Pricing | Pay only after approval
         </p>
       </div>
 
@@ -87,9 +87,7 @@ export default function Home() {
             <p style={{ fontSize: '13px', marginBottom: '12px', opacity: 0.9 }}>
               {service.desc}
             </p>
-            <div style={{ marginBottom: '12px', fontSize: '18px', fontWeight: 'bold' }}>
-              {service.price}
-            </div>
+            {/* Price removed as per user feedback */}
             <button
               onClick={() => handleBookService(service)}
               style={{
@@ -148,9 +146,7 @@ export default function Home() {
               <p style={{ color: '#666', margin: '10px 0' }}>
                 {selectedService.desc}
               </p>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#667eea', marginTop: '15px' }}>
-                {selectedService.price}
-              </div>
+              {/* Price removed as per user feedback */}
             </div>
 
             <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f0f4ff', borderRadius: '8px' }}>

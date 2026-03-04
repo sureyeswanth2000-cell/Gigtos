@@ -114,7 +114,6 @@ export default function Service() {
         status: isScheduled ? 'scheduled' : 'pending', // Set status based on timing choice
         scheduledDate: isScheduled ? scheduledDate : null, // Future date if applicable
         timeSlot: isScheduled ? timeSlot : null, // Future slot if applicable
-        visitingCharge: 150, // Updated charge from ₹200 to ₹150 as per user request
         createdAt: new Date(), // Permanent record of submission
         updatedAt: new Date() // Record of latest status change
       };
@@ -122,7 +121,7 @@ export default function Service() {
       // Write document to Firestore 'bookings' collection
       await addDoc(collection(db, 'bookings'), bookingPayload);
 
-      setSuccess(`✓ ${isScheduled ? 'Scheduled' : 'Booking'} created successfully!`); // Show success UI
+      setSuccess(`Success! Your request has been sent. Our regional professionals will review it and provide price quotes shortly. You can track this in 'My Bookings'.`); // Show success UI
       setShowConfirm(false); // Close confirmation modal
 
       // Navigate to My Bookings after a short delay for visual confirmation
@@ -149,8 +148,8 @@ export default function Service() {
         <p style={{ color: '#666', margin: '10px 0' }}>
           Professional & Verified Service
         </p>
-        <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#667eea', marginTop: '15px' }}>
-          ₹150 Visiting Charge
+        <div style={{ fontSize: '14px', color: '#10b981', fontWeight: '500' }}>
+          ✨ Transparent Bidding System
         </div>
       </div>
 
@@ -399,10 +398,6 @@ export default function Service() {
                   <div><strong>🕒 Time Slot:</strong> {timeSlot}</div>
                 </>
               )}
-              {/* Updated Visiting Charge as per ₹150 split requirement */}
-              <div style={{ marginTop: '10px', color: '#667eea', fontWeight: 'bold' }}>
-                Service Charge: ₹150
-              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>

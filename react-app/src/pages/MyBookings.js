@@ -25,6 +25,8 @@ const statusColors = {
   'awaiting_confirmation': '#f44336', // Worker done, waiting for user approval
   'completed': '#4caf50',         // Successfully closed
   'cancelled': '#757575',         // Discarded/Invalidated
+  'quoted': '#6366f1',            // Price sent to user
+  'accepted': '#ec4899',          // User agreed to price
 };
 
 // UI CONFIG: Human-readable labels for the user interface
@@ -35,6 +37,8 @@ const statusLabels = {
   'awaiting_confirmation': '✅ Awaiting Confirmation',
   'completed': '✓ Completed',
   'cancelled': '✕ Cancelled',
+  'quoted': '💰 Quote Received',
+  'accepted': '🤝 Price Accepted',
 };
 
 // UI CONFIG: Category-specific iconography
@@ -242,8 +246,33 @@ export default function MyBookings() {
     });
   }
 
+  /* ── ACTION: Accept Quote ── 
+     Logic: User selects a specific bid from an admin.
+     Transitions: pending/quoted -> accepted. Sets adminId to winning admin.
+  */
+  async function acceptQuote(id, quote) {
+    if (!window.confirm(`Accept quote for ₹${quote.price} from ${quote.adminName}?`)) return;
+    try {
+      await updateDoc(doc(db, 'bookings', id), {
+        status: 'accepted',
+        adminId: quote.adminId, // Lock booking to this admin
+        acceptedQuote: quote,
+        userId: user.uid,
+        updatedAt: new Date(),
+      });
+      await logActivity(id, 'user_accepted_quote', {
+        price: quote.price,
+        adminId: quote.adminId,
+        adminName: quote.adminName
+      });
+      alert('✓ Quote accepted! Your regional pro will assign a worker shortly.');
+    } catch (e) {
+      alert('Failed to accept quote: ' + e.message);
+    }
+  }
+
   /* ── Booking groups ── */
-  const active = bookings.filter(b => ['pending', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status));
+  const active = bookings.filter(b => ['pending', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status));
   const completed = bookings.filter(b => b.status === 'completed');
   const cancelled = bookings.filter(b => b.status === 'cancelled');
 
@@ -509,6 +538,50 @@ export default function MyBookings() {
               style={{ flex: '1 0 auto', padding: '8px 12px', background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
               🔄 Rebook Service
             </button>
+          )}
+
+          {/* ACTIONS: Quote Acceptance (Multi-bid version) */}
+          {(booking.status === 'pending' || booking.status === 'scheduled') && booking.quotes?.length > 0 && (
+            <div style={{ width: '100%', marginBottom: '10px' }}>
+              <div style={{ padding: '12px', background: '#eef2ff', borderRadius: '8px', border: '1px solid #6366f1', marginBottom: '8px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#4338ca', marginBottom: '8px' }}>
+                  💰 Bids Received ({booking.quotes.length})
+                </div>
+                {booking.quotes.map((q, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '10px', background: 'white', borderRadius: '6px', marginBottom: '6px',
+                    border: '1px solid #e0e7ff'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>{q.adminName}</div>
+                      <div style={{ fontSize: '14px', color: '#4f46e5', fontWeight: 'bold' }}>₹{q.price}</div>
+                    </div>
+                    <button
+                      onClick={() => acceptQuote(booking.id, q)}
+                      style={{
+                        padding: '6px 12px', background: '#4caf50', color: 'white',
+                        border: 'none', borderRadius: '4px', cursor: 'pointer',
+                        fontSize: '12px', fontWeight: 'bold'
+                      }}
+                    >
+                      Accept
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {booking.status === 'accepted' && (
+            <div style={{ width: '100%', marginBottom: '10px', padding: '12px', background: '#ecfdf5', borderRadius: '8px', border: '1px solid #10b981' }}>
+              <div style={{ fontSize: '13px', color: '#065f46', fontWeight: 'bold' }}>
+                🤝 Price Accepted: ₹{booking.acceptedQuote?.price}
+              </div>
+              <div style={{ fontSize: '11px', color: '#059669' }}>
+                Admin: {booking.acceptedQuote?.adminName} | Worker assignment in progress.
+              </div>
+            </div>
           )}
 
           {/* NAVIGATION: Unified support chat */}

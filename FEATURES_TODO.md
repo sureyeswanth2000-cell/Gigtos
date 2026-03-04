@@ -15,6 +15,7 @@ This document summarizes the features in the Gigto project, indicating which ite
 
 - **User Features**
   - Booking system (create, view active bookings, history)
+  - **Bidding System:** Receive and accept quotes from multiple admins
   - Cancel booking (only if pending) with modal confirmation
   - Bookings grouped into Active / Completed / Cancelled
   - Consumer confirmation system (User confirm/resolves awaiting_confirmation)
@@ -22,7 +23,8 @@ This document summarizes the features in the Gigto project, indicating which ite
   - Reopen booking from history
 
 - **Admin Features**
-  - Booking lifecycle management (pending → assigned → in_progress → awaiting_confirmation → completed/cancelled)
+  - Booking lifecycle management (pending → quoted/accepted → assigned → in_progress → awaiting_confirmation → completed/cancelled)
+  - **Quote Submission:** Submit competitive bids for customer service requests
   - Assign worker, start work, mark completed, cancel booking
   - Automatic worker freeing on cancellation
   - View worker availability (free/busy logic)
@@ -37,7 +39,7 @@ This document summarizes the features in the Gigto project, indicating which ite
   - Search/filter workers by name/status (All / Free / Busy)
 
 - **UX & UI**
-  - Mobile‑friendly booking card layout
+  - Mobile‑friendly booking card layout & hamburger menu navigation
   - Worker table with availability filter
   - Responsive design
   - Header menu system & clean admin navigation

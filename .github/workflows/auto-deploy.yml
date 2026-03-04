@@ -1,0 +1,132 @@
+name: Auto-deploy on PR #14 merge
+
+# ─── Trigger ──────────────────────────────────────────────────────────────────
+# Runs when a pull request targeting main is closed (merged).
+# The job is skipped unless the PR is actually merged and is PR #14.
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+# ─── Permissions ──────────────────────────────────────────────────────────────
+permissions:
+  contents: read
+  pull-requests: write
+
+# ─── Jobs ─────────────────────────────────────────────────────────────────────
+jobs:
+  deploy:
+    name: Deploy Cloud Functions
+    # Only deploy when the PR is merged (not just closed)
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      FIREBASE_REGION:     ${{ secrets.FIREBASE_REGION || 'us-central1' }}
+
+    steps:
+      # ── 1. Check out the merged code ────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      # ── 2. Set up Node.js ───────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      # ── 3. Install Cloud Functions dependencies ──────────────────────────────
+      - name: Install Cloud Functions dependencies
+        run: |
+          cd functions
+          npm ci --silent
+
+      # ── 4. Install Firebase CLI ──────────────────────────────────────────────
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools --silent
+
+      # ── 5. Deploy Cloud Functions ────────────────────────────────────────────
+      - name: Deploy Cloud Functions
+        run: |
+          firebase deploy --only functions \
+            --project "$FIREBASE_PROJECT_ID" \
+            --force \
+            --non-interactive
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      # ── 6. Run booking test suite ────────────────────────────────────────────
+      - name: Run booking tests
+        run: |
+          chmod +x scripts/test-booking.sh scripts/colors.sh scripts/utils.sh scripts/config.sh
+          ./scripts/test-booking.sh --dry-run
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_REGION:     ${{ secrets.FIREBASE_REGION || 'us-central1' }}
+          GMAIL_USER:          ${{ secrets.GMAIL_USER }}
+          GMAIL_PASS:          ${{ secrets.GMAIL_PASS }}
+          TWILIO_SID:          ${{ secrets.TWILIO_SID }}
+          TWILIO_TOKEN:        ${{ secrets.TWILIO_TOKEN }}
+          TWILIO_PHONE:        ${{ secrets.TWILIO_PHONE }}
+
+      # ── 7. Run post-deploy verification ─────────────────────────────────────
+      - name: Run deployment verification
+        run: |
+          chmod +x scripts/verify-deployment.sh
+          ./scripts/verify-deployment.sh --dry-run
+
+      # ── 8. Upload reports as artifacts ───────────────────────────────────────
+      - name: Upload deployment reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-reports-${{ github.run_id }}
+          path: reports/
+          retention-days: 14
+
+      # ── 9. Post deployment summary as a PR comment ───────────────────────────
+      - name: Post deployment summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const outcome = '${{ job.status }}';
+            const emoji   = outcome === 'success' ? '✅' : '❌';
+            const body    = [
+              `## ${emoji} Deployment Summary — PR #${{ github.event.pull_request.number }}`,
+              '',
+              `| Item | Value |`,
+              `|------|-------|`,
+              `| Status | **${outcome.toUpperCase()}** |`,
+              `| Firebase project | \`${{ env.FIREBASE_PROJECT_ID }}\` |`,
+              `| Region | \`${{ env.FIREBASE_REGION }}\` |`,
+              `| Run | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |`,
+              '',
+              '_Deployment logs and test reports are attached as workflow artifacts._',
+            ].join('\n');
+            github.rest.issues.createComment({
+              owner:       context.repo.owner,
+              repo:        context.repo.repo,
+              issue_number: ${{ github.event.pull_request.number }},
+              body,
+            });
+
+      # ── 10. Send Slack notification (optional) ───────────────────────────────
+      - name: Send Slack notification
+        if: always() && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          payload: |
+            {
+              "text": "${{ job.status == 'success' && '✅' || '❌' }} Gigtos PR #${{ github.event.pull_request.number }} deployment *${{ job.status }}* on `${{ env.FIREBASE_PROJECT_ID }}`"
+            }
+        env:
+          SLACK_WEBHOOK_URL:  ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

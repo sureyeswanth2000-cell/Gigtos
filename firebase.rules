@@ -18,11 +18,17 @@ service cloud.firestore {
       return isLoggedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    // Check that the admin account is active (not suspended/deactivated)
+    function isActiveAdmin() {
+      return isAdmin() &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.get('isActive', true) != false;
+    }
+
     // New: Check if the current admin is the parent of another admin (to support hierarchy)
     function isParentOf(targetAdminId) {
       let adminData = get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
       let targetData = get(/databases/$(database)/documents/admins/$(targetAdminId)).data;
-      return isAdmin() && (
+      return isActiveAdmin() && (
         adminData.role == "superadmin" || // Superadmin is parent to everyone
         targetData.parentAdminId == request.auth.uid // Direct parent-child link
       );
@@ -38,11 +44,14 @@ service cloud.firestore {
     }
 
     match /users_by_phone/{phoneNumber} {
-      // Public read for login verification; strict write for specific phone owner
+      // Public read is needed for the phone-to-email lookup during login.
+      // Write is restricted to the authenticated owner and must not include
+      // a plaintext password field (passwords must be managed by Firebase Auth only).
       allow read: if true;
       allow create, update: if request.auth != null
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.phone == phoneNumber;
+        && request.resource.data.phone == phoneNumber
+        && !('password' in request.resource.data);
       allow delete: if false;
     }
 
@@ -135,21 +144,22 @@ service cloud.firestore {
       allow create, delete: if isSuperAdmin();
       // Admins can update their own profile, superadmin can update any admin
       // This allows superadmin to set regionStatus, probationStatus etc.
-      allow update: if isAdmin() && (request.auth.uid == adminId || isSuperAdmin());
+      allow update: if isActiveAdmin() && (request.auth.uid == adminId || isSuperAdmin());
     }
 
     /* ============================
        GIG WORKERS COLLECTION
     ============================ */
     match /gig_workers/{workerId} {
-      // Workers are visible to their managing admin and the entire hierarchy above them
+      // Worker owner or parent hierarchy can see all workers regardless of approval.
+      // Other admins (e.g. for assignment lookups) only see approved workers.
       allow read: if isLoggedIn() && (
         resource.data.adminId == request.auth.uid ||
         (resource.data.adminId != null && isParentOf(resource.data.adminId)) ||
-        isAdmin() // Default to allow any admin to see for assignment lookups
+        (isActiveAdmin() && resource.data.get('approvalStatus', 'approved') == 'approved')
       );
-      // Local admins create workers; parents manage them
-      allow create: if isAdmin() && request.resource.data.adminId == request.auth.uid;
+      // Only active local admins create workers under their own adminId
+      allow create: if isActiveAdmin() && request.resource.data.adminId == request.auth.uid;
       // Allow admin owner or parent to update; superadmin can set fraud flags
       allow update: if isLoggedIn() && (
         resource.data.adminId == request.auth.uid ||
@@ -173,5 +183,23 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    /* ============================
+       OTP VERIFICATIONS COLLECTION
+       All access is via the admin SDK (Cloud Functions) only.
+       Client SDK reads/writes are blocked to protect OTP hashes.
+    ============================ */
+    match /otp_verifications/{phone} {
+      allow read, write: if false;
+    }
+
+    /* ============================
+       RATE LIMITS COLLECTION
+       Managed exclusively by Cloud Functions via the admin SDK.
+    ============================ */
+    match /rate_limits/{limitId} {
+      allow read, write: if false;
+    }
+
   }
 }
+

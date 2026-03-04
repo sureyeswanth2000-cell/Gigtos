@@ -123,7 +123,7 @@ export default function AdminBookings() {
     await callBackend('updateBookingStatus', {
       bookingId: b.id,
       action: 'admin_assign_worker',
-      extraArgs: { workerId, workerName: worker?.name, workerPhone: worker?.phone }
+      extraArgs: { workerId, workerName: worker?.name, workerPhone: worker?.contact }
     });
   };
 

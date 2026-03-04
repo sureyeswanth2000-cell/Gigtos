@@ -1,10 +1,10 @@
 {
   "files": {
-    "main.js": "/Gigtos/static/js/main.3463af47.js",
+    "main.js": "/Gigtos/static/js/main.cbab9890.js",
     "index.html": "/Gigtos/index.html",
-    "main.3463af47.js.map": "/Gigtos/static/js/main.3463af47.js.map"
+    "main.cbab9890.js.map": "/Gigtos/static/js/main.cbab9890.js.map"
   },
   "entrypoints": [
-    "static/js/main.3463af47.js"
+    "static/js/main.cbab9890.js"
   ]
 }

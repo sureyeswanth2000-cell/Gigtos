@@ -16,6 +16,18 @@ const crypto = require('crypto');
 admin.initializeApp();
 const db = admin.firestore();
 
+// HMAC secret for OTP hashing. Set in production via:
+//   firebase functions:config:set otp.secret="<strong-random-secret>"
+// A missing/dev value is intentionally loud in logs so it is not overlooked.
+const OTP_HMAC_SECRET = (() => {
+  const secret = functions.config().otp?.secret;
+  if (!secret) {
+    console.warn('[SECURITY] otp.secret is not configured. Set it with: firebase functions:config:set otp.secret="<random-secret>"');
+    return 'insecure-dev-secret-replace-in-production';
+  }
+  return secret;
+})();
+
 /* ──────────────────────────────────────────────────────────────────────────
    SECTION 1: COMMUNICATION HELPERS
    Logic for sending transactional emails and SMS notifications.
@@ -959,10 +971,12 @@ exports.sendOtp = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('not-found', 'Phone number not registered. Please sign up first.');
   }
 
-  // Generate a cryptographically secure 6-digit OTP
-  const otp = crypto.randomInt(100000, 999999).toString();
-  // Hash the OTP with the phone as salt so rainbow tables are ineffective
-  const otpHash = crypto.createHash('sha256').update(otp + ':' + phone).digest('hex');
+  // Generate a cryptographically secure 6-digit OTP.
+  // randomInt(min, max) is exclusive at max, so use 1000000 to include 999999.
+  const otp = crypto.randomInt(100000, 1000000).toString();
+  // Use HMAC-SHA256 with the server-side secret so that even if the Firestore
+  // document is leaked, the hash cannot be brute-forced without the secret key.
+  const otpHash = crypto.createHmac('sha256', OTP_HMAC_SECRET).update(otp + ':' + phone).digest('hex');
 
   // Store only the hash; plaintext OTP is never persisted
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5-minute expiry
@@ -1040,8 +1054,8 @@ exports.verifyOtp = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('resource-exhausted', 'Too many failed attempts. Please request a new OTP.');
   }
 
-  // Verify OTP hash
-  const expectedHash = crypto.createHash('sha256').update(otp + ':' + phone).digest('hex');
+  // Verify OTP using HMAC-SHA256 with the same server-side secret
+  const expectedHash = crypto.createHmac('sha256', OTP_HMAC_SECRET).update(otp + ':' + phone).digest('hex');
   if (expectedHash !== otpData.otpHash) {
     await otpRef.update({ attempts: admin.firestore.FieldValue.increment(1) });
     await logActivity('system', 'otp_failed_attempt', 'system', { phone: phone.slice(0, 2) + '******' + phone.slice(-2) });

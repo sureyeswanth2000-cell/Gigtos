@@ -18,10 +18,12 @@ service cloud.firestore {
       return isLoggedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Check that the admin account is active (not suspended/deactivated)
+    // Check that the admin account is active (not suspended/deactivated).
+    // Explicitly check == true so that admins without the field set are
+    // treated as inactive (fail-closed). Existing admins must have isActive: true.
     function isActiveAdmin() {
       return isAdmin() &&
-        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.get('isActive', true) != false;
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isActive == true;
     }
 
     // New: Check if the current admin is the parent of another admin (to support hierarchy)
@@ -153,10 +155,12 @@ service cloud.firestore {
     match /gig_workers/{workerId} {
       // Worker owner or parent hierarchy can see all workers regardless of approval.
       // Other admins (e.g. for assignment lookups) only see approved workers.
+      // Default is restrictive: workers without an approvalStatus field are treated
+      // as 'pending' so they are not visible to non-owner admins.
       allow read: if isLoggedIn() && (
         resource.data.adminId == request.auth.uid ||
         (resource.data.adminId != null && isParentOf(resource.data.adminId)) ||
-        (isActiveAdmin() && resource.data.get('approvalStatus', 'approved') == 'approved')
+        (isActiveAdmin() && resource.data.get('approvalStatus', 'pending') == 'approved')
       );
       // Only active local admins create workers under their own adminId
       allow create: if isActiveAdmin() && request.resource.data.adminId == request.auth.uid;

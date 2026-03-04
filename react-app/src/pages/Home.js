@@ -50,6 +50,23 @@ export default function Home() {
         <p style={{ fontSize: '14px', color: '#0284c7', fontWeight: 'bold' }}>
           ✨ Transparent Pricing | Pay only after approval
         </p>
+        {/* Search shortcut */}
+        <button
+          onClick={() => navigate('/search')}
+          style={{
+            marginTop: '12px',
+            padding: '10px 24px',
+            backgroundColor: '#667eea',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontWeight: 'bold',
+            fontSize: '14px',
+          }}
+        >
+          🔍 Search & Filter Services
+        </button>
       </div>
 
       {/* Services Grid */}

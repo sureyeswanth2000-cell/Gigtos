@@ -1,39 +1,53 @@
 /**
- * Input validation schemas using Joi for all Cloud Function inputs.
- * Provides defence against injection attacks and malformed requests.
+ * GIGTO SECURITY — INPUT VALIDATION & SANITISATION
+ *
+ * Centralised Joi schemas for every Cloud Function callable endpoint.
+ * Call validate(schema, data) before processing any user-supplied input.
+ *
+ * Supported schemas:
+ *   submitQuoteSchema      — bookingId, price
+ *   acceptQuoteSchema      — bookingId, adminId
+ *   updateBookingSchema    — bookingId, action, extraArgs
+ *   createWorkerSchema     — name, phone, serviceType, skills
+ *   otpRequestSchema       — phone
+ *   otpVerifySchema        — phone, otp
  */
+
+'use strict';
 
 const Joi = require('joi');
+const functions = require('firebase-functions');
 
-const MAX_QUOTE_PRICE = 1_000_000; // Maximum allowed quote price in INR
+// ── Common reusable primitives ───────────────────────────────────────────────
 
-// Reusable field definitions
-const bookingIdSchema = Joi.string().trim().max(128).required();
-const adminIdSchema = Joi.string().trim().max(128).required();
-const workerIdSchema = Joi.string().trim().max(128).required();
-const phoneSchema = Joi.string().trim().pattern(/^\+?[1-9]\d{6,14}$/).required()
-  .messages({ 'string.pattern.base': 'Phone number must be in E.164 format.' });
+/** E.164 phone number (e.g. +911234567890) */
+const phoneSchema = Joi.string()
+  .pattern(/^\+?[1-9]\d{6,14}$/)
+  .required()
+  .messages({ 'string.pattern.base': 'Phone must be a valid E.164 number.' });
 
-/**
- * Validates the input for submitQuote Cloud Function.
- * Fields: bookingId (string, required), price (positive number, required)
- */
+/** Firestore document ID (alphanumeric + hyphen/underscore, 1-128 chars) */
+const docIdSchema = Joi.string()
+  .pattern(/^[a-zA-Z0-9_-]+$/)
+  .max(128)
+  .required()
+  .messages({ 'string.pattern.base': 'ID must contain only alphanumeric characters, hyphens, or underscores.' });
+
+// ── Endpoint schemas ─────────────────────────────────────────────────────────
+
 const submitQuoteSchema = Joi.object({
-  bookingId: bookingIdSchema,
-  price: Joi.number().positive().max(MAX_QUOTE_PRICE).required(),
+  bookingId: docIdSchema,
+  price: Joi.number().positive().max(100000).required()
+    .messages({ 'number.positive': 'Price must be a positive number.' }),
 });
 
-/**
- * Validates the input for acceptQuote Cloud Function.
- * Fields: bookingId (string, required), adminId (string, required)
- */
 const acceptQuoteSchema = Joi.object({
-  bookingId: bookingIdSchema,
-  adminId: adminIdSchema,
+  bookingId: docIdSchema,
+  adminId: docIdSchema,
 });
 
-// Allowed booking action values
-const ALLOWED_BOOKING_ACTIONS = [
+/** Allowed action identifiers for updateBookingStatus */
+const ALLOWED_ACTIONS = [
   'user_cancelled',
   'admin_cancelled',
   'admin_assign_worker',
@@ -50,69 +64,42 @@ const ALLOWED_BOOKING_ACTIONS = [
   'user_raise_dispute',
 ];
 
-/**
- * Validates the input for updateBookingStatus Cloud Function.
- * Fields: bookingId (string, required), action (enum, required), extraArgs (object, optional)
- */
-const updateBookingStatusSchema = Joi.object({
-  bookingId: bookingIdSchema,
-  action: Joi.string().valid(...ALLOWED_BOOKING_ACTIONS).required(),
-  extraArgs: Joi.object({
-    workerId: Joi.string().trim().max(128),
-    workerName: Joi.string().trim().max(200),
-    workerPhone: phoneSchema.optional(),
-    rating: Joi.number().integer().min(1).max(5),
-    decision: Joi.string().valid('user_fault', 'worker_fault', 'shared_fault'),
-    superadminOverride: Joi.boolean(),
-    callNotes: Joi.string().trim().max(2000),
-    note: Joi.string().trim().max(2000),
-    label: Joi.string().trim().max(200),
-    url: Joi.string().uri().max(2048),
-    reason: Joi.string().trim().max(1000),
-  }).optional(),
+const updateBookingSchema = Joi.object({
+  bookingId: docIdSchema,
+  action: Joi.string().valid(...ALLOWED_ACTIONS).required()
+    .messages({ 'any.only': 'action must be one of the allowed booking actions.' }),
+  extraArgs: Joi.object().optional().unknown(true),
 });
 
-/**
- * Validates the input for updateWorkerStatus Cloud Function.
- */
-const updateWorkerStatusSchema = Joi.object({
-  workerId: workerIdSchema,
-  status: Joi.string().valid('available', 'unavailable', 'suspended').required(),
-});
-
-/**
- * Validates the input for createWorker Cloud Function.
- */
 const createWorkerSchema = Joi.object({
-  name: Joi.string().trim().min(2).max(200).required(),
+  name: Joi.string().min(2).max(100).pattern(/^[\p{L}\s'-]+$/u).required()
+    .messages({ 'string.pattern.base': 'Name must contain only letters, spaces, hyphens, or apostrophes.' }),
   phone: phoneSchema,
-  skills: Joi.array().items(Joi.string().trim().max(100)).min(1).max(20).required(),
-  documents: Joi.array().items(
-    Joi.object({
-      type: Joi.string().trim().max(100).required(),
-      url: Joi.string().uri().max(2048).required(),
-    })
-  ).max(10).optional(),
+  serviceType: Joi.string().min(2).max(50).required(),
+  skills: Joi.array().items(Joi.string().max(50)).min(1).max(20).required(),
 });
 
-/**
- * Validates the input for secureLogActivity Cloud Function.
- */
-const secureLogActivitySchema = Joi.object({
-  bookingId: bookingIdSchema,
-  action: Joi.string().trim().max(100).required(),
-  extraArgs: Joi.object().pattern(Joi.string().max(100), Joi.any()).max(20).optional(),
+const otpRequestSchema = Joi.object({
+  phone: phoneSchema,
 });
 
+const otpVerifySchema = Joi.object({
+  phone: phoneSchema,
+  otp: Joi.string().length(6).pattern(/^\d+$/).required()
+    .messages({ 'string.pattern.base': 'OTP must be a 6-digit number.' }),
+});
+
+// ── Validation helper ────────────────────────────────────────────────────────
+
 /**
- * Validates and strips unknown fields from data using the given schema.
- * Throws a functions.https.HttpsError on validation failure.
- * @param {object} data - Input data to validate
- * @param {Joi.Schema} schema - Joi schema to validate against
- * @param {Function} HttpsError - functions.https.HttpsError constructor
- * @returns {object} Validated and sanitized data
+ * Validates `data` against the provided Joi `schema`.
+ * Throws an HttpsError with code `invalid-argument` if validation fails.
+ *
+ * @param {Joi.ObjectSchema} schema
+ * @param {object} data
+ * @returns {object} The validated (coerced) value.
  */
-function validate(data, schema, HttpsError) {
+function validate(schema, data) {
   const { error, value } = schema.validate(data, {
     abortEarly: false,
     stripUnknown: true,
@@ -121,18 +108,53 @@ function validate(data, schema, HttpsError) {
 
   if (error) {
     const message = error.details.map(d => d.message).join('; ');
-    throw new HttpsError('invalid-argument', `Validation failed: ${message}`);
+    throw new functions.https.HttpsError('invalid-argument', message);
   }
 
   return value;
 }
 
+/**
+ * Strips HTML tags and encodes common XSS characters from a string value.
+ * Use on free-text fields before persisting to Firestore.
+ *
+ * @param {string} input
+ * @returns {string}
+ */
+function sanitizeString(input) {
+  if (typeof input !== 'string') return input;
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;')
+    .trim();
+}
+
+/**
+ * Recursively sanitizes all string values in an object.
+ *
+ * @param {object} obj
+ * @returns {object}
+ */
+function sanitizeObject(obj) {
+  if (obj === null || typeof obj !== 'object') return sanitizeString(obj);
+  if (Array.isArray(obj)) return obj.map(item => sanitizeObject(item));
+  return Object.fromEntries(
+    Object.entries(obj).map(([k, v]) => [k, typeof v === 'object' ? sanitizeObject(v) : sanitizeString(v)])
+  );
+}
+
 module.exports = {
   submitQuoteSchema,
   acceptQuoteSchema,
-  updateBookingStatusSchema,
-  updateWorkerStatusSchema,
+  updateBookingSchema,
   createWorkerSchema,
-  secureLogActivitySchema,
+  otpRequestSchema,
+  otpVerifySchema,
   validate,
+  sanitizeString,
+  sanitizeObject,
 };

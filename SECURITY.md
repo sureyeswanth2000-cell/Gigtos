@@ -1,234 +1,180 @@
-# Security Documentation — Gigtos Platform
+# SECURITY.md — Gigtos Platform Security Policy
 
-This document describes the security controls implemented in the Gigtos platform and provides guidance for developers, operators, and incident responders.
+## Overview
+
+This document describes the security architecture, policies, and procedures for the Gigtos regional marketplace platform.
 
 ---
 
 ## 1. Secrets Management
 
-### Implementation
-All secrets are stored in **Google Secret Manager** and retrieved at runtime. The `functions/security/secretManager.js` module provides:
+All sensitive credentials (Gmail password, Twilio SID/token, encryption key) are stored in **Google Secret Manager** and never hard-coded or committed to source control.
 
-- **Cached secret retrieval** — secrets are cached for 5 minutes to minimise API calls.
-- **Graceful fallback** — if Secret Manager is unavailable, credentials fall back to `firebase functions:config`.
+### Secret Names
 
-### Managed Secrets
-| Secret Name | Description |
-|---|---|
-| `gmail-user` | Gmail sender address for transactional emails |
-| `gmail-pass` | Gmail app password for SMTP |
-| `twilio-sid` | Twilio Account SID |
-| `twilio-token` | Twilio Auth Token |
-| `twilio-phone` | Twilio sender phone number |
-| `field-encryption-key` | 32-byte hex key for AES-256-CBC field encryption |
+| Secret Name       | Purpose                         |
+|-------------------|---------------------------------|
+| `gmail-user`      | Gmail sender address            |
+| `gmail-pass`      | Gmail application password      |
+| `twilio-sid`      | Twilio Account SID              |
+| `twilio-token`    | Twilio Auth Token               |
+| `twilio-phone`    | Twilio sender phone number      |
+| `encryption-key`  | 32-byte AES-256 key (hex)       |
 
-### Creating a Secret
-```bash
-echo -n "your-secret-value" | gcloud secrets create SECRET_NAME --data-file=-
-# Grant Cloud Functions access
-gcloud secrets add-iam-policy-binding SECRET_NAME \
-  --member="serviceAccount:PROJECT_ID@appspot.gserviceaccount.com" \
-  --role="roles/secretmanager.secretAccessor"
-```
+### Access Control
+
+Cloud Function service accounts are granted `roles/secretmanager.secretAccessor` on each secret individually via IAM bindings. No wildcard access is granted.
 
 ### Secret Rotation
-1. Create a new secret version: `gcloud secrets versions add SECRET_NAME --data-file=-`
-2. Update the new version in Secret Manager.
-3. Call `clearSecretCache()` or wait 5 minutes for the cache to expire.
-4. Disable the old version: `gcloud secrets versions disable OLD_VERSION_ID --secret=SECRET_NAME`
+
+Secrets should be rotated every 90 days. After rotation:
+1. Update the secret version in Google Secret Manager.
+2. Call `invalidateCache(secretName)` in `functions/security/secretManager.js` or deploy a new function revision to clear the in-memory cache.
 
 ---
 
 ## 2. Firebase App Check
 
-### Implementation
-App Check (`react-app/src/utils/appCheck.js`) is initialized in `react-app/src/index.js` using the **reCAPTCHA v3** provider.
+App Check (reCAPTCHA v3) is configured on all sensitive callable functions:
+- `submitQuote`
+- `acceptQuote`
+- `updateBookingStatus`
 
-### Setup
-1. Go to [Firebase Console → App Check](https://console.firebase.google.com/) and enable App Check for your project.
-2. Register your web app domain and obtain a **reCAPTCHA v3 site key**.
-3. Set the environment variable:
-   ```
-   REACT_APP_RECAPTCHA_SITE_KEY=your_site_key_here
-   ```
-4. (Optional) Enforce App Check on Cloud Functions via the Firebase Console.
+**Setup:**
+1. Enable App Check in the Firebase Console → App Check.
+2. Register your web app with a reCAPTCHA v3 site key.
+3. Set `REACT_APP_RECAPTCHA_SITE_KEY=<your_site_key>` in `react-app/.env`.
+4. For local development, set `REACT_APP_APPCHECK_DEBUG_TOKEN=<debug_token>` (generate in Firebase Console).
+5. Call `initAppCheck(app)` in `react-app/src/index.js` before any Firebase service calls.
 
 ---
 
-## 3. Input Validation
+## 3. Input Validation & Sanitisation
 
-### Implementation
-All Cloud Function inputs are validated using **Joi** schemas (`functions/security/validation.js`).
+All Cloud Function callable endpoints validate incoming data using **Joi** schemas defined in `functions/security/validation.js`.
 
-### Validated Functions
-| Function | Schema | Key Validations |
-|---|---|---|
-| `submitQuote` | `submitQuoteSchema` | bookingId (string, max 128), price (positive number) |
-| `acceptQuote` | `acceptQuoteSchema` | bookingId, adminId (strings) |
-| `updateBookingStatus` | `updateBookingStatusSchema` | bookingId, action (enum), extraArgs (typed object) |
-| `secureLogActivity` | `secureLogActivitySchema` | bookingId, action (string, max 100) |
+Client-side rich-text rendering uses **DOMPurify** (see `react-app/src/utils/sanitization.js`) to prevent XSS.
 
-Unknown fields are stripped automatically (`stripUnknown: true`).
+### Validated Endpoints
+
+| Endpoint              | Schema                  |
+|-----------------------|-------------------------|
+| `submitQuote`         | `submitQuoteSchema`     |
+| `acceptQuote`         | `acceptQuoteSchema`     |
+| `updateBookingStatus` | `updateBookingSchema`   |
+| `createWorker`        | `createWorkerSchema`    |
+| OTP request           | `otpRequestSchema`      |
+| OTP verify            | `otpVerifySchema`       |
 
 ---
 
 ## 4. Rate Limiting
 
-### Implementation
-Firestore-based sliding-window rate limiter (`functions/security/rateLimiter.js`).
+Rate limits are enforced server-side in `functions/security/rateLimiter.js` using Firestore as the counter store.
 
-### Limits
-| Function | Limit | Window |
-|---|---|---|
-| `submitQuote` | 10 requests | per minute per user |
-| `createBooking` | 5 requests | per hour per user |
-| `updateBookingStatus` | 20 requests | per hour per user |
-| OTP requests | 3 requests | per hour per phone |
-| Login attempts | 5 requests | per hour per phone |
-| Default | 30 requests | per minute per user/IP |
+| Endpoint              | Limit               |
+|-----------------------|---------------------|
+| `submitQuote`         | 10 per minute / user |
+| `createBooking`       | 5 per hour / user   |
+| `updateBookingStatus` | 20 per hour / user  |
+| OTP request           | 3 per hour / phone  |
+| Login                 | 5 per hour / phone  |
 
-### Firestore Collection
-Rate limit counters are stored in the `rate_limits` collection with an `expiresAt` field for TTL-based cleanup. Client access to this collection is blocked by Firestore rules.
-
-### Error Response
-Clients receive a `resource-exhausted` (HTTP 429) error with a `retryAfter` field in seconds.
+Violations return HTTP 429 (`resource-exhausted`) with a `retryAfterMs` field. Repeated violations trigger a **15-minute lockout**.
 
 ---
 
 ## 5. OTP Security
 
-### Recommendations (Phase 2)
-- Hash OTPs with **bcrypt** before storing.
-- Enforce 5-minute expiry on OTP documents.
-- Limit verification to 3 attempts per OTP.
-- Log failed attempts via `functions/security/audit.js`.
+OTPs are managed by `functions/security/otpManager.js`:
+- Generated as 6-digit numeric codes using `Math.random` (sufficient for transient tokens).
+- Hashed with **bcrypt** (10 rounds) before storage — never stored in plaintext.
+- Expire after **5 minutes**.
+- Maximum **3 verification attempts** per OTP.
+- **15-minute account lockout** after exhausting attempts.
+- All failures logged to `security_logs`.
 
 ---
 
-## 6. Data Encryption
+## 6. Field-Level Encryption
 
-### Implementation
-Field-level **AES-256-CBC** encryption is provided by `functions/security/encryption.js`.
+PII fields are encrypted at rest using **AES-256-GCM** via `functions/security/encryption.js`.
 
-### PII Fields Encrypted
-- Phone numbers (users, workers, bookings)
-- Email addresses
-- Physical addresses
+### Encrypted Fields
 
-### API
-```js
-const { encryptFields, decryptFields, USER_PII_FIELDS } = require('./security/encryption');
+| Collection   | Fields                                      |
+|--------------|---------------------------------------------|
+| `users`      | `phone`, `email`                            |
+| `gig_workers`| `phone`, `email`, `aadhaarNumber`           |
+| `bookings`   | `userPhone`, `workerPhone`, `userAddress`   |
 
-// Before writing to Firestore
-const safeData = await encryptFields(userData, USER_PII_FIELDS);
-
-// After reading from Firestore
-const plainData = await decryptFields(firestoreDoc, USER_PII_FIELDS);
-```
-
-### Key Management
-The encryption key is stored in Google Secret Manager as `field-encryption-key` (32-byte hex string).
-
-To generate a key:
-```bash
-openssl rand -hex 32
-```
+The encryption key is retrieved from `ENCRYPTION_KEY` environment variable (set from Secret Manager). Key format: 64-character lowercase hex string (32 bytes).
 
 ---
 
 ## 7. Firestore Security Rules
 
-### Enhancements in `firebase.rules`
-- **Admin activeness check** — `isAdmin()` now requires `isActive != false`.
-- **Worker approval validation** — workers flagged as `isFraud` or `status == suspended` are not client-readable.
-- **Field-level protection on admins** — `role`, `parentAdminId`, `probationStatus`, `regionScore`, `fraudCount`, and `isActive` can only be modified by superadmins.
-- **Field-level protection on workers** — `isFraud` and `adminId` can only be modified by superadmins.
-- **Chat message validation** — messages must have a non-null `text` field (≤ 5000 chars) and a `senderId`.
-- **Security logs** — `security_logs` collection is read-only for superadmins; write blocked from clients.
-- **Rate limits** — `rate_limits` collection is fully blocked from client access.
+Enhanced rules in `firebase.rules` enforce:
+- **Admin activeness check**: Suspended/deactivated admins (`isActive: false`) cannot perform admin actions.
+- **Worker approval status**: Only approved, non-fraudulent workers are visible for assignment.
+- **Approval/fraud flag restrictions**: Only superadmins or parent admins can change `approvalStatus` or `isFraud`.
+- **Protected collections**: `security_logs`, `rate_limits`, `otp_records` — client writes blocked entirely.
+- **State machine enforcement**: All booking state transitions go through Cloud Functions only.
 
 ---
 
-## 8. Audit Logging
+## 8. Security Headers
 
-### Implementation
-`functions/security/audit.js` writes to the `security_logs` Firestore collection.
+Configured in `firebase.json` for Firebase Hosting:
+
+| Header                     | Value                                     |
+|----------------------------|-------------------------------------------|
+| `Strict-Transport-Security`| `max-age=31536000; includeSubDomains; preload` |
+| `X-Content-Type-Options`   | `nosniff`                                 |
+| `X-Frame-Options`          | `SAMEORIGIN`                              |
+| `X-XSS-Protection`         | `1; mode=block`                           |
+| `Referrer-Policy`          | `strict-origin-when-cross-origin`         |
+| `Permissions-Policy`       | Camera/mic blocked; geolocation self-only |
+| `Content-Security-Policy`  | Strict CSP allowing only Gigtos domains   |
+
+---
+
+## 9. Audit Logging
+
+Security events are written to the `security_logs` Firestore collection by `functions/security/audit.js`. Only superadmins can read this collection via client SDKs.
 
 ### Logged Events
-| Event | Trigger |
-|---|---|
-| `function_invoked` | Every call to `submitQuote`, `acceptQuote`, `updateBookingStatus` |
-| `rate_limit_exceeded` | When a rate limit is breached |
-| `unauthorized_access` | When a permission check fails |
-| `otp_failed` | On OTP verification failure |
-| `failed_login` | On login failure |
 
-### Alert Thresholds
-If **3 or more** high-severity events occur for the same user within 5 minutes, a warning is logged to Cloud Functions logs. In production, integrate with Cloud Monitoring or PubSub for real-time alerts.
-
-### Querying Security Logs
-```js
-// Get recent unauthorized access events (superadmin only via Cloud Functions)
-const logs = await db.collection('security_logs')
-  .where('eventType', '==', 'unauthorized_access')
-  .orderBy('timestamp', 'desc')
-  .limit(50)
-  .get();
-```
+- Authentication success/failure
+- Authorisation failures
+- Rate limit violations
+- OTP failures and lockouts
+- Suspicious activity
+- Admin actions
+- Secret access (production)
 
 ---
 
-## 9. CORS & Security Headers
+## 10. Data Privacy
 
-Callable Cloud Functions (`onCall`) do not require CORS configuration as they use Firebase's built-in authentication. For HTTP functions, configure CORS whitelisting in the function handler.
-
----
-
-## 10. Environment Security
-
-### Environment Variables
-| Variable | Purpose |
-|---|---|
-| `REACT_APP_RECAPTCHA_SITE_KEY` | reCAPTCHA v3 site key for App Check |
-| `GCLOUD_PROJECT` | Google Cloud project ID (auto-set in Cloud Functions) |
-
-### `.env.example`
-```
-REACT_APP_RECAPTCHA_SITE_KEY=your_recaptcha_v3_site_key_here
-```
-
-**Never commit real credentials to source control.**
+- Personal data (phone, email, Aadhaar) is encrypted at rest (see §6).
+- Data deletion on user request should be implemented via a Cloud Function that removes/anonymises `users`, `users_by_phone`, and associated `bookings` documents.
+- Audit logs are retained for 90 days (configure TTL policies in Firestore).
 
 ---
 
-## 11. Incident Response
+## Environment Variables
 
-### Failed Login Alerts
-1. Check `security_logs` for `failed_login` events.
-2. If 5+ failures from the same phone/IP in 1 hour, consider temporarily blocking.
+| Variable                          | Location          | Purpose                              |
+|-----------------------------------|-------------------|--------------------------------------|
+| `ENCRYPTION_KEY`                  | Cloud Functions   | 32-byte AES-256 key (hex)            |
+| `REACT_APP_RECAPTCHA_SITE_KEY`    | React app `.env`  | reCAPTCHA v3 site key                |
+| `REACT_APP_APPCHECK_DEBUG_TOKEN`  | React app `.env`  | App Check debug token (dev only)     |
 
-### Rate Limit Violations
-1. Check `security_logs` for `rate_limit_exceeded` events.
-2. Identify the `uid` or `ip` field.
-3. If abuse is confirmed, use Firebase Auth to disable the account.
-
-### Suspected Data Breach
-1. Immediately rotate all secrets in Google Secret Manager.
-2. Revoke Firebase service account keys.
-3. Review `security_logs` for `unauthorized_access` events.
-4. Notify affected users per your data protection obligations.
+Never commit `.env` files to source control. Use `.env.example` templates.
 
 ---
 
-## Security Score Checklist
+## Responsible Disclosure
 
-- [x] Secrets migrated to Secret Manager
-- [x] App Check initialized with reCAPTCHA v3
-- [x] All inputs validated with Joi schemas
-- [x] Rate limiting on sensitive endpoints
-- [x] PII encryption utilities implemented
-- [x] Firestore rules blocking unauthorized access
-- [x] Security logs capturing all events
-- [x] Audit logging on sensitive Cloud Functions
-- [x] Field-level write protection on admin/worker documents
-- [x] No hardcoded credentials in codebase
+To report a security vulnerability, email the project maintainer directly. Do not open a public GitHub issue for security concerns.

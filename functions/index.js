@@ -6,6 +6,7 @@
  * 2. Governance Scoring & Regions lead performance tracking
  * 3. Lifecycle automation (Escrow hold, Cashback, Worker badges)
  * 4. Automated Task Scheduling (Escalations & Expiry)
+ * 5. Security middleware (validation, rate limiting, audit logging)
  */
 
 const functions = require('firebase-functions');
@@ -17,6 +18,11 @@ const { getGmailCredentials, getTwilioCredentials } = require('./security/secret
 const { validate, submitQuoteSchema, acceptQuoteSchema, updateBookingStatusSchema, secureLogActivitySchema } = require('./security/validation');
 const { enforceRateLimit } = require('./security/rateLimiter');
 const { logSecurityEvent, logRateLimitViolation, SECURITY_EVENTS } = require('./security/audit');
+
+// Security utilities
+const { validate, submitQuoteSchema, acceptQuoteSchema, updateBookingSchema, createWorkerSchema } = require('./security/validation');
+const { checkRateLimit } = require('./security/rateLimiter');
+const { logSecurityEvent, extractCallerInfo, EVENT_TYPES } = require('./security/audit');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -650,14 +656,13 @@ const verifyAuth = (context) => {
  */
 exports.submitQuote = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
+  // Validate input with Joi schema
+  const { bookingId, price } = validate(submitQuoteSchema, data);
+  // Enforce rate limit: 10 per minute per user
+  await checkRateLimit('submitQuote', context.auth.uid);
 
-  // Rate limiting
-  try {
-    await enforceRateLimit(context, 'submitQuote', functions.https.HttpsError);
-  } catch (err) {
-    await logRateLimitViolation('submitQuote', context.auth?.uid || 'unknown', context);
-    throw err;
-  }
+  // Audit log attempt
+  const { ip, userAgent } = extractCallerInfo(context);
 
   // Input validation
   const { bookingId, price } = validate(data, submitQuoteSchema, functions.https.HttpsError);
@@ -668,6 +673,7 @@ exports.submitQuote = functions.https.onCall(async (data, context) => {
   // Verify the caller is an admin
   const adminDoc = await db.collection('admins').doc(context.auth.uid).get();
   if (!adminDoc.exists) {
+    await logSecurityEvent({ event: EVENT_TYPES.AUTHZ_FAILURE, actorId: context.auth.uid, targetId: null, ip, userAgent, outcome: 'blocked', details: { reason: 'Non-admin attempted submitQuote' } });
     throw new functions.https.HttpsError('permission-denied', 'Only admins can submit quotes.');
   }
   const adminName = adminDoc.data().name || 'Regional Pro';
@@ -723,12 +729,7 @@ exports.submitQuote = functions.https.onCall(async (data, context) => {
  */
 exports.acceptQuote = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
-
-  // Input validation
-  const { bookingId, adminId } = validate(data, acceptQuoteSchema, functions.https.HttpsError);
-
-  // Audit log
-  await logSecurityEvent(SECURITY_EVENTS.FUNCTION_INVOKED, { function: 'acceptQuote', bookingId }, context);
+  const { bookingId, adminId } = validate(acceptQuoteSchema, data);
 
   const bookingRef = db.collection('bookings').doc(bookingId);
 
@@ -779,20 +780,9 @@ exports.acceptQuote = functions.https.onCall(async (data, context) => {
  */
 exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
-
-  // Rate limiting
-  try {
-    await enforceRateLimit(context, 'updateBookingStatus', functions.https.HttpsError);
-  } catch (err) {
-    await logRateLimitViolation('updateBookingStatus', context.auth?.uid || 'unknown', context);
-    throw err;
-  }
-
-  // Input validation
-  const { bookingId, action, extraArgs } = validate(data, updateBookingStatusSchema, functions.https.HttpsError);
-
-  // Audit log
-  await logSecurityEvent(SECURITY_EVENTS.FUNCTION_INVOKED, { function: 'updateBookingStatus', bookingId, action }, context);
+  const { bookingId, action, extraArgs } = validate(updateBookingSchema, data);
+  // Enforce rate limit: 20 per hour per user
+  await checkRateLimit('updateBookingStatus', context.auth.uid);
 
   const bookingRef = db.collection('bookings').doc(bookingId);
 
@@ -1094,150 +1084,42 @@ exports.secureLogActivity = functions.https.onCall(async (data, context) => {
   return { success: true };
 });
 
-/* ──────────────────────────────────────────────────────────────────────────
-   SECTION 6: OTP AUTHENTICATION
-   Secure server-side OTP generation, storage (hashed), and verification.
-   Replaces the previous hardcoded client-side OTP ("101010").
-   ────────────────────────────────────────────────────────────────────────── */
-
 /**
- * Callable: sendOtp
- * Generates a cryptographically secure 6-digit OTP, stores a SHA-256 hash
- * (salted with the phone number) in Firestore with a 5-minute TTL, and sends
- * the plaintext code to the user via SMS.
- *
- * Security controls:
- * - Rate-limited to 3 requests per phone number per 10 minutes.
- * - Phone number must already exist in users_by_phone (prevents enumeration attacks).
- * - OTP is never logged or returned to the client.
+ * Callable: createWorker
+ * Securely creates a gig worker record with input validation.
+ * Only authenticated admins may call this endpoint.
  */
-exports.sendOtp = functions.https.onCall(async (data, context) => {
-  const phone = String(data.phone || '').trim();
+exports.createWorker = functions.https.onCall(async (data, context) => {
+  verifyAuth(context);
+  const { name, phone, serviceType, skills } = validate(createWorkerSchema, data);
 
-  if (!phone || !/^\d{10}$/.test(phone)) {
-    throw new functions.https.HttpsError('invalid-argument', 'A valid 10-digit phone number is required.');
+  // Verify the caller is an admin
+  const adminDoc = await db.collection('admins').doc(context.auth.uid).get();
+  if (!adminDoc.exists) {
+    throw new functions.https.HttpsError('permission-denied', 'Only admins can create workers.');
   }
 
-  // Rate limit: max 3 OTP requests per phone per 10 minutes
-  const allowed = await checkRateLimit('otp_send', phone, 3, 600);
-  if (!allowed) {
-    throw new functions.https.HttpsError('resource-exhausted', 'Too many OTP requests. Please wait before trying again.');
-  }
-
-  // Confirm the phone is registered before sending an OTP
-  const userDoc = await db.collection('users_by_phone').doc(phone).get();
-  if (!userDoc.exists) {
-    throw new functions.https.HttpsError('not-found', 'Phone number not registered. Please sign up first.');
-  }
-
-  // Generate a cryptographically secure 6-digit OTP.
-  // randomInt(min, max) is exclusive at max, so use 1000000 to include 999999.
-  const otp = crypto.randomInt(100000, 1000000).toString();
-  // Use HMAC-SHA256 with the server-side secret so that even if the Firestore
-  // document is leaked, the hash cannot be brute-forced without the secret key.
-  const otpHash = crypto.createHmac('sha256', OTP_HMAC_SECRET).update(otp + ':' + phone).digest('hex');
-
-  // Store only the hash; plaintext OTP is never persisted
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5-minute expiry
-  await db.collection('otp_verifications').doc(phone).set({
-    otpHash,
-    expiresAt,
-    attempts: 0,
-    used: false,
+  const workerRef = db.collection('gig_workers').doc();
+  await workerRef.set({
+    name,
+    phone,
+    serviceType,
+    skills,
+    adminId: context.auth.uid,
+    approvalStatus: 'pending',
+    isAvailable: false,
+    isFraud: false,
+    completedJobs: 0,
+    isTopListed: false,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  // Send OTP; mask phone number in server logs
-  const maskedPhone = phone.slice(0, 2) + '******' + phone.slice(-2);
-  await sendSms(phone, `Your Gigto verification code is: ${otp}. Valid for 5 minutes. Do not share this code with anyone.`);
-  console.log(`[OTP] Verification code sent to ${maskedPhone}`);
-
-  return { success: true };
-});
-
-/**
- * Callable: verifyOtp
- * Verifies a user-supplied OTP against the stored hash.
- * On success, issues a Firebase custom auth token so the client can sign in
- * without ever needing the user's password to be stored in Firestore.
- *
- * Security controls:
- * - Rate-limited to 3 verification attempts per phone per 10 minutes.
- * - OTP is invalidated after first successful use (prevents replay attacks).
- * - OTP document is deleted after 3 failed attempts or on expiry.
- * - Failed attempts are logged to the activity_logs collection.
- */
-exports.verifyOtp = functions.https.onCall(async (data, context) => {
-  const phone = String(data.phone || '').trim();
-  const otp = String(data.otp || '').trim();
-
-  if (!phone || !/^\d{10}$/.test(phone)) {
-    throw new functions.https.HttpsError('invalid-argument', 'Valid 10-digit phone number required.');
-  }
-  if (!otp || !/^\d{6}$/.test(otp)) {
-    throw new functions.https.HttpsError('invalid-argument', 'Valid 6-digit OTP required.');
-  }
-
-  // Rate limit: max 3 verification attempts per phone per 10 minutes
-  const allowed = await checkRateLimit('otp_verify', phone, 3, 600);
-  if (!allowed) {
-    await logActivity('system', 'otp_rate_limited', 'system', { phone: phone.slice(0, 2) + '******' + phone.slice(-2) });
-    throw new functions.https.HttpsError('resource-exhausted', 'Too many failed attempts. Please request a new OTP.');
-  }
-
-  const otpRef = db.collection('otp_verifications').doc(phone);
-  const otpDoc = await otpRef.get();
-
-  if (!otpDoc.exists) {
-    throw new functions.https.HttpsError('not-found', 'No active OTP found. Please request a new one.');
-  }
-
-  const otpData = otpDoc.data();
-
-  // Reject already-used OTPs (replay attack prevention)
-  if (otpData.used) {
-    throw new functions.https.HttpsError('failed-precondition', 'OTP already used. Please request a new one.');
-  }
-
-  // Check expiry
-  const expiresAt = otpData.expiresAt?.toDate ? otpData.expiresAt.toDate() : new Date(otpData.expiresAt);
-  if (Date.now() > expiresAt.getTime()) {
-    await otpRef.delete();
-    throw new functions.https.HttpsError('deadline-exceeded', 'OTP has expired. Please request a new one.');
-  }
-
-  // Enforce max 3 failed attempts before invalidating the OTP
-  if (otpData.attempts >= 3) {
-    await otpRef.delete();
-    await logActivity('system', 'otp_max_attempts_reached', 'system', { phone: phone.slice(0, 2) + '******' + phone.slice(-2) });
-    throw new functions.https.HttpsError('resource-exhausted', 'Too many failed attempts. Please request a new OTP.');
-  }
-
-  // Verify OTP using HMAC-SHA256 with the same server-side secret
-  const expectedHash = crypto.createHmac('sha256', OTP_HMAC_SECRET).update(otp + ':' + phone).digest('hex');
-  if (expectedHash !== otpData.otpHash) {
-    await otpRef.update({ attempts: admin.firestore.FieldValue.increment(1) });
-    await logActivity('system', 'otp_failed_attempt', 'system', { phone: phone.slice(0, 2) + '******' + phone.slice(-2) });
-    throw new functions.https.HttpsError('unauthenticated', 'Invalid OTP. Please try again.');
-  }
-
-  // Mark OTP as used immediately to prevent replay attacks
-  await otpRef.update({ used: true });
-
-  // Retrieve the Firebase UID linked to this phone number
-  const userSnap = await db.collection('users_by_phone').doc(phone).get();
-  if (!userSnap.exists) {
-    throw new functions.https.HttpsError('not-found', 'User account not found.');
-  }
-  const { uid } = userSnap.data();
-
-  // Issue a short-lived Firebase custom auth token so the client can sign in
-  // without having the user's password stored anywhere in Firestore
-  const customToken = await admin.auth().createCustomToken(uid);
-
-  await logActivity('system', 'otp_login_success', 'system', {
-    phone: phone.slice(0, 2) + '******' + phone.slice(-2),
+  await logActivity('system', 'worker_created', 'admin', {
+    workerId: workerRef.id,
+    adminId: context.auth.uid,
+    name,
   });
 
-  return { success: true, token: customToken };
+  return { success: true, workerId: workerRef.id };
 });

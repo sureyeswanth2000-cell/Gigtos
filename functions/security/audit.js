@@ -1,129 +1,89 @@
 /**
- * Security audit logging for the Gigtos platform.
- * Records security-relevant events in a dedicated security_logs collection.
+ * GIGTO SECURITY — AUDIT LOGGER
+ *
+ * Writes security-relevant events to the `security_logs` Firestore collection.
+ * All writes use the Admin SDK so client rules cannot suppress them.
+ *
+ * Log schema:
+ *   event        {string}  — event type identifier (see EVENT_TYPES)
+ *   actorId      {string}  — UID of the user performing the action (if known)
+ *   actorRole    {string}  — 'user' | 'admin' | 'superadmin' | 'system'
+ *   targetId     {string}  — ID of the affected resource (bookingId, phone, etc.)
+ *   ip           {string}  — caller IP address (from context.rawRequest if available)
+ *   userAgent    {string}  — caller user-agent
+ *   outcome      {string}  — 'success' | 'failure' | 'blocked'
+ *   details      {object}  — arbitrary extra details
+ *   timestamp    {FieldValue.serverTimestamp()}
  */
+
+'use strict';
 
 const admin = require('firebase-admin');
 
-// Alert threshold: number of same-type events from same user within the window to trigger an alert
-const ALERT_THRESHOLD = 3;
-const SECURITY_EVENTS = {
-  FAILED_LOGIN: 'failed_login',
-  RATE_LIMIT_EXCEEDED: 'rate_limit_exceeded',
-  UNAUTHORIZED_ACCESS: 'unauthorized_access',
-  SUSPICIOUS_ACTIVITY: 'suspicious_activity',
-  OTP_FAILED: 'otp_failed',
-  OTP_EXPIRED: 'otp_expired',
-  SECRET_ACCESS: 'secret_access',
-  DATA_ENCRYPTED: 'data_encrypted',
-  FUNCTION_INVOKED: 'function_invoked',
+/** Canonical event type identifiers */
+const EVENT_TYPES = {
+  AUTH_SUCCESS:          'auth_success',
+  AUTH_FAILURE:          'auth_failure',
+  AUTHZ_FAILURE:         'authorization_failure',
+  RATE_LIMIT_VIOLATION:  'rate_limit_violation',
+  OTP_FAILURE:           'otp_failure',
+  OTP_LOCKOUT:           'otp_lockout',
+  SUSPICIOUS_ACTIVITY:   'suspicious_activity',
+  DATA_ACCESS:           'data_access',
+  ADMIN_ACTION:          'admin_action',
+  SECRET_ACCESS:         'secret_access',
+  ENCRYPTION_ERROR:      'encryption_error',
 };
 
 /**
- * Writes a security event to the security_logs Firestore collection.
+ * Writes a structured security log entry to `security_logs`.
+ * Failures are swallowed to prevent logging from breaking the main flow.
  *
- * @param {string} eventType - One of SECURITY_EVENTS values
- * @param {object} details - Additional event details
- * @param {object} [context] - Firebase Functions call context (optional)
+ * @param {object} opts
+ * @param {string}  opts.event       - Event type (use EVENT_TYPES constants).
+ * @param {string}  [opts.actorId]   - UID performing the action.
+ * @param {string}  [opts.actorRole] - Role of the actor.
+ * @param {string}  [opts.targetId]  - Affected resource ID.
+ * @param {string}  [opts.ip]        - Caller IP address.
+ * @param {string}  [opts.userAgent] - Caller user-agent string.
+ * @param {string}  [opts.outcome]   - 'success' | 'failure' | 'blocked'.
+ * @param {object}  [opts.details]   - Additional context.
  */
-async function logSecurityEvent(eventType, details = {}, context = null) {
-  const db = admin.firestore();
-
-  const logEntry = {
-    eventType,
+async function logSecurityEvent({ event, actorId, actorRole, targetId, ip, userAgent, outcome, details }) {
+  const entry = {
+    event,
+    actorId:   actorId   || null,
+    actorRole: actorRole || 'unknown',
+    targetId:  targetId  || null,
+    ip:        ip        || null,
+    userAgent: userAgent || null,
+    outcome:   outcome   || 'unknown',
+    details:   details   || {},
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
-    uid: context?.auth?.uid || details.uid || null,
-    ip: context?.rawRequest?.ip || details.ip || null,
-    userAgent: context?.rawRequest?.headers?.['user-agent'] || details.userAgent || null,
-    ...details,
   };
 
   try {
-    await db.collection('security_logs').add(logEntry);
+    const db = admin.firestore();
+    await db.collection('security_logs').add(entry);
   } catch (err) {
-    // Never let logging errors break the main flow
-    console.error('[AuditLog] Failed to write security log:', err.message);
-  }
-
-  // Auto-alert for high-severity events
-  await _checkAlertThresholds(eventType, logEntry);
-}
-
-/**
- * Checks if alert thresholds have been crossed and logs a system alert.
- * (In production, this can trigger a PubSub message, email, or Cloud Monitoring alert.)
- */
-async function _checkAlertThresholds(eventType, logEntry) {
-  const db = admin.firestore();
-  const HIGH_SEVERITY_EVENTS = [
-    SECURITY_EVENTS.UNAUTHORIZED_ACCESS,
-    SECURITY_EVENTS.SUSPICIOUS_ACTIVITY,
-    SECURITY_EVENTS.RATE_LIMIT_EXCEEDED,
-  ];
-
-  if (!HIGH_SEVERITY_EVENTS.includes(eventType)) return;
-
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-  try {
-    const recentSnap = await db.collection('security_logs')
-      .where('eventType', '==', eventType)
-      .where('uid', '==', logEntry.uid)
-      .where('timestamp', '>=', fiveMinutesAgo)
-      .get();
-
-    // Alert if there are ALERT_THRESHOLD or more of the same event from the same user in 5 minutes
-    if (recentSnap.size >= ALERT_THRESHOLD) {
-      console.warn(
-        `[SECURITY ALERT] ${recentSnap.size} "${eventType}" events for uid=${logEntry.uid} in 5 min`
-      );
-    }
-  } catch (err) {
-    console.error('[AuditLog] Alert threshold check failed:', err.message);
+    // Fallback: emit to Cloud Logging so the event is never silently lost
+    console.error('[AuditLog] Firestore write failed — falling back to Cloud Logging:', JSON.stringify({ ...entry, timestamp: new Date().toISOString() }));
   }
 }
 
 /**
- * Logs a failed OTP attempt for fraud detection.
- * @param {string} phone - Phone number that attempted OTP
- * @param {string} [uid] - User ID if known
- * @param {object} [context] - Firebase Functions call context
+ * Extracts the caller IP and user-agent from a Cloud Function context or
+ * rawRequest object.
+ *
+ * @param {object} context - Firebase Functions callable context.
+ * @returns {{ ip: string|null, userAgent: string|null }}
  */
-async function logOtpFailure(phone, uid, context) {
-  return logSecurityEvent(SECURITY_EVENTS.OTP_FAILED, { phone, uid }, context);
+function extractCallerInfo(context) {
+  const req = context?.rawRequest;
+  if (!req) return { ip: null, userAgent: null };
+  const ip = (req.headers?.['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || null;
+  const userAgent = req.headers?.['user-agent'] || null;
+  return { ip, userAgent };
 }
 
-/**
- * Logs a rate limit violation.
- * @param {string} functionName - The function that was rate-limited
- * @param {string} key - The limiting key (uid or IP)
- * @param {object} [context] - Firebase Functions call context
- */
-async function logRateLimitViolation(functionName, key, context) {
-  return logSecurityEvent(
-    SECURITY_EVENTS.RATE_LIMIT_EXCEEDED,
-    { functionName, key },
-    context
-  );
-}
-
-/**
- * Logs an unauthorized access attempt.
- * @param {string} resource - The resource that was accessed
- * @param {string} reason - Why the access was denied
- * @param {object} [context] - Firebase Functions call context
- */
-async function logUnauthorizedAccess(resource, reason, context) {
-  return logSecurityEvent(
-    SECURITY_EVENTS.UNAUTHORIZED_ACCESS,
-    { resource, reason },
-    context
-  );
-}
-
-module.exports = {
-  SECURITY_EVENTS,
-  logSecurityEvent,
-  logOtpFailure,
-  logRateLimitViolation,
-  logUnauthorizedAccess,
-};
+module.exports = { logSecurityEvent, extractCallerInfo, EVENT_TYPES };

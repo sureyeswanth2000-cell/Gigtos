@@ -13,9 +13,11 @@ service cloud.firestore {
         get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "superadmin";
     }
 
-    // Check if the current user is an admin of any level
+    // Check if the current user is an admin of any level AND is active (not suspended/deactivated)
     function isAdmin() {
-      return isLoggedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isLoggedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isActive != false;
     }
 
     // New: Check if the current admin is the parent of another admin (to support hierarchy)
@@ -26,6 +28,11 @@ service cloud.firestore {
         adminData.role == "superadmin" || // Superadmin is parent to everyone
         targetData.parentAdminId == request.auth.uid // Direct parent-child link
       );
+    }
+
+    // Check if a gig worker has been approved by an admin
+    function isApprovedWorker(workerData) {
+      return workerData.approvalStatus == "approved" && workerData.isFraud != true;
     }
 
     /* ============================
@@ -125,6 +132,32 @@ service cloud.firestore {
     }
 
     /* ============================
+       SECURITY LOGS
+    ============================ */
+    match /security_logs/{logId} {
+      // Security logs are write-only from backend (Admin SDK bypasses rules).
+      // Only superadmins can read them.
+      allow read: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    /* ============================
+       RATE LIMITS
+    ============================ */
+    match /rate_limits/{docId} {
+      // Rate limit records are managed exclusively by Cloud Functions (Admin SDK).
+      allow read, write: if false;
+    }
+
+    /* ============================
+       OTP RECORDS
+    ============================ */
+    match /otp_records/{phone} {
+      // OTP records are managed exclusively by Cloud Functions (Admin SDK).
+      allow read, write: if false;
+    }
+
+    /* ============================
        ADMINS COLLECTION
     ============================ */
     match /admins/{adminId} {
@@ -143,18 +176,28 @@ service cloud.firestore {
     ============================ */
     match /gig_workers/{workerId} {
       // Workers are visible to their managing admin and the entire hierarchy above them
+      // Only approved, non-fraudulent workers are visible for assignment lookups
       allow read: if isLoggedIn() && (
         resource.data.adminId == request.auth.uid ||
         (resource.data.adminId != null && isParentOf(resource.data.adminId)) ||
-        isAdmin() // Default to allow any admin to see for assignment lookups
+        (isAdmin() && isApprovedWorker(resource.data))
       );
       // Local admins create workers; parents manage them
-      allow create: if isAdmin() && request.resource.data.adminId == request.auth.uid;
+      // New workers start with approvalStatus = "pending"
+      allow create: if isAdmin()
+        && request.resource.data.adminId == request.auth.uid
+        && request.resource.data.approvalStatus == "pending";
       // Allow admin owner or parent to update; superadmin can set fraud flags
+      // Restrict who can change approvalStatus (only superadmin or parent)
       allow update: if isLoggedIn() && (
         resource.data.adminId == request.auth.uid ||
         isParentOf(resource.data.adminId) ||
         isSuperAdmin()
+      ) && (
+        // Only superadmin or parent can approve/reject workers
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['approvalStatus', 'isFraud'])
+        || isParentOf(resource.data.adminId)
+        || isSuperAdmin()
       );
       allow delete: if isSuperAdmin();
     }
@@ -175,3 +218,4 @@ service cloud.firestore {
 
   }
 }
+

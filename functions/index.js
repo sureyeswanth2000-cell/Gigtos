@@ -6,11 +6,17 @@
  * 2. Governance Scoring & Regions lead performance tracking
  * 3. Lifecycle automation (Escrow hold, Cashback, Worker badges)
  * 4. Automated Task Scheduling (Escalations & Expiry)
+ * 5. Security middleware (validation, rate limiting, audit logging)
  */
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+
+// Security utilities
+const { validate, submitQuoteSchema, acceptQuoteSchema, updateBookingSchema, createWorkerSchema } = require('./security/validation');
+const { checkRateLimit } = require('./security/rateLimiter');
+const { logSecurityEvent, extractCallerInfo, EVENT_TYPES } = require('./security/audit');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -510,14 +516,18 @@ const verifyAuth = (context) => {
  */
 exports.submitQuote = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
-  const { bookingId, price } = data;
-  if (!bookingId || !price || isNaN(price) || price <= 0) {
-    throw new functions.https.HttpsError('invalid-argument', 'Invalid quote parameters.');
-  }
+  // Validate input with Joi schema
+  const { bookingId, price } = validate(submitQuoteSchema, data);
+  // Enforce rate limit: 10 per minute per user
+  await checkRateLimit('submitQuote', context.auth.uid);
+
+  // Audit log attempt
+  const { ip, userAgent } = extractCallerInfo(context);
 
   // Verify the caller is an admin
   const adminDoc = await db.collection('admins').doc(context.auth.uid).get();
   if (!adminDoc.exists) {
+    await logSecurityEvent({ event: EVENT_TYPES.AUTHZ_FAILURE, actorId: context.auth.uid, targetId: null, ip, userAgent, outcome: 'blocked', details: { reason: 'Non-admin attempted submitQuote' } });
     throw new functions.https.HttpsError('permission-denied', 'Only admins can submit quotes.');
   }
   const adminName = adminDoc.data().name || 'Regional Pro';
@@ -573,9 +583,7 @@ exports.submitQuote = functions.https.onCall(async (data, context) => {
  */
 exports.acceptQuote = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
-  const { bookingId, adminId } = data;
-
-  if (!bookingId || !adminId) throw new functions.https.HttpsError('invalid-argument', 'Missing parameters.');
+  const { bookingId, adminId } = validate(acceptQuoteSchema, data);
 
   const bookingRef = db.collection('bookings').doc(bookingId);
 
@@ -626,8 +634,9 @@ exports.acceptQuote = functions.https.onCall(async (data, context) => {
  */
 exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
   verifyAuth(context);
-  const { bookingId, action, extraArgs } = data;
-  if (!bookingId || !action) throw new functions.https.HttpsError('invalid-argument', 'Missing parameters.');
+  const { bookingId, action, extraArgs } = validate(updateBookingSchema, data);
+  // Enforce rate limit: 20 per hour per user
+  await checkRateLimit('updateBookingStatus', context.auth.uid);
 
   const bookingRef = db.collection('bookings').doc(bookingId);
 
@@ -853,4 +862,44 @@ exports.secureLogActivity = functions.https.onCall(async (data, context) => {
   });
 
   return { success: true };
+});
+
+/**
+ * Callable: createWorker
+ * Securely creates a gig worker record with input validation.
+ * Only authenticated admins may call this endpoint.
+ */
+exports.createWorker = functions.https.onCall(async (data, context) => {
+  verifyAuth(context);
+  const { name, phone, serviceType, skills } = validate(createWorkerSchema, data);
+
+  // Verify the caller is an admin
+  const adminDoc = await db.collection('admins').doc(context.auth.uid).get();
+  if (!adminDoc.exists) {
+    throw new functions.https.HttpsError('permission-denied', 'Only admins can create workers.');
+  }
+
+  const workerRef = db.collection('gig_workers').doc();
+  await workerRef.set({
+    name,
+    phone,
+    serviceType,
+    skills,
+    adminId: context.auth.uid,
+    approvalStatus: 'pending',
+    isAvailable: false,
+    isFraud: false,
+    completedJobs: 0,
+    isTopListed: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  await logActivity('system', 'worker_created', 'admin', {
+    workerId: workerRef.id,
+    adminId: context.auth.uid,
+    name,
+  });
+
+  return { success: true, workerId: workerRef.id };
 });

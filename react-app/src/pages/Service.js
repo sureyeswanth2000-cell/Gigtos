@@ -80,7 +80,7 @@ export default function Service() {
     };
 
     loadUserData(); // Execute profile fetch
-  }, [auth.currentUser, location.state]); // Re-run if auth or rebook state changes
+  }, [location.state]); // auth.currentUser omitted: not reactive; user is guaranteed authenticated via ProtectedRoute
 
   // Main booking submission handler
   const handleBooking = async () => {

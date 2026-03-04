@@ -11,11 +11,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  collection, onSnapshot, updateDoc, doc,
-  query, orderBy, addDoc, serverTimestamp, arrayUnion
+  collection, onSnapshot, doc, getDoc,
+  query, orderBy, serverTimestamp
 } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, db } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functionsInstance } from '../firebase';
 
 // Status colors to give admins quick visual cues about the load
 const STATUS_COLORS = {
@@ -100,13 +101,17 @@ export default function AdminBookings() {
   };
 
   /**
-   * Records a manual entry in the audit trail.
+   * Universal Backend Caller
    */
-  const logActivity = (bookingId, action, extra = {}) =>
-    addDoc(collection(db, 'activity_logs'), {
-      bookingId, actorId: uid, actorRole: 'admin',
-      action, ...extra, timestamp: serverTimestamp(),
-    }).catch(() => { });
+  const callBackend = async (method, data) => {
+    try {
+      const func = httpsCallable(functionsInstance, method);
+      await func(data);
+    } catch (e) {
+      console.error(e);
+      alert('Action failed: ' + e.message);
+    }
+  };
 
   /**
    * Action: Assing a specific worker to a pending request.
@@ -115,14 +120,11 @@ export default function AdminBookings() {
   const assignWorker = async (b, workerId) => {
     if (!workerId) return;
     const worker = workers.find(w => w.id === workerId);
-    await updateDoc(doc(db, 'bookings', b.id), {
-      assignedWorkerId: workerId,
-      assignedWorker: worker?.name || '',
-      adminId: uid,
-      status: 'assigned',
-      updatedAt: new Date(),
+    await callBackend('updateBookingStatus', {
+      bookingId: b.id,
+      action: 'admin_assign_worker',
+      extraArgs: { workerId, workerName: worker?.name, workerPhone: worker?.phone }
     });
-    await logActivity(b.id, 'admin_assigned_worker', { workerName: worker?.name });
   };
 
   /**
@@ -130,12 +132,7 @@ export default function AdminBookings() {
    * Transitions: assigned -> in_progress.
    */
   const startWork = async (b) => {
-    await updateDoc(doc(db, 'bookings', b.id), {
-      status: 'in_progress',
-      workStartDate: new Date().toISOString().split('T')[0],
-      updatedAt: new Date(),
-    });
-    await logActivity(b.id, 'admin_started_work');
+    await callBackend('updateBookingStatus', { bookingId: b.id, action: 'admin_start_work' });
   };
 
   /**
@@ -143,12 +140,7 @@ export default function AdminBookings() {
    * Transitions: in_progress -> awaiting_confirmation.
    */
   const markFinished = async (b) => {
-    await updateDoc(doc(db, 'bookings', b.id), {
-      status: 'awaiting_confirmation',
-      assignedWorkerId: null, // Worker is now free for other jobs
-      updatedAt: new Date(),
-    });
-    await logActivity(b.id, 'admin_marked_finished');
+    await callBackend('updateBookingStatus', { bookingId: b.id, action: 'admin_mark_finished' });
   };
 
   /**
@@ -157,19 +149,9 @@ export default function AdminBookings() {
    */
   const cancelBooking = async (b) => {
     if (['assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status)) {
-      await updateDoc(doc(db, 'bookings', b.id), {
-        status: 'pending',
-        assignedWorkerId: null,
-        adminId: null,
-        updatedAt: new Date(),
-      });
-      await logActivity(b.id, 'admin_cancelled_reopened');
+      await callBackend('updateBookingStatus', { bookingId: b.id, action: 'admin_reopen_booking' });
     } else {
-      await updateDoc(doc(db, 'bookings', b.id), {
-        status: 'cancelled',
-        updatedAt: new Date(),
-      });
-      await logActivity(b.id, 'admin_cancelled');
+      await callBackend('updateBookingStatus', { bookingId: b.id, action: 'admin_cancelled' });
     }
   };
 
@@ -183,14 +165,7 @@ export default function AdminBookings() {
       alert('Select a decision type first.');
       return;
     }
-    await updateDoc(doc(db, 'bookings', b.id), {
-      'dispute.status': 'resolved',
-      'dispute.decision': decision,
-      'dispute.resolutionTime': new Date(),
-      'dispute.resolvedBy': uid,
-      updatedAt: new Date(),
-    });
-    await logActivity(b.id, 'admin_resolved_dispute', { decision });
+    await callBackend('updateBookingStatus', { bookingId: b.id, action: 'admin_resolve_dispute', extraArgs: { decision } });
     setDisputeDecisions(prev => { const n = { ...prev }; delete n[b.id]; return n; });
     alert('Dispute resolved: ' + decision);
   };
@@ -201,12 +176,7 @@ export default function AdminBookings() {
    */
   const submitCallLog = async (bookingId) => {
     if (!callNotes.trim()) return;
-    await updateDoc(doc(db, 'bookings', bookingId), {
-      'dispute.regionCallTime': new Date(),
-      'dispute.callNotes': callNotes.trim(),
-      updatedAt: new Date(),
-    });
-    await logActivity(bookingId, 'region_call_logged', { callNotes: callNotes.trim() });
+    await callBackend('updateBookingStatus', { bookingId, action: 'admin_log_call', extraArgs: { callNotes: callNotes.trim() } });
     setCallLogId(null);
     setCallNotes('');
   };
@@ -215,11 +185,7 @@ export default function AdminBookings() {
    * Action: Record a physical visit to the dispute site.
    */
   const submitVisitLog = async (bookingId) => {
-    await updateDoc(doc(db, 'bookings', bookingId), {
-      'dispute.visitTime': new Date(),
-      updatedAt: new Date(),
-    });
-    await logActivity(bookingId, 'region_visit_logged');
+    await callBackend('updateBookingStatus', { bookingId, action: 'admin_log_visit' });
   };
 
   /**
@@ -227,16 +193,7 @@ export default function AdminBookings() {
    */
   const submitNote = async (bookingId) => {
     if (!noteText.trim()) return;
-    const entry = {
-      date: new Date().toLocaleDateString('en-IN'),
-      note: noteText.trim(),
-      addedBy: uid,
-    };
-    await updateDoc(doc(db, 'bookings', bookingId), {
-      dailyNotes: arrayUnion(entry),
-      updatedAt: new Date(),
-    });
-    await logActivity(bookingId, 'admin_added_note', { note: noteText });
+    await callBackend('updateBookingStatus', { bookingId, action: 'admin_add_note', extraArgs: { note: noteText.trim() } });
     setNoteId(null);
     setNoteText('');
   };
@@ -252,11 +209,8 @@ export default function AdminBookings() {
       const path = `bookings/${bookingId}/${label}_${Date.now()}`;
       const snap = await uploadBytes(storageRef(storage, path), file);
       const url = await getDownloadURL(snap.ref);
-      await updateDoc(doc(db, 'bookings', bookingId), {
-        photos: arrayUnion({ label, url, uploadedAt: new Date().toISOString() }),
-        updatedAt: new Date(),
-      });
-      await logActivity(bookingId, 'admin_uploaded_photo', { label });
+
+      await callBackend('updateBookingStatus', { bookingId, action: 'admin_upload_photo', extraArgs: { label, url } });
     } catch (e) {
       alert('Upload failed.');
     } finally {
@@ -293,21 +247,7 @@ export default function AdminBookings() {
       return;
     }
 
-    // Fetch current admin name for the quote
-    const adminDoc = await getDoc(doc(db, 'admins', uid));
-    const adminName = adminDoc.data()?.name || auth.currentUser?.email || 'Regional Pro';
-
-    await updateDoc(doc(db, 'bookings', bookingId), {
-      quotes: arrayUnion({
-        adminId: uid,
-        adminName: adminName,
-        price: Number(price),
-        createdAt: new Date().toISOString()
-      }),
-      updatedAt: new Date(),
-    });
-
-    await logActivity(bookingId, 'admin_submitted_quote', { price, adminName });
+    await callBackend('submitQuote', { bookingId, price: Number(price) });
     setQuotes(prev => { const n = { ...prev }; delete n[bookingId]; return n; });
     alert('Quote sent! User will be notified.');
   };

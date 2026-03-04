@@ -10,12 +10,13 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../firebase';
+import { auth, db, functionsInstance } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection, query, where, onSnapshot,
-  doc, updateDoc, addDoc, serverTimestamp, getDoc
+  doc, updateDoc, getDoc
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
 // UI CONFIG: Color mapping for visual differentiation of booking states
 const statusColors = {
@@ -107,15 +108,16 @@ export default function MyBookings() {
   }, [user]);
 
   /* ── Audit Helpers ── */
-  const logActivity = (bookingId, action, extra = {}) =>
-    addDoc(collection(db, 'activity_logs'), {
-      bookingId,
-      actorId: user?.uid,
-      actorRole: 'user',
-      action, // e.g., 'user_cancelled', 'user_rated'
-      ...extra,
-      timestamp: serverTimestamp(),
-    }).catch(() => { });
+  const callBackend = async (method, data) => {
+    try {
+      const func = httpsCallable(functionsInstance, method);
+      await func(data);
+    } catch (e) {
+      console.error(e);
+      alert('Action failed: ' + e.message);
+      throw e;
+    }
+  };
 
   // Formats Firestore Timestamps for the UI
   const fmt = ts => {
@@ -130,14 +132,9 @@ export default function MyBookings() {
   async function cancelBooking(id) {
     if (!window.confirm('Cancel this booking?')) return;
     try {
-      await updateDoc(doc(db, 'bookings', id), {
-        status: 'cancelled',
-        userId: user.uid,      // Re-send UID for security rules validation
-        updatedAt: new Date(),
-      });
-      await logActivity(id, 'user_cancelled');
+      await callBackend('updateBookingStatus', { bookingId: id, action: 'user_cancelled' });
     } catch (e) {
-      alert('Failed to cancel: ' + e.message);
+      // Error handled by callBackend
     }
   }
 
@@ -148,15 +145,10 @@ export default function MyBookings() {
   async function confirmCompletion(id) {
     if (!window.confirm('Confirm job is done?')) return;
     try {
-      await updateDoc(doc(db, 'bookings', id), {
-        status: 'completed',
-        userId: user.uid,
-        updatedAt: new Date(),
-      });
-      await logActivity(id, 'user_confirmed_completion');
+      await callBackend('updateBookingStatus', { bookingId: id, action: 'user_confirm_completion' });
       alert('✓ Service confirmed complete!');
     } catch (e) {
-      alert('Failed: ' + e.message);
+      // Error handled by callBackend
     }
   }
 
@@ -166,13 +158,13 @@ export default function MyBookings() {
   async function saveEdit(id) {
     setUpdating(true);
     try {
+      // Keep this as updateDoc for now as it's just editing text fields
       await updateDoc(doc(db, 'bookings', id), {
         address: editData.address,
         phone: editData.phone,
         userId: user.uid,
         updatedAt: new Date(),
       });
-      await logActivity(id, 'user_edited_booking');
       setEditingId(null);
       setEditData({});
     } catch (e) {
@@ -189,12 +181,7 @@ export default function MyBookings() {
   async function submitRating(id) {
     if (!selectedStar) { alert('Please select a star rating'); return; }
     try {
-      await updateDoc(doc(db, 'bookings', id), {
-        rating: selectedStar,
-        review: reviewText,
-        userId: user.uid,
-      });
-      await logActivity(id, 'user_rated', { rating: selectedStar });
+      await callBackend('updateBookingStatus', { bookingId: id, action: 'user_rate', extraArgs: { rating: selectedStar } });
       setRatingId(null);
       setReviewText('');
       setSelectedStar(0);
@@ -204,7 +191,7 @@ export default function MyBookings() {
         alert('✓ Thank you for your rating!');
       }
     } catch (e) {
-      alert('Failed to save rating: ' + e.message);
+      // Error handled by callBackend
     }
   }
 
@@ -214,22 +201,12 @@ export default function MyBookings() {
   async function submitDispute(id) {
     if (!disputeReason.trim()) { alert('Please describe the issue'); return; }
     try {
-      await updateDoc(doc(db, 'bookings', id), {
-        dispute: {
-          reason: disputeReason.trim(),
-          raisedAt: new Date(),
-          status: 'open',
-          raisedBy: user.uid,
-        },
-        userId: user.uid,
-        updatedAt: new Date(),
-      });
-      await logActivity(id, 'user_raised_dispute', { reason: disputeReason });
+      await callBackend('updateBookingStatus', { bookingId: id, action: 'user_raise_dispute', extraArgs: { reason: disputeReason.trim() } });
       setDisputeId(null);
       setDisputeReason('');
       alert('✓ Dispute submitted. Admin will review shortly.');
     } catch (e) {
-      alert('Failed: ' + e.message);
+      // Error handled by callBackend
     }
   }
 
@@ -253,21 +230,10 @@ export default function MyBookings() {
   async function acceptQuote(id, quote) {
     if (!window.confirm(`Accept quote for ₹${quote.price} from ${quote.adminName}?`)) return;
     try {
-      await updateDoc(doc(db, 'bookings', id), {
-        status: 'accepted',
-        adminId: quote.adminId, // Lock booking to this admin
-        acceptedQuote: quote,
-        userId: user.uid,
-        updatedAt: new Date(),
-      });
-      await logActivity(id, 'user_accepted_quote', {
-        price: quote.price,
-        adminId: quote.adminId,
-        adminName: quote.adminName
-      });
+      await callBackend('acceptQuote', { bookingId: id, adminId: quote.adminId });
       alert('✓ Quote accepted! Your regional pro will assign a worker shortly.');
     } catch (e) {
-      alert('Failed to accept quote: ' + e.message);
+      // Error handled by callBackend
     }
   }
 

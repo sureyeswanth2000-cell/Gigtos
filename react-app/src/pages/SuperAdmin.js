@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, updateDoc, doc, query, where, orderBy } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functionsInstance } from '../firebase';
 
 export default function SuperAdmin() {
     const [admins, setAdmins] = useState([]);
@@ -68,14 +69,22 @@ export default function SuperAdmin() {
 
     const resolveEscalatedDispute = async (booking, decision) => {
         if (!decision) { alert('Please select a decision'); return; }
-        await updateDoc(doc(db, 'bookings', booking.id), {
-            'dispute.status': 'resolved',
-            'dispute.decision': decision,
-            'dispute.resolvedBy': uid,
-            'dispute.superadminOverride': true,
-            updatedAt: new Date(),
-        });
-        alert('Dispute resolved by superadmin.');
+
+        try {
+            const updateBookingStatus = httpsCallable(functionsInstance, 'updateBookingStatus');
+            await updateBookingStatus({
+                bookingId: booking.id,
+                action: 'admin_resolve_dispute',
+                extraArgs: {
+                    decision: decision,
+                    superadminOverride: true
+                }
+            });
+            alert('Dispute resolved by superadmin.');
+        } catch (e) {
+            console.error(e);
+            alert('Error resolving dispute: ' + e.message);
+        }
     };
 
     /* ── Derived data ── */

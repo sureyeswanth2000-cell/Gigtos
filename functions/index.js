@@ -492,3 +492,365 @@ exports.checkCashbackExpiry = functions.pubsub
     }
     return null;
   });
+
+/* ──────────────────────────────────────────────────────────────────────────
+   SECTION 5: SECURE CALLABLE FUNCTIONS (100% SECURITY)
+   Endpoints to handle all state transitions, removing logic from the frontend.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const verifyAuth = (context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+  }
+};
+
+/**
+ * Callable: submitQuote
+ * Allows an admin to securely submit a quote without arbitrary document write access.
+ */
+exports.submitQuote = functions.https.onCall(async (data, context) => {
+  verifyAuth(context);
+  const { bookingId, price } = data;
+  if (!bookingId || !price || isNaN(price) || price <= 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid quote parameters.');
+  }
+
+  // Verify the caller is an admin
+  const adminDoc = await db.collection('admins').doc(context.auth.uid).get();
+  if (!adminDoc.exists) {
+    throw new functions.https.HttpsError('permission-denied', 'Only admins can submit quotes.');
+  }
+  const adminName = adminDoc.data().name || 'Regional Pro';
+
+  const bookingRef = db.collection('bookings').doc(bookingId);
+
+  await db.runTransaction(async (transaction) => {
+    const bookingSnap = await transaction.get(bookingRef);
+    if (!bookingSnap.exists) throw new functions.https.HttpsError('not-found', 'Booking not found');
+
+    const booking = bookingSnap.data();
+    if (booking.status !== 'pending' && booking.status !== 'scheduled' && booking.status !== 'quoted') {
+      throw new functions.https.HttpsError('failed-precondition', 'Cannot quote on this booking status.');
+    }
+
+    // Check if this admin already quoted
+    const quotes = booking.quotes || [];
+    if (quotes.some(q => q.adminId === context.auth.uid)) {
+      throw new functions.https.HttpsError('already-exists', 'You have already submitted a quote for this booking.');
+    }
+
+    const newQuote = {
+      adminId: context.auth.uid,
+      adminName: adminName,
+      price: Number(price),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    transaction.update(bookingRef, {
+      status: 'quoted', // Update status to reflect it has quotes
+      quotes: admin.firestore.FieldValue.arrayUnion(newQuote),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Also log activity in the same transaction for integrity
+    const logRef = db.collection('activity_logs').doc();
+    transaction.set(logRef, {
+      bookingId,
+      actorId: context.auth.uid,
+      action: 'admin_submitted_quote',
+      price: Number(price),
+      adminName: adminName,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+  });
+
+  return { success: true };
+});
+
+/**
+ * Callable: acceptQuote
+ * Securely locks the booking to the accepted quote and the corresponding admin.
+ */
+exports.acceptQuote = functions.https.onCall(async (data, context) => {
+  verifyAuth(context);
+  const { bookingId, adminId } = data;
+
+  if (!bookingId || !adminId) throw new functions.https.HttpsError('invalid-argument', 'Missing parameters.');
+
+  const bookingRef = db.collection('bookings').doc(bookingId);
+
+  await db.runTransaction(async (transaction) => {
+    const bookingSnap = await transaction.get(bookingRef);
+    if (!bookingSnap.exists) throw new functions.https.HttpsError('not-found', 'Booking not found');
+
+    const booking = bookingSnap.data();
+    if (booking.userId !== context.auth.uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Only the owner can accept a quote.');
+    }
+    if (booking.status !== 'quoted' && booking.status !== 'pending' && booking.status !== 'scheduled') {
+      throw new functions.https.HttpsError('failed-precondition', 'Cannot accept quote right now.');
+    }
+
+    const quotes = booking.quotes || [];
+    const acceptedQuote = quotes.find(q => q.adminId === adminId);
+    if (!acceptedQuote) {
+      throw new functions.https.HttpsError('not-found', 'Requested quote does not exist.');
+    }
+
+    transaction.update(bookingRef, {
+      status: 'accepted',
+      adminId: adminId, // Lock the booking to this admin
+      acceptedQuote: acceptedQuote,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Securely log
+    const logRef = db.collection('activity_logs').doc();
+    transaction.set(logRef, {
+      bookingId,
+      actorId: context.auth.uid,
+      action: 'user_accepted_quote',
+      price: acceptedQuote.price,
+      adminId: acceptedQuote.adminId,
+      adminName: acceptedQuote.adminName,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+  });
+
+  return { success: true };
+});
+
+/**
+ * Callable: updateBookingStatus
+ * Generalized secure endpoint for state machine transitions.
+ */
+exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
+  verifyAuth(context);
+  const { bookingId, action, extraArgs } = data;
+  if (!bookingId || !action) throw new functions.https.HttpsError('invalid-argument', 'Missing parameters.');
+
+  const bookingRef = db.collection('bookings').doc(bookingId);
+
+  await db.runTransaction(async (transaction) => {
+    const bookingSnap = await transaction.get(bookingRef);
+    if (!bookingSnap.exists) throw new functions.https.HttpsError('not-found', 'Booking not found');
+    const booking = bookingSnap.data();
+
+    const isOwner = booking.userId === context.auth.uid;
+    const isAssignedAdmin = booking.adminId === context.auth.uid;
+    const adminDocSnap = await transaction.get(db.collection('admins').doc(context.auth.uid));
+    const isSuperAdmin = adminDocSnap.exists && adminDocSnap.data().role === 'superadmin';
+
+    let updates = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    let logAction = '';
+    let logExtra = {};
+
+    switch (action) {
+      case 'user_cancelled':
+        if (!isOwner) throw new functions.https.HttpsError('permission-denied', 'Only owner can cancel.');
+        if (!['pending', 'scheduled', 'quoted', 'accepted'].includes(booking.status)) {
+          throw new functions.https.HttpsError('failed-precondition', 'Booking has progressed too far to cancel.');
+        }
+        updates.status = 'cancelled';
+        logAction = 'user_cancelled';
+        break;
+
+      case 'admin_cancelled':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        updates.status = 'cancelled';
+        logAction = 'admin_cancelled';
+        // Free worker safely
+        if (booking.assignedWorkerId) {
+          const workerRef = db.collection('gig_workers').doc(booking.assignedWorkerId);
+          transaction.update(workerRef, { isAvailable: true });
+        }
+        break;
+
+      case 'admin_assign_worker':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        if (!['accepted', 'pending', 'scheduled'].includes(booking.status)) throw new functions.https.HttpsError('failed-precondition', 'Invalid state for assigning worker.');
+
+        const { workerId, workerName, workerPhone } = extraArgs || {};
+        if (!workerId) throw new functions.https.HttpsError('invalid-argument', 'Missing worker details.');
+
+        // Verify worker exists and is available
+        const workerSnap = await transaction.get(db.collection('gig_workers').doc(workerId));
+        if (!workerSnap.exists || !workerSnap.data().isAvailable) {
+          throw new functions.https.HttpsError('failed-precondition', 'Worker is not available.');
+        }
+
+        updates.status = 'assigned';
+        updates.assignedWorkerId = workerId;
+        updates.workerName = workerName;
+        updates.workerPhone = workerPhone;
+
+        // Lock worker
+        transaction.update(workerSnap.ref, { isAvailable: false });
+
+        logAction = 'admin_assigned_worker';
+        logExtra = { workerName };
+        break;
+
+      case 'admin_start_work':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        if (booking.status !== 'assigned') throw new functions.https.HttpsError('failed-precondition', 'Invalid state.');
+        updates.status = 'in_progress';
+        updates.startedAt = admin.firestore.FieldValue.serverTimestamp();
+        logAction = 'admin_started_work';
+        break;
+
+      case 'admin_mark_finished':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        if (booking.status !== 'in_progress') throw new functions.https.HttpsError('failed-precondition', 'Invalid state.');
+        updates.status = 'awaiting_confirmation';
+        updates.finishedAt = admin.firestore.FieldValue.serverTimestamp();
+        logAction = 'admin_marked_finished';
+        break;
+
+      case 'user_confirm_completion':
+        if (!isOwner) throw new functions.https.HttpsError('permission-denied', 'Only owner can confirm.');
+        if (booking.status !== 'awaiting_confirmation') throw new functions.https.HttpsError('failed-precondition', 'Invalid state.');
+        updates.status = 'completed';
+        logAction = 'user_confirmed_completion';
+
+        // Free worker
+        if (booking.assignedWorkerId) {
+          const workerRef = db.collection('gig_workers').doc(booking.assignedWorkerId);
+          transaction.update(workerRef, { isAvailable: true });
+        }
+        break;
+
+      case 'admin_reopen_booking':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        if (booking.status !== 'cancelled') throw new functions.https.HttpsError('failed-precondition', 'Only cancelled bookings can be reopened.');
+        updates.status = 'pending';
+        // Erase worker assignment
+        updates.assignedWorkerId = null;
+        updates.workerName = null;
+        updates.workerPhone = null;
+        logAction = 'admin_cancelled_reopened';
+        break;
+
+      case 'user_rate':
+        if (!isOwner) throw new functions.https.HttpsError('permission-denied', 'Only owner can rate.');
+        if (booking.status !== 'completed') throw new functions.https.HttpsError('failed-precondition', 'Can only rate completed bookings.');
+        if (booking.rating) throw new functions.https.HttpsError('already-exists', 'Already rated.');
+        const { rating } = extraArgs || {};
+        if (typeof rating !== 'number' || rating < 1 || rating > 5) throw new functions.https.HttpsError('invalid-argument', 'Invalid rating.');
+        updates.rating = rating;
+        logAction = 'user_rated';
+        logExtra = { rating };
+        break;
+
+      case 'admin_resolve_dispute':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        const { decision, superadminOverride } = extraArgs || {};
+        updates['dispute.status'] = 'resolved';
+        updates['dispute.decision'] = decision;
+        if (superadminOverride && isSuperAdmin) {
+          updates['dispute.superadminOverride'] = true;
+        }
+        updates['dispute.resolutionTime'] = admin.firestore.FieldValue.serverTimestamp();
+        updates['dispute.resolvedBy'] = context.auth.uid;
+        logAction = 'admin_resolved_dispute';
+        logExtra = { decision, superadminOverride: !!superadminOverride };
+        break;
+
+      case 'admin_log_call':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        const { callNotes } = extraArgs || {};
+        updates['dispute.regionCallTime'] = admin.firestore.FieldValue.serverTimestamp();
+        updates['dispute.callNotes'] = callNotes;
+        logAction = 'region_call_logged';
+        logExtra = { callNotes };
+        break;
+
+      case 'admin_log_visit':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        updates['dispute.visitTime'] = admin.firestore.FieldValue.serverTimestamp();
+        logAction = 'region_visit_logged';
+        break;
+
+      case 'admin_add_note':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        const { note } = extraArgs || {};
+        updates.dailyNotes = admin.firestore.FieldValue.arrayUnion({
+          date: new Date().toLocaleDateString('en-IN'),
+          note: note,
+          addedBy: context.auth.uid
+        });
+        logAction = 'admin_added_note';
+        logExtra = { note };
+        break;
+
+      case 'admin_upload_photo':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        const { label, url } = extraArgs || {};
+        updates.photos = admin.firestore.FieldValue.arrayUnion({
+          label, url, uploadedAt: new Date().toISOString()
+        });
+        logAction = 'admin_uploaded_photo';
+        logExtra = { label };
+        break;
+
+      case 'user_raise_dispute':
+        if (!isOwner) throw new functions.https.HttpsError('permission-denied', 'Only owner can raise dispute.');
+        const { reason } = extraArgs || {};
+        updates.dispute = {
+          status: 'open',
+          reason: reason,
+          raisedAt: admin.firestore.FieldValue.serverTimestamp(),
+          escalationStatus: false
+        };
+        logAction = 'user_raised_dispute';
+        logExtra = { reason };
+        break;
+
+      default:
+        throw new functions.https.HttpsError('invalid-argument', 'Unknown action.');
+    }
+
+    transaction.update(bookingRef, updates);
+
+    const logRef = db.collection('activity_logs').doc();
+    transaction.set(logRef, {
+      bookingId,
+      actorId: context.auth.uid,
+      action: logAction,
+      ...logExtra,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+  });
+
+  return { success: true };
+});
+
+/**
+ * Callable: logActivity
+ * For non-state-changing UI actions (uploading photos, logging calls/visits).
+ */
+exports.secureLogActivity = functions.https.onCall(async (data, context) => {
+  verifyAuth(context);
+  const { bookingId, action, extraArgs } = data;
+  if (!bookingId || !action) throw new functions.https.HttpsError('invalid-argument', 'Missing parameters.');
+
+  // Validate only specific actions are allowed this way
+  const allowedActions = [
+    'region_call_logged', 'region_visit_logged', 'admin_added_note', 'admin_uploaded_photo',
+    'user_raised_dispute', 'admin_resolved_dispute'
+  ];
+  if (!allowedActions.includes(action)) {
+    throw new functions.https.HttpsError('permission-denied', 'Invalid direct log action. Actions should be inferred from state changes.');
+  }
+
+  const logRef = db.collection('activity_logs').doc();
+  await logRef.set({
+    bookingId,
+    actorId: context.auth.uid,
+    action,
+    ...(extraArgs || {}),
+    timestamp: admin.firestore.FieldValue.serverTimestamp()
+  });
+
+  return { success: true };
+});

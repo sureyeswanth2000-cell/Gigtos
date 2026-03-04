@@ -68,32 +68,14 @@ service cloud.firestore {
         || isSuperAdmin()
       );
 
-      // UPDATE — lifecycle management for users and hierarchical admins
+      // UPDATE — Enforce Backend Only for state changes.
+      // Users can ONLY edit simple fields (address, phone) while pending/scheduled.
+      // ALL state transitions (quotes, assigns, completes, disputes) MUST use Cloud Functions.
       allow update: if request.auth != null && (
-
-        // 1) User-initiated actions (cancel, confirm completion, rate, dispute)
-        (
-          resource.data.userId == request.auth.uid
-          && (
-            ((resource.data.status == 'pending' || resource.data.status == 'scheduled' || resource.data.status == 'quoted' || resource.data.status == 'accepted') && request.resource.data.status == 'cancelled') ||
-            (resource.data.status == 'awaiting_confirmation' && request.resource.data.status == 'completed') ||
-            ((resource.data.status == 'pending' || resource.data.status == 'scheduled') && request.resource.data.status == resource.data.status) || // Allow minor edits/quotes
-            (request.resource.data.status == 'accepted' && (resource.data.status == 'pending' || resource.data.status == 'quoted')) || // User accepting a quote
-            (resource.data.status == 'completed' && request.resource.data.rating is number) ||
-            (resource.data.status == 'completed' && request.resource.data.keys().hasAll(['dispute']))
-          )
-        )
-
-        // 2) Hierarchical Admin management (Local, Parent, or SuperAdmin)
-        || (
-          (
-            resource.data.adminId == request.auth.uid ||
-            (resource.data.adminId != null && isParentOf(resource.data.adminId)) ||
-            isSuperAdmin()
-          )
-          && request.resource.data.userId == resource.data.userId // Data integrity check
-          && request.resource.data.createdAt == resource.data.createdAt
-        )
+        resource.data.userId == request.auth.uid &&
+        (resource.data.status == 'pending' || resource.data.status == 'scheduled') &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['address', 'phone', 'updatedAt', 'userId'])
       );
 
       // Client-side deletions are strictly prohibited
@@ -127,10 +109,8 @@ service cloud.firestore {
        ACTIVITY LOGS
     ============================ */
     match /activity_logs/{logId} {
-      // Logs can be created by any authenticated participant
-      allow create: if isLoggedIn()
-        && request.resource.data.actorId == request.auth.uid
-        && request.resource.data.bookingId != null;
+      // Action logs MUST go through secure backend callable functions now.
+      allow create: if false;
 
       // Logs are viewable by admins and the specific booking owner
       allow read: if isLoggedIn() && (

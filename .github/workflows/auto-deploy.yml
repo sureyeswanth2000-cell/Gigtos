@@ -1,0 +1,53 @@
+name: Auto Deploy on PR Merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  deploy:
+    if: github.event.pull_request.merged == true
+    name: Deploy Cloud Functions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Install Cloud Functions dependencies
+        run: npm ci
+        working-directory: functions
+
+      - name: Deploy Cloud Functions
+        run: firebase deploy --only functions --project ${{ secrets.FIREBASE_PROJECT_ID }} --non-interactive
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+
+      - name: Post deployment summary
+        if: always()
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| PR | #${{ github.event.pull_request.number }} — ${{ github.event.pull_request.title }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Project | \`${{ secrets.FIREBASE_PROJECT_ID }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Time | $(date '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY

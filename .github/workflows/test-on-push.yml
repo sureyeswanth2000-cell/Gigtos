@@ -1,0 +1,59 @@
+name: Test on Push
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+      - 'fix/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint-and-test:
+    name: Lint & Test Cloud Functions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Cloud Functions dependencies
+        run: npm ci
+        working-directory: functions
+
+      - name: Run Cloud Functions tests
+        run: npm test --if-present
+        working-directory: functions
+
+      - name: Install React app dependencies
+        run: npm ci
+        working-directory: react-app
+
+      - name: Build React app
+        run: npm run build
+        working-directory: react-app
+        env:
+          CI: false
+
+      - name: Post test summary
+        if: always()
+        run: |
+          echo "## 🧪 Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Triggered by | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Time | $(date '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY

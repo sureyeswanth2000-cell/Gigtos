@@ -375,6 +375,31 @@ exports.onBookingStatusChange = functions.firestore
       }
     }
 
+    // LOGIC: Multi-day job — auto-complete when all days confirmed
+    // When a new dailyConfirmation is added, check if all days are confirmed.
+    const prevConfirmCount = (before.dailyConfirmations || []).length;
+    const newConfirmCount = (after.dailyConfirmations || []).length;
+    if (
+      after.isMultiDay &&
+      newConfirmCount > prevConfirmCount &&
+      after.status === 'in_progress'
+    ) {
+      const totalDays = after.jobDuration || 1;
+      if (newConfirmCount >= totalDays) {
+        // All days confirmed — move to awaiting_confirmation for final user approval
+        await bookingRef.update({
+          status: 'awaiting_confirmation',
+          finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await logActivity(bookingId, 'all_days_confirmed_auto_finished', 'system', { confirmedDays: newConfirmCount, totalDays });
+
+        const msg = `All ${totalDays} days of your multi-day ${after.serviceType} job have been confirmed. Please give your final confirmation. Booking ID: ${bookingId}`;
+        await sendEmail(after.email, 'Multi-Day Job Complete – Gigto', msg);
+        await sendSms(after.phone, msg);
+      }
+    }
+
     return null;
   });
 
@@ -497,6 +522,42 @@ exports.checkCashbackExpiry = functions.pubsub
    SECTION 5: SECURE CALLABLE FUNCTIONS (100% SECURITY)
    Endpoints to handle all state transitions, removing logic from the frontend.
    ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * SCHEDULED: Runs every evening at 6 PM IST.
+ * LOGIC: For active multi-day jobs where the user hasn't confirmed today's work,
+ * sends an SMS/email reminder to confirm daily work.
+ */
+exports.dailyJobReminder = functions.pubsub
+  .schedule('0 18 * * *')
+  .timeZone('Asia/Kolkata')
+  .onRun(async (context) => {
+    const today = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' });
+    try {
+      const snapshot = await db.collection('bookings')
+        .where('isMultiDay', '==', true)
+        .where('status', '==', 'in_progress')
+        .get();
+
+      let reminderCount = 0;
+      for (const docSnap of snapshot.docs) {
+        const booking = docSnap.data();
+        const bookingId = docSnap.id;
+        const confirmedDays = (booking.dailyConfirmations || []).map(c => c.dateLabel);
+        // Send reminder if today hasn't been confirmed yet
+        if (!confirmedDays.includes(today)) {
+          const msg = `Reminder: Please confirm today's work for your ${booking.serviceType} multi-day job. Booking ID: ${bookingId}`;
+          await sendEmail(booking.email, 'Daily Work Confirmation Reminder – Gigto', msg);
+          await sendSms(booking.phone, msg);
+          reminderCount++;
+        }
+      }
+      console.log(`[DAILY_REMINDER] Sent ${reminderCount} daily confirmation reminders.`);
+    } catch (e) {
+      console.error('Daily job reminder failed:', e);
+    }
+    return null;
+  });
 
 const verifyAuth = (context) => {
   if (!context.auth) {
@@ -789,6 +850,14 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
         updates.photos = admin.firestore.FieldValue.arrayUnion({
           label, url, uploadedAt: new Date().toISOString()
         });
+        // Also populate dailyPhotos for multi-day job tracking
+        updates.dailyPhotos = admin.firestore.FieldValue.arrayUnion({
+          dateLabel: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }),
+          label: label || 'progress',
+          url: url,
+          uploadedBy: context.auth.uid,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
         logAction = 'admin_uploaded_photo';
         logExtra = { label };
         break;
@@ -804,6 +873,71 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
         };
         logAction = 'user_raised_dispute';
         logExtra = { reason };
+        break;
+
+      case 'daily_add_note':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        if (!['in_progress'].includes(booking.status)) throw new functions.https.HttpsError('failed-precondition', 'Can only add daily notes when job is in progress.');
+        const { note: dailyNote, dateLabel: noteDateLabel } = extraArgs || {};
+        if (!dailyNote) throw new functions.https.HttpsError('invalid-argument', 'Note text is required.');
+        updates.dailyNotes = admin.firestore.FieldValue.arrayUnion({
+          dateLabel: noteDateLabel || new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }),
+          note: dailyNote,
+          addedBy: context.auth.uid,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        logAction = 'daily_note_added';
+        logExtra = { note: dailyNote };
+        break;
+
+      case 'daily_upload_photo':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        if (!['in_progress'].includes(booking.status)) throw new functions.https.HttpsError('failed-precondition', 'Can only upload photos when job is in progress.');
+        const { label: photoLabel, url: photoUrl, dateLabel: photoDatelabel } = extraArgs || {};
+        if (!photoUrl) throw new functions.https.HttpsError('invalid-argument', 'Photo URL is required.');
+        updates.dailyPhotos = admin.firestore.FieldValue.arrayUnion({
+          dateLabel: photoDatelabel || new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }),
+          label: photoLabel || 'progress',
+          url: photoUrl,
+          uploadedBy: context.auth.uid,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        logAction = 'daily_photo_uploaded';
+        logExtra = { label: photoLabel };
+        break;
+
+      case 'daily_user_confirmation':
+        if (!isOwner) throw new functions.https.HttpsError('permission-denied', 'Only the booking owner can confirm daily work.');
+        if (!['in_progress'].includes(booking.status)) throw new functions.https.HttpsError('failed-precondition', 'Can only confirm daily work when job is in progress.');
+        const { dateLabel, workQuality, notes: confirmNotes } = extraArgs || {};
+        if (!dateLabel) throw new functions.https.HttpsError('invalid-argument', 'Date label is required.');
+        const existingConfirmations = booking.dailyConfirmations || [];
+        if (existingConfirmations.some(c => c.dateLabel === dateLabel)) {
+          throw new functions.https.HttpsError('already-exists', 'You have already confirmed work for this day.');
+        }
+        updates.dailyConfirmations = admin.firestore.FieldValue.arrayUnion({
+          date: admin.firestore.FieldValue.serverTimestamp(),
+          dateLabel: dateLabel,
+          confirmedBy: context.auth.uid,
+          workQuality: typeof workQuality === 'number' ? Math.min(5, Math.max(1, workQuality)) : 3,
+          notes: confirmNotes || '',
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        logAction = 'daily_work_confirmed';
+        logExtra = { dateLabel, workQuality };
+        break;
+
+      case 'mark_day_complete':
+        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        if (!['in_progress'].includes(booking.status)) throw new functions.https.HttpsError('failed-precondition', 'Can only mark day complete when job is in progress.');
+        const { dayDate } = extraArgs || {};
+        updates.completedDays = admin.firestore.FieldValue.arrayUnion({
+          date: dayDate || new Date().toLocaleDateString('en-IN'),
+          markedBy: context.auth.uid,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        logAction = 'day_marked_complete';
+        logExtra = { dayDate };
         break;
 
       default:

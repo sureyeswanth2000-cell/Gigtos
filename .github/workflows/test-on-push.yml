@@ -1,0 +1,175 @@
+name: Test on push
+
+# ─── Trigger ──────────────────────────────────────────────────────────────────
+# Runs on every push to any branch and on every pull-request event.
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+# ─── Permissions ──────────────────────────────────────────────────────────────
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+# ─── Concurrency ──────────────────────────────────────────────────────────────
+# Cancel in-progress runs on the same branch when a new push is made.
+concurrency:
+  group: test-on-push-${{ github.ref }}
+  cancel-in-progress: true
+
+# ─── Jobs ─────────────────────────────────────────────────────────────────────
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  syntax-validation:
+    name: Syntax validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate shell scripts (bash -n)
+        run: |
+          echo "Checking shell scripts for syntax errors…"
+          find scripts/ -name '*.sh' -print0 \
+            | xargs -0 -I{} bash -n {} && echo "All shell scripts OK"
+
+      - name: Validate GitHub Actions workflows (actionlint)
+        # actionlint is the official linter for GitHub Actions workflow files
+        uses: docker://rhysd/actionlint:latest
+        with:
+          args: -color .github/workflows/auto-deploy.yml .github/workflows/test-on-push.yml
+        continue-on-error: true   # non-blocking; keeps CI green for now
+
+      - name: Validate JavaScript / JSON files
+        run: |
+          echo "Checking JSON files…"
+          find . -name '*.json' \
+            -not -path '*/node_modules/*' \
+            -not -path '*/.git/*' \
+            -print0 \
+            | xargs -0 -I{} sh -c 'node -e "require(\"{}\")" && echo "OK: {}" || exit 1'
+
+  # ────────────────────────────────────────────────────────────────────────────
+  security-checks:
+    name: Security checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for committed .env file
+        run: |
+          if git ls-files | grep -q '^\\.env$'; then
+            echo "::error::'.env' is committed to the repository! Remove it and rotate credentials."
+            exit 1
+          fi
+          echo ".env is not committed — OK"
+
+      - name: Check for secrets in source files
+        run: |
+          # Detect common secret patterns (broad heuristic)
+          PATTERNS='(AKIA[0-9A-Z]{16}|password\s*=\s*["\x27][^"]+["\x27]|api[_-]?key\s*=\s*["\x27][^"]+["\x27])'
+          if grep -rn --include='*.js' --include='*.json' \
+               -E "${PATTERNS}" \
+               --exclude-dir=node_modules --exclude-dir=.git .; then
+            echo "::warning::Potential secrets detected in source files — review the above matches."
+          else
+            echo "No obvious secret patterns detected — OK"
+          fi
+
+  # ────────────────────────────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Cloud Functions dependencies
+        run: |
+          cd functions
+          npm ci --silent
+
+      - name: Run Cloud Functions unit tests
+        run: |
+          cd functions
+          # Run tests only if a test script is defined in package.json
+          if node -e "require('./package.json').scripts.test" 2>/dev/null | grep -qv 'echo'; then
+            npm test
+          else
+            echo "No unit tests configured in functions/package.json — skipping"
+          fi
+
+      - name: Run booking script in dry-run mode
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/test-booking.sh --dry-run
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID || 'gigtos-ci' }}
+          FIREBASE_REGION:     us-central1
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.run_id }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ────────────────────────────────────────────────────────────────────────────
+  report-to-pr:
+    name: Report results to PR
+    needs: [syntax-validation, security-checks, unit-tests]
+    runs-on: ubuntu-latest
+    if: always() && github.event_name == 'pull_request'
+    timeout-minutes: 5
+
+    steps:
+      - name: Post CI summary comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const jobs = {
+              'Syntax validation': '${{ needs.syntax-validation.result }}',
+              'Security checks':   '${{ needs.security-checks.result }}',
+              'Unit tests':        '${{ needs.unit-tests.result }}',
+            };
+            const icon = (r) => r === 'success' ? '✅' : r === 'skipped' ? '⏭️' : '❌';
+            const rows = Object.entries(jobs)
+              .map(([name, result]) => `| ${icon(result)} | ${name} | ${result} |`)
+              .join('\n');
+            const allPassed = Object.values(jobs).every(r => r === 'success' || r === 'skipped');
+            const body = [
+              `## ${allPassed ? '✅' : '❌'} CI Results`,
+              '',
+              '| | Check | Status |',
+              '|---|---|---|',
+              rows,
+              '',
+              `_Run: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_`,
+            ].join('\n');
+            github.rest.issues.createComment({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

@@ -548,6 +548,7 @@ exports.submitQuote = functions.https.onCall(async (data, context) => {
 
     transaction.update(bookingRef, {
       status: 'quoted', // Update status to reflect it has quotes
+      escrowStatus: 'pending_acceptance',  // ✅ ADD THIS - Track escrow status for quote acceptance
       quotes: admin.firestore.FieldValue.arrayUnion(newQuote),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
@@ -716,7 +717,10 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
         // Free worker
         if (booking.assignedWorkerId) {
           const workerRef = db.collection('gig_workers').doc(booking.assignedWorkerId);
-          transaction.update(workerRef, { isAvailable: true });
+          const workerSnap = await transaction.get(workerRef);
+          if (workerSnap.exists) {
+            transaction.update(workerRef, { isAvailable: true });
+          }
         }
         break;
 

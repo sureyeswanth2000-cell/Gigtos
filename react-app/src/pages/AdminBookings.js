@@ -11,8 +11,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  collection, onSnapshot, doc, getDoc,
-  query, orderBy, serverTimestamp
+  collection, onSnapshot, doc, getDoc, updateDoc,
+  query, where, orderBy, serverTimestamp
 } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
@@ -51,31 +51,174 @@ export default function AdminBookings() {
   const [disputeDecisions, setDisputeDecisions] = useState({}); // Tracking selected resolution types
   const [quotes, setQuotes] = useState({});            // Temporary quote prices being entered
   const fileInputRefs = useRef({});                    // Dynamic refs for hidden file inputs
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false); // Role check for permissions
+  const [adminRole, setAdminRole] = useState('admin'); // admin/mason/regionLead/superadmin
+  const [childAdminIds, setChildAdminIds] = useState([]); // For regionLead area monitoring
+  const [readError, setReadError] = useState('');      // Firestore read errors for troubleshooting
 
   const uid = auth.currentUser?.uid;
+
+  /* ──────────────────────────────────────────────────────────────────────────
+     ROLE CHECK - Determine if current user is SuperAdmin
+     ────────────────────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    if (!uid) return;
+    let unsubChildren = () => {};
+    const checkRole = async () => {
+      const adminDoc = await getDoc(doc(db, 'admins', uid));
+      if (adminDoc.exists()) {
+        const role = adminDoc.data()?.role || 'admin';
+        console.log('🔐 Admin role detected:', role);
+        setAdminRole(role);
+        setIsSuperAdmin(role === 'superadmin');
+
+        if (role === 'regionLead') {
+          console.log('📍 Region Lead detected - loading child admins...');
+          unsubChildren = onSnapshot(
+            query(collection(db, 'admins'), where('parentAdminId', '==', uid)),
+            snap => {
+              console.log('✅ Child admins found:', snap.size);
+              snap.docs.forEach(d => console.log('  - Admin:', d.data().name || d.data().email));
+              setChildAdminIds(snap.docs.map(d => d.id));
+            },
+            (err) => {
+              console.error('❌ Error loading child admins:', err);
+              setChildAdminIds([]);
+            }
+          );
+        } else {
+          setChildAdminIds([]);
+        }
+      } else {
+        console.error('❌ Admin document not found for UID:', uid);
+      }
+    };
+    checkRole().catch((err) => console.error('❌ checkRole error:', err));
+    return () => unsubChildren();
+  }, [uid]);
 
   /* ──────────────────────────────────────────────────────────────────────────
      REAL-TIME LISTENERS
      ────────────────────────────────────────────────────────────────────────── */
 
-  // Listen to ALL bookings (admins see their region, SuperAdmin sees all)
-  useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, 'bookings'), orderBy('createdAt', 'desc')),
-      snap => setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-    );
-    return unsub;
-  }, []);
-
-  // Listen to available workers for assignment logic
+  // Listen to bookings with rule-safe queries.
+  // Regular admins read open bookings + their assigned bookings; SuperAdmin reads all.
   useEffect(() => {
     if (!uid) return;
-    const q = query(collection(db, 'gig_workers'));
-    const unsub = onSnapshot(q, snap =>
-      setWorkers(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+
+    setReadError('');
+    if (isSuperAdmin) {
+      const unsubAll = onSnapshot(
+        query(collection(db, 'bookings'), orderBy('createdAt', 'desc')),
+        snap => {
+          setReadError('');
+          setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        },
+        (err) => {
+          console.error('Bookings read failed:', err);
+          setReadError(err?.message || 'Unable to load bookings.');
+        }
+      );
+      return unsubAll;
+    }
+
+    let openDocs = [];
+    let myDocs = [];
+
+    const mergeAndSet = () => {
+      const merged = [...openDocs, ...myDocs];
+      const byId = new Map();
+      merged.forEach(item => byId.set(item.id, item));
+      const unique = Array.from(byId.values());
+      unique.sort((a, b) => {
+        const aTs = a?.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+        const bTs = b?.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+        return bTs - aTs;
+      });
+      setBookings(unique);
+    };
+
+    const unsubOpen = onSnapshot(
+      query(collection(db, 'bookings'), where('status', 'in', ['pending', 'scheduled', 'quoted'])),
+      snap => {
+        setReadError('');
+        openDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        mergeAndSet();
+      },
+      (err) => {
+        console.error('Open bookings read failed:', err);
+        setReadError(err?.message || 'Unable to load open bookings.');
+      }
+    );
+
+    const unsubMine = onSnapshot(
+      query(collection(db, 'bookings'), where('adminId', '==', uid)),
+      snap => {
+        setReadError('');
+        myDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        mergeAndSet();
+      },
+      (err) => {
+        console.error('My bookings read failed:', err);
+        setReadError(err?.message || 'Unable to load your bookings.');
+      }
+    );
+
+    const unsubsChildren = [];
+    if (adminRole === 'regionLead' && childAdminIds.length > 0) {
+      console.log('📋 Loading bookings for', childAdminIds.length, 'child admins');
+      childAdminIds.forEach((childId) => {
+        const unsubChild = onSnapshot(
+          query(collection(db, 'bookings'), where('adminId', '==', childId)),
+          snap => {
+            console.log(`  ✓ Child admin ${childId}: ${snap.size} bookings`);
+            const childDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            myDocs = [...myDocs.filter(b => b.adminId !== childId), ...childDocs];
+            mergeAndSet();
+          },
+          (err) => {
+            console.error(`  ❌ Child admin ${childId} error:`, err);
+          }
+        );
+        unsubsChildren.push(unsubChild);
+      });
+    } else if (adminRole === 'regionLead') {
+      console.warn('⚠️ Region lead has NO child admins assigned!');
+    }
+
+    return () => {
+      unsubOpen();
+      unsubMine();
+      unsubsChildren.forEach(fn => fn());
+    };
+  }, [uid, isSuperAdmin, adminRole, childAdminIds]);
+
+  // Listen to workers - admin only sees their own workers (unless SuperAdmin)
+  useEffect(() => {
+    if (!uid) return;
+    
+    const unsub = onSnapshot(
+      query(collection(db, 'gig_workers')),
+      snap => {
+        const allWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const approvedWorkers = allWorkers.filter(w => !w.approvalStatus || w.approvalStatus === 'approved');
+        
+        // SuperAdmin sees all workers
+        if (isSuperAdmin) {
+          setWorkers(approvedWorkers);
+        } else if (adminRole === 'regionLead') {
+          // Region lead monitors workers in their area (owned by child admins)
+          const areaWorkers = approvedWorkers.filter(w => childAdminIds.includes(w.adminId));
+          setWorkers(areaWorkers);
+        } else {
+          // Admin/Mason sees only own workers
+          const myWorkers = approvedWorkers.filter(w => w.adminId === uid);
+          setWorkers(myWorkers);
+        }
+      }
     );
     return unsub;
-  }, [uid]);
+  }, [uid, isSuperAdmin, adminRole, childAdminIds]);
 
   /* ──────────────────────────────────────────────────────────────────────────
      CORE ACTIONS & LOGIC
@@ -89,11 +232,13 @@ export default function AdminBookings() {
     setOpenLog(bookingId);
     if (logMap[bookingId]) return;
     const unsub = onSnapshot(
-      query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc')),
+      query(
+        collection(db, 'activity_logs'),
+        where('bookingId', '==', bookingId),
+        orderBy('timestamp', 'desc')
+      ),
       snap => {
-        const entries = snap.docs
-          .map(d => d.data())
-          .filter(d => d.bookingId === bookingId);
+        const entries = snap.docs.map(d => d.data());
         setLogMap(prev => ({ ...prev, [bookingId]: entries }));
       }
     );
@@ -103,13 +248,144 @@ export default function AdminBookings() {
   /**
    * Universal Backend Caller
    */
+  const runSparkFallback = async (method, data) => {
+    if (!uid) throw new Error('Not authenticated');
+
+    if (method === 'submitQuote') {
+      const { bookingId, price } = data;
+      const bookingRef = doc(db, 'bookings', bookingId);
+      const snap = await getDoc(bookingRef);
+      if (!snap.exists()) throw new Error('Booking not found');
+      const booking = snap.data();
+      const quotesList = booking.quotes || [];
+      if (quotesList.some(q => q.adminId === uid)) throw new Error('Quote already submitted');
+
+      const adminDoc = await getDoc(doc(db, 'admins', uid));
+      const adminName = adminDoc.exists() ? (adminDoc.data().name || adminDoc.data().email || 'Admin') : 'Admin';
+      const updatedQuotes = [...quotesList, { adminId: uid, adminName, price: Number(price), createdAt: new Date() }];
+
+      await updateDoc(bookingRef, {
+        quotes: updatedQuotes,
+        status: 'quoted',
+        updatedAt: new Date(),
+      });
+      return;
+    }
+
+    if (method === 'updateBookingStatus') {
+      const { bookingId, action, extraArgs = {} } = data;
+      const bookingRef = doc(db, 'bookings', bookingId);
+      const snap = await getDoc(bookingRef);
+      if (!snap.exists()) throw new Error('Booking not found');
+      const booking = snap.data();
+
+      const base = { updatedAt: new Date() };
+
+      if (action === 'admin_assign_worker') {
+        const { workerId, workerName, workerPhone } = extraArgs;
+        await updateDoc(bookingRef, {
+          ...base,
+          status: 'assigned',
+          adminId: uid,
+          assignedWorkerId: workerId,
+          workerName,
+          workerPhone,
+          assignedWorker: workerName,
+        });
+        return;
+      }
+
+      if (action === 'admin_start_work') {
+        await updateDoc(bookingRef, { ...base, status: 'in_progress', startedAt: new Date(), adminId: booking.adminId || uid });
+        return;
+      }
+
+      if (action === 'admin_mark_finished') {
+        await updateDoc(bookingRef, { ...base, status: 'awaiting_confirmation', finishedAt: new Date(), adminId: booking.adminId || uid });
+        return;
+      }
+
+      if (action === 'admin_cancelled') {
+        await updateDoc(bookingRef, { ...base, status: 'cancelled', adminId: booking.adminId || uid });
+        return;
+      }
+
+      if (action === 'admin_reopen_booking') {
+        await updateDoc(bookingRef, {
+          ...base,
+          status: 'pending',
+          adminId: null,
+          assignedWorkerId: null,
+          workerName: null,
+          workerPhone: null,
+          assignedWorker: null,
+          acceptedQuote: null,
+        });
+        return;
+      }
+
+      if (action === 'admin_resolve_dispute') {
+        await updateDoc(bookingRef, {
+          ...base,
+          'dispute.status': 'resolved',
+          'dispute.decision': extraArgs.decision,
+          'dispute.resolvedBy': uid,
+          'dispute.resolutionTime': new Date(),
+          adminId: booking.adminId || uid,
+        });
+        return;
+      }
+
+      if (action === 'admin_log_call') {
+        await updateDoc(bookingRef, {
+          ...base,
+          'dispute.regionCallTime': new Date(),
+          'dispute.callNotes': extraArgs.callNotes || '',
+          adminId: booking.adminId || uid,
+        });
+        return;
+      }
+
+      if (action === 'admin_log_visit') {
+        await updateDoc(bookingRef, {
+          ...base,
+          'dispute.visitTime': new Date(),
+          adminId: booking.adminId || uid,
+        });
+        return;
+      }
+
+      if (action === 'admin_add_note') {
+        const existing = booking.dailyNotes || [];
+        const next = [...existing, { date: new Date().toLocaleDateString('en-IN'), note: extraArgs.note || '' }];
+        await updateDoc(bookingRef, { ...base, dailyNotes: next, adminId: booking.adminId || uid });
+        return;
+      }
+
+      if (action === 'admin_upload_photo') {
+        const existing = booking.photos || [];
+        const next = [...existing, { label: extraArgs.label, url: extraArgs.url, uploadedAt: new Date() }];
+        await updateDoc(bookingRef, { ...base, photos: next, adminId: booking.adminId || uid });
+        return;
+      }
+    }
+
+    throw new Error(`Spark fallback not implemented for ${method}`);
+  };
+
   const callBackend = async (method, data) => {
     try {
       const func = httpsCallable(functionsInstance, method);
       await func(data);
     } catch (e) {
-      console.error(e);
-      alert('Action failed: ' + e.message);
+      // Spark plan cannot deploy callable functions that require Cloud Build.
+      try {
+        await runSparkFallback(method, data);
+      } catch (fallbackErr) {
+        console.error(e);
+        console.error(fallbackErr);
+        alert('Action failed: ' + (fallbackErr.message || e.message));
+      }
     }
   };
 
@@ -260,6 +536,7 @@ export default function AdminBookings() {
     if (filter === 'completed') return b.status === 'completed';
     if (filter === 'cancelled') return b.status === 'cancelled';
     if (filter === 'disputes') return b.dispute?.status === 'open';
+    if (filter === 'quoted') return b.status === 'quoted' || (b.quotes?.length > 0 && b.status === 'pending');
     if (filter === 'escalated') return b.dispute?.escalationStatus === true && b.dispute?.status === 'open';
     return true;
   });
@@ -267,6 +544,25 @@ export default function AdminBookings() {
   return (
     <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '20px' }}>
       <h2 style={{ fontSize: '24px', marginBottom: '20px', color: '#333' }}>📋 Booking Management</h2>
+
+      {readError && (
+        <div style={{
+          background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca',
+          borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', fontSize: '13px'
+        }}>
+          {readError}
+        </div>
+      )}
+
+      {/* DEBUG INFO: Show what role and data is loaded */}
+      {adminRole === 'regionLead' && (
+        <div style={{
+          background: '#f0f9ff', color: '#0369a1', border: '2px solid #0ea5e9',
+          borderRadius: '8px', padding: '12px', marginBottom: '14px', fontSize: '12px', fontWeight: 'bold'
+        }}>
+          🌐 Region Lead Dashboard | Child Admins: {childAdminIds.length || '❌ NONE ASSIGNED'} | Bookings Loaded: {bookings.length}
+        </div>
+      )}
 
       {/* FILTER BUTTONS: Redirects the view state but not the URL */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>

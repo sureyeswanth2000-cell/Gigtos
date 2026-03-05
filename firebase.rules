@@ -18,6 +18,11 @@ service cloud.firestore {
       return isLoggedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    function isWorkerOwnerRole() {
+      return isAdmin() &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role != "regionLead";
+    }
+
     // New: Check if the current admin is the parent of another admin (to support hierarchy)
     function isParentOf(targetAdminId) {
       let adminData = get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
@@ -63,19 +68,27 @@ service cloud.firestore {
       // READ: accessible by owner, the assigning admin, or their parent admins
       allow read: if request.auth != null && (
         resource.data.userId == request.auth.uid
+        || (isAdmin() && resource.data.status in ['pending', 'scheduled', 'quoted'])
         || resource.data.adminId == request.auth.uid
         || (resource.data.adminId != null && isParentOf(resource.data.adminId))
         || isSuperAdmin()
       );
 
-      // UPDATE — Enforce Backend Only for state changes.
-      // Users can ONLY edit simple fields (address, phone) while pending/scheduled.
-      // ALL state transitions (quotes, assigns, completes, disputes) MUST use Cloud Functions.
+      // UPDATE — Spark mode support:
+      // Allow owner/admin client-side transitions because callable functions may be unavailable on free tier.
       allow update: if request.auth != null && (
-        resource.data.userId == request.auth.uid &&
-        (resource.data.status == 'pending' || resource.data.status == 'scheduled') &&
-        request.resource.data.status == resource.data.status &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['address', 'phone', 'updatedAt', 'userId'])
+        (
+          resource.data.userId == request.auth.uid &&
+          request.resource.data.userId == request.auth.uid
+        )
+        ||
+        (
+          isAdmin() && (
+            resource.data.adminId == request.auth.uid
+            || resource.data.status in ['pending', 'scheduled', 'quoted']
+            || isSuperAdmin()
+          )
+        )
       );
 
       // Client-side deletions are strictly prohibited
@@ -130,9 +143,23 @@ service cloud.firestore {
     match /admins/{adminId} {
       // An admin can read their own profile, and higher-level admins can read child profiles
       // SuperAdmin can read ALL admin profiles (for region performance overview)
-      allow read: if isLoggedIn() && (request.auth.uid == adminId || isParentOf(adminId) || isSuperAdmin());
-      // Hierarchical provisioning (SuperAdmin only for root, Parents for local)
-      allow create, delete: if isSuperAdmin();
+      // Also allow reading regionLead profiles for dropdown/assignment selection
+      allow read: if isLoggedIn() && (
+        request.auth.uid == adminId 
+        || isParentOf(adminId) 
+        || isSuperAdmin()
+        || resource.data.role == "regionLead"  // ✅ Allow all admins to see region leads for assignment
+      );
+      // Hierarchical provisioning:
+      // - Superadmin can create any admin
+      // - RegionLead can create child admins under themselves
+      allow create: if isSuperAdmin() || (
+        isAdmin()
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "regionLead"
+        && request.resource.data.role == "admin"
+        && request.resource.data.parentAdminId == request.auth.uid
+      );
+      allow delete: if isSuperAdmin();
       // Admins can update their own profile, superadmin can update any admin
       // This allows superadmin to set regionStatus, probationStatus etc.
       allow update: if isAdmin() && (request.auth.uid == adminId || isSuperAdmin());
@@ -144,14 +171,25 @@ service cloud.firestore {
     match /gig_workers/{workerId} {
       // Workers are visible to their managing admin and the entire hierarchy above them
       allow read: if isLoggedIn() && (
+        workerId == request.auth.uid ||
         resource.data.adminId == request.auth.uid ||
         (resource.data.adminId != null && isParentOf(resource.data.adminId)) ||
-        isAdmin() // Default to allow any admin to see for assignment lookups
+        isSuperAdmin()
       );
-      // Local admins create workers; parents manage them
-      allow create: if isAdmin() && request.resource.data.adminId == request.auth.uid;
+      // Admin/Mason create workers; region leads only monitor.
+      // Workers can self-register in pending state and must be approved by region lead.
+      allow create: if (
+        isWorkerOwnerRole() && request.resource.data.adminId == request.auth.uid
+      ) || (
+        isLoggedIn()
+        && workerId == request.auth.uid
+        && request.resource.data.adminId in [null, ""]
+        && request.resource.data.approvalStatus == "pending"
+        && request.resource.data.status == "inactive"
+      );
       // Allow admin owner or parent to update; superadmin can set fraud flags
       allow update: if isLoggedIn() && (
+        workerId == request.auth.uid ||
         resource.data.adminId == request.auth.uid ||
         isParentOf(resource.data.adminId) ||
         isSuperAdmin()

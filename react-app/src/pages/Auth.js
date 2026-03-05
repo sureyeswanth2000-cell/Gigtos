@@ -8,7 +8,7 @@ function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
-  const [userType, setUserType] = useState(searchParams.get('mode') || 'user'); // 'user' or 'admin'
+  const [userType, setUserType] = useState(searchParams.get('mode') || 'user'); // 'user', 'admin', or 'worker'
   const [phase, setPhase] = useState('typeSelect'); // 'typeSelect', 'login', 'signup'
   
   // User (Phone) Fields
@@ -19,6 +19,15 @@ function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Worker Registration Fields
+  const [workerName, setWorkerName] = useState('');
+  const [workerPhone, setWorkerPhone] = useState('');
+  const [workerEmail, setWorkerEmail] = useState('');
+  const [workerPassword, setWorkerPassword] = useState('');
+  const [workerConfirmPassword, setWorkerConfirmPassword] = useState('');
+  const [workerGigType, setWorkerGigType] = useState('');
+  const [workerArea, setWorkerArea] = useState('');
   
   // UI States
   const [error, setError] = useState('');
@@ -43,19 +52,15 @@ function Auth() {
       }
 
       const storedEmail = userDoc.data().email;
-      const storedPassword = userDoc.data().password;
 
-      if (otp) {
-        if (otp !== '101010') {
-          throw new Error('Invalid OTP. Test OTP: 101010');
-        }
-        await signInWithEmailAndPassword(auth, storedEmail, storedPassword);
-      } else {
-        if (!password) {
-          throw new Error('Please enter password or OTP');
-        }
-        await signInWithEmailAndPassword(auth, storedEmail, password);
+      // ✅ SECURITY FIX: Removed hardcoded OTP check (101010)
+      // OTP should be verified through Firebase Phone Auth or a backend service
+      // For now, only password-based login is allowed
+      if (!password) {
+        throw new Error('Please enter your password to login');
       }
+      
+      await signInWithEmailAndPassword(auth, storedEmail, password);
       navigate('/');
     } catch (err) {
       setError(err.message);
@@ -94,10 +99,12 @@ function Auth() {
       const userCred = await createUserWithEmailAndPassword(auth, email, password);
       const uid = userCred.user.uid;
 
+      // ✅ SECURITY FIX: Removed plaintext password storage in Firestore
+      // Password is securely managed by Firebase Authentication
       await setDoc(doc(db, 'users_by_phone', phone), {
         uid: uid,
         email: email,
-        password: password,
+        // password field REMOVED - passwords are managed by Firebase Auth
         phone: phone,
         createdAt: new Date()
       });
@@ -132,22 +139,95 @@ function Auth() {
     try {
       const userCred = await signInWithEmailAndPassword(auth, email, password);
       const uid = userCred.user.uid;
+      console.log('✅ Firebase Auth success, UID:', uid);
 
       const adminDoc = await getDoc(doc(db, 'admins', uid));
+      console.log('📋 Admin doc exists:', adminDoc.exists());
+      console.log('👤 Admin data:', adminDoc.data());
+      
       if (!adminDoc.exists()) {
         await signOut(auth);
-        throw new Error('This account is not registered as an admin');
+        throw new Error('This account is not registered as an admin. Please contact SuperAdmin.');
+      }
+
+      const adminData = adminDoc.data();
+      const role = adminData?.role || 'unknown';
+      console.log('🔐 Admin role:', role);
+
+      if (adminData?.regionStatus === 'suspended') {
+        await signOut(auth);
+        throw new Error('❌ This region has been suspended. Contact SuperAdmin.');
       }
 
       navigate('/admin/bookings');
     } catch (err) {
+      console.error('❌ Admin login error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ============= TYPE SELECTION PHASE =============
+  // ============= WORKER REGISTRATION =============
+  const handleWorkerSignup = async (e) => {
+    e.preventDefault();
+    if (!workerName || !workerPhone || !workerEmail || !workerPassword || !workerConfirmPassword || !workerGigType || !workerArea) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    if (workerPhone.length < 10) {
+      setError('Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    if (workerPassword !== workerConfirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (workerPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      // Step 1: Create Firebase Auth user
+      const userCred = await createUserWithEmailAndPassword(auth, workerEmail, workerPassword);
+      const uid = userCred.user.uid;
+
+      // Step 2: Find region lead for this area - assume area code is used to find region lead
+      // For now, workers are created with approvalStatus: 'pending'
+      // In a real scenario, you'd match area to region lead
+
+      // Step 3: Create worker document
+      await setDoc(doc(db, 'gig_workers', uid), {
+        name: workerName,
+        contact: workerPhone,
+        email: workerEmail,
+        gigType: workerGigType,
+        area: workerArea,
+        adminId: '', // Will be assigned by region lead on approval
+        approvalStatus: 'pending', // New field for approval tracking
+        status: 'inactive', // Inactive until approved
+        completedJobs: 0,
+        rating: 0,
+        isTopListed: false,
+        isFraud: false,
+        createdAt: new Date()
+      });
+
+      alert('✅ Registration successful! Waiting for region lead approval.');
+      navigate('/');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
   if (phase === 'typeSelect') {
     return (
       <div style={{ maxWidth: '500px', margin: '60px auto', padding: '40px', textAlign: 'center' }}>
@@ -224,6 +304,39 @@ function Auth() {
               Login with email & password
             </div>
           </button>
+
+          <button
+            onClick={() => {
+              setUserType('worker');
+              setPhase('signup');
+              setError('');
+            }}
+            style={{
+              padding: '40px',
+              border: '2px solid #10b981',
+              borderRadius: '12px',
+              backgroundColor: '#f0fdf4',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              color: '#333',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#e6fdf0';
+              e.target.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#f0fdf4';
+              e.target.style.boxShadow = 'none';
+            }}
+          >
+            <div style={{ fontSize: '40px', marginBottom: '10px' }}>👷</div>
+            Register as Worker
+            <div style={{ fontSize: '13px', color: '#666', marginTop: '10px', fontWeight: 'normal' }}>
+              Get approved by region lead
+            </div>
+          </button>
         </div>
       </div>
     );
@@ -243,10 +356,10 @@ function Auth() {
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '30px' }}>
         <h2 style={{ margin: '0 0 5px 0', fontSize: '24px', color: '#333' }}>
-          {userType === 'user' ? '👤 User' : '👨‍💼 Admin'} {phase === 'login' ? 'Login' : 'Sign Up'}
+          {userType === 'user' ? '👤 User' : userType === 'admin' ? '👨‍💼 Admin' : '👷 Worker'} {phase === 'login' ? 'Login' : 'Register/Sign Up'}
         </h2>
         <p style={{ color: '#666', margin: '5px 0', fontSize: '13px' }}>
-          {userType === 'user' ? 'Book services with phone & OTP' : 'Manage your service business'}
+          {userType === 'user' ? 'Book services with phone & OTP' : userType === 'admin' ? 'Manage your service business' : 'Register and get approved by region lead'}
         </p>
       </div>
 
@@ -331,7 +444,7 @@ function Auth() {
                   setPassword(e.target.value);
                 }
               }}
-              placeholder={phase === 'login' ? 'Enter OTP (101010) or password' : 'Minimum 6 characters'}
+              placeholder={phase === 'login' ? 'Enter your password' : 'Minimum 6 characters'}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -505,6 +618,182 @@ function Auth() {
         </form>
       )}
 
+      {/* WORKER REGISTRATION */}
+      {userType === 'worker' && (
+        <form onSubmit={handleWorkerSignup}>
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Full Name:
+            </label>
+            <input
+              type="text"
+              value={workerName}
+              onChange={(e) => setWorkerName(e.target.value)}
+              placeholder="Your full name"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Phone Number:
+            </label>
+            <input
+              type="tel"
+              value={workerPhone}
+              onChange={(e) => setWorkerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="10-digit phone number"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Email:
+            </label>
+            <input
+              type="email"
+              value={workerEmail}
+              onChange={(e) => setWorkerEmail(e.target.value)}
+              placeholder="your.email@example.com"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Service Type:
+            </label>
+            <select
+              value={workerGigType}
+              onChange={(e) => setWorkerGigType(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            >
+              <option value="">Select service type...</option>
+              <option value="plumbing">Plumbing</option>
+              <option value="electrical">Electrical</option>
+              <option value="carpentry">Carpentry</option>
+              <option value="painting">Painting</option>
+              <option value="masonry">Masonry</option>
+              <option value="cleaning">Cleaning</option>
+              <option value="landscaping">Landscaping</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Area/Region:
+            </label>
+            <input
+              type="text"
+              value={workerArea}
+              onChange={(e) => setWorkerArea(e.target.value)}
+              placeholder="e.g., North Mumbai, Delhi South"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Password (min 6 chars):
+            </label>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={workerPassword}
+              onChange={(e) => setWorkerPassword(e.target.value)}
+              placeholder="Enter password"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Confirm Password:
+            </label>
+            <input
+              type="password"
+              value={workerConfirmPassword}
+              onChange={(e) => setWorkerConfirmPassword(e.target.value)}
+              placeholder="Re-enter password"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '11px',
+              backgroundColor: loading ? '#ccc' : '#10b981',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '15px',
+              fontWeight: 'bold',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              marginBottom: '12px'
+            }}
+          >
+            {loading ? '⏳ Registering...' : 'Register as Worker'}
+          </button>
+
+          <div style={{ textAlign: 'center', fontSize: '12px', color: '#999' }}>
+            Your registration will be reviewed by region lead for approval.
+          </div>
+        </form>
+      )}
+
       {/* Back Button */}
       <button
         onClick={() => {
@@ -515,6 +804,13 @@ function Auth() {
           setConfirmPassword('');
           setPhone('');
           setEmail('');
+          setWorkerName('');
+          setWorkerPhone('');
+          setWorkerEmail('');
+          setWorkerPassword('');
+          setWorkerConfirmPassword('');
+          setWorkerGigType('');
+          setWorkerArea('');
         }}
         style={{
           width: '100%',
@@ -541,7 +837,7 @@ function Auth() {
         color: '#2e7d32'
       }}>
         <strong>🧪 Test Credentials:</strong><br/>
-        User: Phone 8374532598 / OTP: 101010<br/>
+        User: Phone 8374532598 / Password: user123<br/>
         Admin: sri@gmail.com / Sri123
       </div>
     </div>

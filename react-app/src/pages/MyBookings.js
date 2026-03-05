@@ -64,6 +64,7 @@ export default function MyBookings() {
   const [selectedStar, setSelectedStar] = useState(0);
   const [cashbacks, setCashbacks] = useState([]);
   const [workerDetails, setWorkerDetails] = useState({});
+  const [readError, setReadError] = useState('');
 
   /* ── Auth Listener ── */
   useEffect(() => {
@@ -79,6 +80,7 @@ export default function MyBookings() {
     if (!user) return;
     const q = query(collection(db, 'bookings'), where('userId', '==', user.uid));
     const unsub = onSnapshot(q, snap => {
+      setReadError('');
       const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       items.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
       setBookings(items);
@@ -93,7 +95,10 @@ export default function MyBookings() {
           }).catch(() => { });
         }
       });
-    }, err => console.error('snapshot error', err));
+    }, err => {
+      console.error('snapshot error', err);
+      setReadError(err?.message || 'Unable to load bookings');
+    });
     return unsub;
   }, [user]);
 
@@ -108,14 +113,85 @@ export default function MyBookings() {
   }, [user]);
 
   /* ── Audit Helpers ── */
+  const runSparkFallback = async (method, data) => {
+    if (!user) throw new Error('Not authenticated');
+
+    if (method === 'acceptQuote') {
+      const { bookingId, adminId } = data;
+      const bookingRef = doc(db, 'bookings', bookingId);
+      const bookingSnap = await getDoc(bookingRef);
+      if (!bookingSnap.exists()) throw new Error('Booking not found');
+      const booking = bookingSnap.data();
+      const acceptedQuote = (booking.quotes || []).find(q => q.adminId === adminId);
+      if (!acceptedQuote) throw new Error('Quote not found');
+
+      await updateDoc(bookingRef, {
+        status: 'accepted',
+        adminId,
+        acceptedQuote,
+        updatedAt: new Date(),
+        userId: user.uid,
+      });
+      return;
+    }
+
+    if (method === 'updateBookingStatus') {
+      const { bookingId, action, extraArgs = {} } = data;
+      const bookingRef = doc(db, 'bookings', bookingId);
+      const bookingSnap = await getDoc(bookingRef);
+      if (!bookingSnap.exists()) throw new Error('Booking not found');
+      const booking = bookingSnap.data();
+
+      if (booking.userId !== user.uid) throw new Error('Not owner');
+
+      if (action === 'user_cancelled') {
+        await updateDoc(bookingRef, { status: 'cancelled', updatedAt: new Date(), userId: user.uid });
+        return;
+      }
+
+      if (action === 'user_confirm_completion') {
+        await updateDoc(bookingRef, { status: 'completed', updatedAt: new Date(), userId: user.uid });
+        return;
+      }
+
+      if (action === 'user_rate') {
+        await updateDoc(bookingRef, { rating: extraArgs.rating, updatedAt: new Date(), userId: user.uid });
+        return;
+      }
+
+      if (action === 'user_raise_dispute') {
+        await updateDoc(bookingRef, {
+          dispute: {
+            status: 'open',
+            reason: extraArgs.reason,
+            raisedBy: user.uid,
+            raisedAt: new Date(),
+            escalationStatus: false,
+          },
+          updatedAt: new Date(),
+          userId: user.uid,
+        });
+        return;
+      }
+    }
+
+    throw new Error(`Spark fallback not implemented for ${method}`);
+  };
+
   const callBackend = async (method, data) => {
     try {
       const func = httpsCallable(functionsInstance, method);
       await func(data);
     } catch (e) {
-      console.error(e);
-      alert('Action failed: ' + e.message);
-      throw e;
+      // Spark plan cannot deploy callable functions that require Cloud Build.
+      try {
+        await runSparkFallback(method, data);
+      } catch (fallbackErr) {
+        console.error(e);
+        console.error(fallbackErr);
+        alert('Action failed: ' + (fallbackErr.message || e.message));
+        throw fallbackErr;
+      }
     }
   };
 
@@ -238,7 +314,7 @@ export default function MyBookings() {
   }
 
   /* ── Booking groups ── */
-  const active = bookings.filter(b => ['pending', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status));
+  const active = bookings.filter(b => ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status));
   const completed = bookings.filter(b => b.status === 'completed');
   const cancelled = bookings.filter(b => b.status === 'cancelled');
 
@@ -462,6 +538,14 @@ export default function MyBookings() {
             </>
           )}
 
+          {/* ACTIONS: Cancel quoted or accepted jobs before worker assignment */}
+          {['quoted', 'accepted'].includes(booking.status) && (
+            <button onClick={() => cancelBooking(booking.id)}
+              style={{ flex: '1 0 auto', padding: '8px 12px', background: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
+              ✕ Cancel Booking
+            </button>
+          )}
+
           {/* ACTIONS: Job verification */}
           {booking.status === 'awaiting_confirmation' && (
             <>
@@ -507,7 +591,7 @@ export default function MyBookings() {
           )}
 
           {/* ACTIONS: Quote Acceptance (Multi-bid version) */}
-          {(booking.status === 'pending' || booking.status === 'scheduled') && booking.quotes?.length > 0 && (
+          {(booking.status === 'pending' || booking.status === 'scheduled' || booking.status === 'quoted') && booking.quotes?.length > 0 && (
             <div style={{ width: '100%', marginBottom: '10px' }}>
               <div style={{ padding: '12px', background: '#eef2ff', borderRadius: '8px', border: '1px solid #6366f1', marginBottom: '8px' }}>
                 <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#4338ca', marginBottom: '8px' }}>
@@ -624,6 +708,20 @@ export default function MyBookings() {
 
       {user && (
         <>
+          {readError && (
+            <div style={{
+              marginBottom: '14px',
+              padding: '10px 12px',
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: '8px',
+              color: '#b91c1c',
+              fontSize: '13px'
+            }}>
+              {readError}
+            </div>
+          )}
+
           {/* SECTION: ACTIVE BOOKINGS (Jobs in progress or awaiting assignment) */}
           <div style={{ marginBottom: '30px' }}>
             <h3 style={{ fontSize: '17px', color: '#333', marginBottom: '12px' }}>

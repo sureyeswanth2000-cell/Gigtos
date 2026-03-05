@@ -305,14 +305,29 @@ export default function AdminBookings() {
             {/* BOOKING HEADER & MAP LINK */}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
               <div>
-                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{b.serviceType} — {b.customerName}</div>
-                <div style={{ fontSize: '12px', color: '#666' }}>
-                  📞 {b.phone} | 📍
-                  {/* NAVIGATION LINK: Opens Google Maps search for the job location */}
-                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.address)}`}
-                    target="_blank" rel="noreferrer" style={{ color: '#2196f3', textDecoration: 'none', marginLeft: '4px' }}>
-                    {b.address} ↗
-                  </a>
+                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>
+                  {['pending', 'scheduled', 'quoted'].includes(b.status)
+                    ? `${b.serviceType} — 📍 Work Available at this location`
+                    : `${b.serviceType} — ${b.customerName}`}
+                </div>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                  {['pending', 'scheduled', 'quoted'].includes(b.status) ? (
+                    <>
+                      📍 Location:
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.address)}`}
+                        target="_blank" rel="noreferrer" style={{ color: '#2196f3', textDecoration: 'none', marginLeft: '4px' }}>
+                        {b.address} ↗
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      📞 {b.phone} | 📍
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.address)}`}
+                        target="_blank" rel="noreferrer" style={{ color: '#2196f3', textDecoration: 'none', marginLeft: '4px' }}>
+                        {b.address} ↗
+                      </a>
+                    </>
+                  )}
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>

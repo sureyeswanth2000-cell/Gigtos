@@ -1,0 +1,249 @@
+name: Auto Deploy – createBooking Cloud Function
+
+on:
+  # Trigger when a PR is merged into main
+  push:
+    branches:
+      - main
+  # Allow manual trigger from the Actions UI
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (skip actual deployment)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      skip_tests:
+        description: 'Skip test suite'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+env:
+  FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+  FIREBASE_REGION: ${{ secrets.FIREBASE_REGION || 'us-central1' }}
+  GMAIL_USER: ${{ secrets.GMAIL_USER }}
+  GMAIL_PASS: ${{ secrets.GMAIL_PASS }}
+  TWILIO_SID: ${{ secrets.TWILIO_SID }}
+  TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+  TWILIO_PHONE: ${{ secrets.TWILIO_PHONE }}
+
+jobs:
+  # ── Job 1: Install dependencies ──────────────────────────────────────────
+  install:
+    name: Install Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Cloud Functions dependencies
+        working-directory: functions
+        run: npm ci --prefer-offline
+
+      - name: Cache functions node_modules
+        uses: actions/cache@v4
+        with:
+          path: functions/node_modules
+          key: functions-${{ runner.os }}-${{ hashFiles('functions/package-lock.json') }}
+
+  # ── Job 2: Deploy to Firebase ─────────────────────────────────────────────
+  deploy:
+    name: Deploy Cloud Functions
+    runs-on: ubuntu-latest
+    needs: install
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Restore cached node_modules
+        uses: actions/cache@v4
+        with:
+          path: functions/node_modules
+          key: functions-${{ runner.os }}-${{ hashFiles('functions/package-lock.json') }}
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools@latest
+
+      - name: Write Firebase service account credentials
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/firebase-sa.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json" >> $GITHUB_ENV
+
+      - name: Deploy Cloud Functions
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          firebase deploy \
+            --only functions \
+            --project "$FIREBASE_PROJECT_ID" \
+            --force \
+            --non-interactive
+
+      - name: Dry run – print deploy command
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "[DRY-RUN] Would run: firebase deploy --only functions --project $FIREBASE_PROJECT_ID"
+
+  # ── Job 3: Run test suite ─────────────────────────────────────────────────
+  test:
+    name: Run Booking Tests
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: ${{ github.event.inputs.skip_tests != 'true' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Run structural tests (no emulator required)
+        env:
+          FIREBASE_EMULATOR: 'false'
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID || 'demo-gigtos' }}
+          LOG_DIR: reports
+        run: bash scripts/test-booking.sh
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-report
+          path: reports/test-report-*.txt
+          if-no-files-found: ignore
+
+  # ── Job 4: Generate deployment report ────────────────────────────────────
+  report:
+    name: Generate Deployment Report
+    runs-on: ubuntu-latest
+    needs: [deploy, test]
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Run verification
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID || 'demo-gigtos' }}
+          LOG_DIR: reports
+        run: bash scripts/verify-deployment.sh || true
+
+      - name: Generate deployment report
+        run: |
+          mkdir -p reports
+          cat > reports/deploy-report-$(date '+%Y-%m-%d-%H%M%S').txt <<EOF
+          ═══════════════════════════════════════════════════════════════
+            DEPLOYMENT REPORT - $(date '+%Y-%m-%d %H:%M:%S')
+          ═══════════════════════════════════════════════════════════════
+
+          ✅ Repository: ${{ github.repository }}
+          ✅ Branch: ${{ github.ref_name }}
+          ✅ Commit: ${{ github.sha }}
+          ✅ Triggered by: ${{ github.actor }}
+          ✅ Run: ${{ github.run_id }}
+
+          Deploy job status: ${{ needs.deploy.result }}
+          Test job status:   ${{ needs.test.result }}
+          EOF
+
+      - name: Upload deployment report
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-report
+          path: reports/
+          if-no-files-found: ignore
+
+      - name: Post summary to workflow
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Install | ${{ needs.install.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Project:** \`${{ env.FIREBASE_PROJECT_ID }}\`" >> $GITHUB_STEP_SUMMARY
+
+  # ── Job 5: Rollback on failure ────────────────────────────────────────────
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy, test]
+    if: >
+      always() &&
+      (needs.deploy.result == 'failure' || needs.test.result == 'failure')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools@latest
+
+      - name: Find previous working commit
+        id: prev_commit
+        run: |
+          PREV=$(git log --oneline -2 | tail -1 | awk '{print $1}')
+          echo "sha=${PREV}" >> $GITHUB_OUTPUT
+          echo "Previous commit: ${PREV}"
+
+      - name: Write Firebase service account credentials
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/firebase-sa.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json" >> $GITHUB_ENV
+
+      - name: Rollback Cloud Functions
+        if: ${{ secrets.FIREBASE_PROJECT_ID != '' }}
+        run: |
+          echo "⚠️ Rolling back to previous deployment…"
+          echo "Previous commit: ${{ steps.prev_commit.outputs.sha }}"
+          git checkout ${{ steps.prev_commit.outputs.sha }} -- functions/index.js || true
+          firebase deploy \
+            --only functions \
+            --project "$FIREBASE_PROJECT_ID" \
+            --force \
+            --non-interactive \
+          || echo "Rollback deploy failed – manual intervention required"
+
+      - name: Post rollback notice
+        run: |
+          echo "## ⚠️ Rollback Executed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Deployment or tests failed. Rollback to previous state was attempted." >> $GITHUB_STEP_SUMMARY
+          echo "Please check the Firebase console and verify function status." >> $GITHUB_STEP_SUMMARY

@@ -12,7 +12,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   collection, onSnapshot, doc, getDoc,
-  query, orderBy, serverTimestamp
+  query, where, orderBy, serverTimestamp
 } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
@@ -51,6 +51,10 @@ export default function AdminBookings() {
   const [disputeDecisions, setDisputeDecisions] = useState({}); // Tracking selected resolution types
   const [quotes, setQuotes] = useState({});            // Temporary quote prices being entered
   const fileInputRefs = useRef({});                    // Dynamic refs for hidden file inputs
+  // Refs hold the latest snapshot docs from each query so the merge helper
+  // always sees up-to-date data from both listeners without stale closures.
+  const unassignedDocsRef = useRef([]);
+  const ownDocsRef = useRef([]);
 
   const uid = auth.currentUser?.uid;
 
@@ -58,19 +62,56 @@ export default function AdminBookings() {
      REAL-TIME LISTENERS
      ────────────────────────────────────────────────────────────────────────── */
 
-  // Listen to ALL bookings (admins see their region, SuperAdmin sees all)
-  useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, 'bookings'), orderBy('createdAt', 'desc')),
-      snap => setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-    );
-    return unsub;
-  }, []);
-
-  // Listen to available workers for assignment logic
+  // Merge unassigned (no adminId) bookings + this admin's own bookings into one list.
+  // Two queries are required because Firestore doesn't support OR across fields.
   useEffect(() => {
     if (!uid) return;
-    const q = query(collection(db, 'gig_workers'));
+
+    const rebuildList = () => {
+      const seen = new Set();
+      const merged = [];
+      for (const d of [...unassignedDocsRef.current, ...ownDocsRef.current]) {
+        if (!seen.has(d.id)) { seen.add(d.id); merged.push(d); }
+      }
+      merged.sort((a, b) => {
+        const ta = a.createdAt?.toDate?.() ?? new Date(a.createdAt ?? 0);
+        const tb = b.createdAt?.toDate?.() ?? new Date(b.createdAt ?? 0);
+        return tb - ta;
+      });
+      setBookings(merged);
+    };
+
+    // Query 1: bookings with no adminId yet (open/pending for all admins to bid on)
+    const unsubUnassigned = onSnapshot(
+      query(collection(db, 'bookings'), where('adminId', '==', null), orderBy('createdAt', 'desc')),
+      snap => {
+        unassignedDocsRef.current = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        rebuildList();
+      }
+    );
+
+    // Query 2: bookings assigned to this admin
+    const unsubOwn = onSnapshot(
+      query(collection(db, 'bookings'), where('adminId', '==', uid), orderBy('createdAt', 'desc')),
+      snap => {
+        ownDocsRef.current = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        rebuildList();
+      }
+    );
+
+    return () => {
+      unsubUnassigned();
+      unsubOwn();
+      // Reset refs so stale data isn't carried into a future uid's listeners
+      unassignedDocsRef.current = [];
+      ownDocsRef.current = [];
+    };
+  }, [uid]);
+
+  // Listen to admin's own workers for the assignment dropdown
+  useEffect(() => {
+    if (!uid) return;
+    const q = query(collection(db, 'gig_workers'), where('adminId', '==', uid));
     const unsub = onSnapshot(q, snap =>
       setWorkers(snap.docs.map(d => ({ id: d.id, ...d.data() })))
     );

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, doc, query, where } from 'firebase/firestore';
 
 export default function Workers() {
   const [user, setUser] = useState(null);
@@ -16,13 +16,14 @@ export default function Workers() {
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'gig_workers'), (snap) => {
-      const list = [];
-      snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+    if (!user) return;
+    const q = query(collection(db, 'gig_workers'), where('adminId', '==', user.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setWorkers(list);
     }, err => console.error(err));
     return () => unsub();
-  }, []);
+  }, [user]);
 
   async function createWorker() {
     if (!user) return alert('Not authenticated');

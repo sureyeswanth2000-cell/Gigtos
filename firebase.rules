@@ -60,12 +60,15 @@ service cloud.firestore {
         && (request.resource.data.status == "pending" || request.resource.data.status == "scheduled")
         && request.resource.data.createdAt != null;
 
-      // READ: accessible by owner, the assigning admin, or their parent admins
+      // READ: accessible by owner, the assigning admin, their parent admins, or
+      // any admin for unassigned (pending/scheduled) bookings — all admins must
+      // see open requests to participate in the bidding and assignment workflow.
       allow read: if request.auth != null && (
         resource.data.userId == request.auth.uid
         || resource.data.adminId == request.auth.uid
         || (resource.data.adminId != null && isParentOf(resource.data.adminId))
         || isSuperAdmin()
+        || (isAdmin() && resource.data.adminId == null)
       );
 
       // UPDATE — Enforce Backend Only for state changes.
@@ -142,11 +145,12 @@ service cloud.firestore {
        GIG WORKERS COLLECTION
     ============================ */
     match /gig_workers/{workerId} {
-      // Workers are visible to their managing admin and the entire hierarchy above them
+      // Workers are visible to their managing admin, the entire hierarchy above
+      // them, and superadmins (who see all workers across all regions).
       allow read: if isLoggedIn() && (
         resource.data.adminId == request.auth.uid ||
         (resource.data.adminId != null && isParentOf(resource.data.adminId)) ||
-        isAdmin() // Default to allow any admin to see for assignment lookups
+        isSuperAdmin()
       );
       // Local admins create workers; parents manage them
       allow create: if isAdmin() && request.resource.data.adminId == request.auth.uid;

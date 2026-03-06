@@ -45,12 +45,18 @@ export default function Chat() {
   const sendMessage = async () => {
     if (!text.trim() || !bookingId) return;
     const user = auth.currentUser;
-    await addDoc(collection(db, 'bookings', bookingId, 'chat'), {
-      senderId: user.uid,
-      message: text.trim(),
-      createdAt: serverTimestamp(),
-    });
-    setText('');
+    if (!user) return;
+    try {
+      await addDoc(collection(db, 'bookings', bookingId, 'chat'), {
+        senderId: user.uid,
+        message: text.trim(),
+        createdAt: serverTimestamp(),
+      });
+      setText('');
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      alert('Failed to send message. Please try again.');
+    }
   };
 
   if (loading) {

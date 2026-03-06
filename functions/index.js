@@ -396,7 +396,7 @@ exports.onWorkerFraudMarked = functions.firestore
         await adminRef.update({ fraudCount: admin.firestore.FieldValue.increment(1) });
         await recalcRegionScore(after.adminId);
 
-        await logActivity('system', 'worker_fraud_detected', 'system', { workerId, adminId: after.adminId });
+        await logActivity(workerId, 'worker_fraud_detected', 'system', { workerId, adminId: after.adminId });
       }
     }
     return null;
@@ -857,4 +857,48 @@ exports.secureLogActivity = functions.https.onCall(async (data, context) => {
   });
 
   return { success: true };
+});
+
+/**
+ * Callable: createAdminUser
+ * Creates a new admin (regionLead) Firebase Auth account and Firestore document
+ * using the Firebase Admin SDK so that the calling SuperAdmin's auth session is
+ * NOT replaced by the newly created user.  Only superadmins may call this.
+ */
+exports.createAdminUser = functions.https.onCall(async (data, context) => {
+  verifyAuth(context);
+
+  // Only superadmins may create other admin accounts
+  const callerDoc = await db.collection('admins').doc(context.auth.uid).get();
+  if (!callerDoc.exists || callerDoc.data().role !== 'superadmin') {
+    throw new functions.https.HttpsError('permission-denied', 'Only superadmins can create admin accounts.');
+  }
+
+  const { name, email, password, areaName } = data;
+  if (!name || !email || !password || !areaName) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing required fields: name, email, password, areaName.');
+  }
+  if (password.length < 6) {
+    throw new functions.https.HttpsError('invalid-argument', 'Password must be at least 6 characters.');
+  }
+
+  // Create the Firebase Auth user server-side (does not affect client auth state)
+  const userRecord = await admin.auth().createUser({ email, password, displayName: name });
+  const uid = userRecord.uid;
+
+  // Create the admin Firestore document
+  await db.collection('admins').doc(uid).set({
+    name,
+    email,
+    role: 'regionLead',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    regionStatus: 'active',
+    probationStatus: false,
+    regionScore: 100,
+    totalDisputes: 0,
+    fraudCount: 0,
+    areaName,
+  });
+
+  return { success: true, uid };
 });

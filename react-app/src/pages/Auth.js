@@ -431,19 +431,12 @@ function Auth() {
 
           <div style={{ marginBottom: '15px' }}>
             <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
-              {phase === 'login' ? 'OTP or Password:' : 'Password:'}
+              Password:
             </label>
             <input
               type={showPassword ? 'text' : 'password'}
-              value={otp || password}
-              onChange={(e) => {
-                if (phase === 'login') {
-                  setOtp(e.target.value);
-                  setPassword('');
-                } else {
-                  setPassword(e.target.value);
-                }
-              }}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder={phase === 'login' ? 'Enter your password' : 'Minimum 6 characters'}
               style={{
                 width: '100%',

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, updateDoc, doc, query, where, orderBy, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, query, where, orderBy } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db, functionsInstance } from '../firebase';
 
 export default function SuperAdmin() {
@@ -170,36 +169,12 @@ export default function SuperAdmin() {
         setCreateLoading(true);
 
         try {
-            // Step 1: Create Firebase Auth user
-            const userCred = await createUserWithEmailAndPassword(auth, email, password);
-            const uid = userCred.user.uid;
+            // Use the createAdminUser Cloud Function so that the SuperAdmin's auth
+            // session is NOT replaced by the newly created user's session.
+            const createAdminUserFn = httpsCallable(functionsInstance, 'createAdminUser');
+            await createAdminUserFn({ name, email, password, areaName });
 
-            // Step 2: Create admin document in Firestore
-            const adminData = {
-                name,
-                email,
-                role: 'regionLead',
-                createdAt: new Date(),
-                regionStatus: 'active',
-                probationStatus: false,
-                regionScore: 100,
-                totalDisputes: 0,
-                fraudCount: 0,
-                areaName,
-            };
-
-            await setDoc(doc(db, 'admins', uid), adminData);
-
-            // Step 3: ✅ FIX - Log back in as SuperAdmin (createUserWithEmailAndPassword auto-logged in the new user)
-            const superAdminUser = auth.currentUser;
-            if (superAdminUser) {
-                // Get SuperAdmin credentials and re-authenticate
-                // For now, we'll stay logged in as the newly created region lead briefly, 
-                // but show a message that they should log out and back in as SuperAdmin
-                console.log('⚠️ NEW REGION LEAD CREATED - You are now logged in as:', email);
-            }
-
-            setCreateSuccess(`✅ Region Admin "${name}" created successfully! You are logged in as the new region lead. Please LOGOUT and log back in to return to SuperAdmin mode.`);
+            setCreateSuccess(`✅ Region Admin "${name}" created successfully!`);
             
             // Reset form
             setCreateForm({
@@ -212,7 +187,6 @@ export default function SuperAdmin() {
                 areaName: '',
             });
 
-            // Longer timeout since they need to read the message
             setTimeout(() => setCreateSuccess(''), 5000);
         } catch (err) {
             setCreateError('Error: ' + (err.message || err));

@@ -50,6 +50,7 @@ export default function AdminBookings() {
   const [callNotes, setCallNotes] = useState('');      // Notes from the customer phone call
   const [disputeDecisions, setDisputeDecisions] = useState({}); // Tracking selected resolution types
   const [quotes, setQuotes] = useState({});            // Temporary quote prices being entered
+  const [selectedWorkers, setSelectedWorkers] = useState({}); // Per-booking worker dropdown selections
   const fileInputRefs = useRef({});                    // Dynamic refs for hidden file inputs
   // Refs hold the latest snapshot docs from each query so the merge helper
   // always sees up-to-date data from both listeners without stale closures.
@@ -164,7 +165,7 @@ export default function AdminBookings() {
     await callBackend('updateBookingStatus', {
       bookingId: b.id,
       action: 'admin_assign_worker',
-      extraArgs: { workerId, workerName: worker?.name, workerPhone: worker?.phone }
+      extraArgs: { workerId, workerName: worker?.name, workerPhone: worker?.contact }
     });
   };
 
@@ -302,6 +303,7 @@ export default function AdminBookings() {
     if (filter === 'cancelled') return b.status === 'cancelled';
     if (filter === 'disputes') return b.dispute?.status === 'open';
     if (filter === 'escalated') return b.dispute?.escalationStatus === true && b.dispute?.status === 'open';
+    if (filter === 'quoted') return b.status === 'quoted' || b.status === 'accepted';
     return true;
   });
 
@@ -403,8 +405,52 @@ export default function AdminBookings() {
                   )}
                 </div>
               )}
+
+              {/* ASSIGN WORKER: visible for pending/quoted/scheduled (any admin can claim)
+                  and for accepted bookings (only the assigned admin can assign) */}
+              {(['pending', 'scheduled', 'quoted'].includes(b.status) || (b.status === 'accepted' && b.adminId === uid)) && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: '#f0fdf4', padding: '10px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#166534' }}>👷 Assign Worker</div>
+                  {availableWorkers.length === 0 ? (
+                    <div style={{ fontSize: '11px', color: '#6b7280' }}>No available workers for {b.serviceType}.</div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <select
+                        value={selectedWorkers[b.id] || ''}
+                        onChange={e => setSelectedWorkers(prev => ({ ...prev, [b.id]: e.target.value }))}
+                        style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #86efac', fontSize: '12px' }}
+                      >
+                        <option value="">Select worker…</option>
+                        {availableWorkers.map(w => (
+                          <option key={w.id} value={w.id}>{w.name} ({w.contact})</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => {
+                          assignWorker(b, selectedWorkers[b.id]);
+                          setSelectedWorkers(prev => { const n = { ...prev }; delete n[b.id]; return n; });
+                        }}
+                        style={{ background: '#16a34a', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                      >
+                        Assign
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {b.status === 'assigned' && <button onClick={() => startWork(b)} style={{ background: '#9c27b0', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px' }}>Start Work</button>}
               {b.status === 'in_progress' && <button onClick={() => markFinished(b)} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px' }}>Mark Finished</button>}
+
+              {/* CANCEL / REOPEN: only the assigned admin can revert or cancel */}
+              {b.adminId === uid && (
+                <button
+                  onClick={() => cancelBooking(b)}
+                  style={{ background: ['assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status) ? '#f59e0b' : '#ef4444', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px', fontSize: '13px' }}
+                >
+                  {['assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status) ? '↩ Reopen' : '✕ Cancel'}
+                </button>
+              )}
 
               {/* DISPUTE SUB-PANEL */}
               {b.dispute?.status === 'open' && (
@@ -445,6 +491,35 @@ export default function AdminBookings() {
           </div>
         );
       })}
+
+      {/* CALL LOG MODAL: Shown when admin clicks "Log Call" on a dispute */}
+      {callLogId && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div style={{ background: 'white', borderRadius: '12px', padding: '24px', width: '360px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#1e293b' }}>📞 Log Customer Call</h3>
+            <textarea
+              placeholder="Enter call notes / summary…"
+              value={callNotes}
+              onChange={e => setCallNotes(e.target.value)}
+              rows={4}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', resize: 'vertical' }}
+            />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setCallLogId(null); setCallNotes(''); }}
+                style={{ padding: '8px 16px', background: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>
+                Cancel
+              </button>
+              <button onClick={() => submitCallLog(callLogId)}
+                style={{ padding: '8px 16px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>
+                Save Call Log
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

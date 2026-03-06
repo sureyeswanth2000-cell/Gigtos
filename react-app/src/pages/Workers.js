@@ -30,7 +30,7 @@ export default function Workers() {
     if (!/^[0-9]{10}$/.test(contact)) return alert('Enter valid 10 digit phone');
     try {
       await addDoc(collection(db, 'gig_workers'), {
-        name, contact, gigType, status: 'active', adminId: user.uid, createdAt: new Date()
+        name, contact, gigType, status: 'active', isAvailable: true, adminId: user.uid, createdAt: new Date()
       });
       setName(''); setContact('');
     } catch (e) { console.error(e); alert(e.message); }

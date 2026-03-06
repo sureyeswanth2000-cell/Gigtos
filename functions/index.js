@@ -666,9 +666,14 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
         }
         break;
 
-      case 'admin_assign_worker':
-        if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
-        if (!['accepted', 'pending', 'scheduled'].includes(booking.status)) throw new functions.https.HttpsError('failed-precondition', 'Invalid state for assigning worker.');
+      case 'admin_assign_worker': {
+        // Any admin can assign to an unassigned booking; only the locked-in admin
+        // (or superadmin) can assign to a booking that already has adminId set.
+        const callerIsAdmin = adminDocSnap.exists;
+        const bookingHasAdmin = booking.adminId != null;
+        if (bookingHasAdmin && !isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
+        if (!bookingHasAdmin && !callerIsAdmin) throw new functions.https.HttpsError('permission-denied', 'Only admins can assign workers.');
+        if (!['accepted', 'pending', 'scheduled', 'quoted'].includes(booking.status)) throw new functions.https.HttpsError('failed-precondition', 'Invalid state for assigning worker.');
 
         const { workerId, workerName, workerPhone } = extraArgs || {};
         if (!workerId) throw new functions.https.HttpsError('invalid-argument', 'Missing worker details.');
@@ -683,6 +688,10 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
         updates.assignedWorkerId = workerId;
         updates.workerName = workerName;
         updates.workerPhone = workerPhone;
+        // Claim the booking for this admin if it was unassigned
+        if (!bookingHasAdmin) {
+          updates.adminId = context.auth.uid;
+        }
 
         // Lock worker
         transaction.update(workerSnap.ref, { isAvailable: false });
@@ -690,6 +699,7 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
         logAction = 'admin_assigned_worker';
         logExtra = { workerName };
         break;
+      }
 
       case 'admin_start_work':
         if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
@@ -722,13 +732,20 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
 
       case 'admin_reopen_booking':
         if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
-        if (booking.status !== 'cancelled') throw new functions.https.HttpsError('failed-precondition', 'Only cancelled bookings can be reopened.');
+        if (!['cancelled', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(booking.status)) {
+          throw new functions.https.HttpsError('failed-precondition', 'Booking cannot be reverted to pending from its current state.');
+        }
         updates.status = 'pending';
-        // Erase worker assignment
         updates.assignedWorkerId = null;
         updates.workerName = null;
         updates.workerPhone = null;
-        logAction = 'admin_cancelled_reopened';
+        updates.adminId = null;
+        // Free the worker if one was assigned
+        if (booking.assignedWorkerId) {
+          const workerRef = db.collection('gig_workers').doc(booking.assignedWorkerId);
+          transaction.update(workerRef, { isAvailable: true });
+        }
+        logAction = 'admin_booking_reopened';
         break;
 
       case 'user_rate':

@@ -12,6 +12,8 @@ export default function RegionLeadDashboard() {
   const [allGigs, setAllGigs] = useState([]);
   const [activeBookings, setActiveBookings] = useState([]);
   const [disputes, setDisputes] = useState([]);
+  const [allDisputeBookings, setAllDisputeBookings] = useState([]);
+  const [disputeFilter, setDisputeFilter] = useState('open');
   const [stats, setStats] = useState({
     totalMasons: 0,
     totalGigs: 0,
@@ -131,11 +133,13 @@ export default function RegionLeadDashboard() {
             ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status)
           );
           
-          const openDisputes = allBookings.filter(b => b.dispute?.status === 'open');
+          const disputeBookings = allBookings.filter(b => b.dispute?.status);
+          const openDisputes = disputeBookings.filter(b => b.dispute?.status === 'open');
           
           console.log(`✅ Active bookings: ${active.length}, Open disputes: ${openDisputes.length}`);
           
           setActiveBookings(active);
+          setAllDisputeBookings(disputeBookings);
           setDisputes(openDisputes);
           setStats(prev => ({
             ...prev,
@@ -607,7 +611,28 @@ export default function RegionLeadDashboard() {
       {/* Disputes Tab */}
       {activeTab === 'disputes' && (
         <div>
-          <h3 style={{ marginBottom: '16px' }}>Open Disputes</h3>
+          <h3 style={{ marginBottom: '16px' }}>Disputes</h3>
+
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            {[['open', 'Open'], ['all', 'All'], ['resolved', 'Resolved']].map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setDisputeFilter(key)}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  background: disputeFilter === key ? '#1f2937' : 'white',
+                  color: disputeFilter === key ? 'white' : '#111827',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           
           {/* Debug Info */}
           <div style={{
@@ -621,56 +646,71 @@ export default function RegionLeadDashboard() {
             <div><strong>Debug Info:</strong></div>
             <div>↳ Masons under you: {childAdmins.length} ({childAdmins.map(a => a.name).join(', ') || 'none'})</div>
             <div>↳ Total active bookings loaded: {activeBookings.length}</div>
-            <div>↳ Bookings with disputes: {activeBookings.filter(b => b.dispute).length}</div>
+            <div>↳ Bookings with disputes: {allDisputeBookings.length}</div>
             <div>↳ Open disputes: {disputes.length}</div>
             <div>↳ Mason IDs: {childAdmins.map(a => a.id.slice(-6)).join(', ')}</div>
             {childAdmins.map(a => (
               <div key={a.id}>↳ {a.name}: parentAdminId = {a.parentAdminId ? a.parentAdminId.slice(-6) + (a.parentAdminId === uid ? ' ✅' : ' ❌') : 'MISSING'}</div>
             ))}
           </div>
-          
-          {disputes.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
-              No open disputes
-            </div>
-          ) : (
-            <div>
-              {disputes.map(booking => (
-                <div key={booking.id} style={{
-                  background: '#fef2f2',
-                  border: '2px solid #ef4444',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  marginBottom: '12px'
-                }}>
-                  <div style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '8px', color: '#991b1b' }}>
-                    🚨 Booking #{booking.id.slice(-6)}
-                  </div>
-                  <div style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>
-                    Customer: {booking.customerName} | Service: {booking.serviceType}
-                  </div>
-                  <div style={{ fontSize: '13px', color: '#666', marginBottom: '8px' }}>
-                    Dispute Reason: {booking.dispute?.reason || 'No reason provided'}
-                  </div>
-                  <button
-                    onClick={() => navigate('/admin/bookings')}
-                    style={{
-                      padding: '8px 16px',
-                      background: '#ef4444',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontSize: '13px',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    Handle Dispute →
-                  </button>
+
+          {(() => {
+            const shownDisputes = disputeFilter === 'open'
+              ? disputes
+              : disputeFilter === 'resolved'
+                ? allDisputeBookings.filter(b => b.dispute?.status === 'resolved')
+                : allDisputeBookings;
+
+            if (shownDisputes.length === 0) {
+              return (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
+                  No {disputeFilter} disputes
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            }
+
+            return (
+              <div>
+                {shownDisputes.map(booking => (
+                  <div key={booking.id} style={{
+                    background: booking.dispute?.status === 'resolved' ? '#ecfdf5' : '#fef2f2',
+                    border: `2px solid ${booking.dispute?.status === 'resolved' ? '#10b981' : '#ef4444'}`,
+                    borderRadius: '12px',
+                    padding: '16px',
+                    marginBottom: '12px'
+                  }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '8px', color: booking.dispute?.status === 'resolved' ? '#065f46' : '#991b1b' }}>
+                      {booking.dispute?.status === 'resolved' ? '✅' : '🚨'} Booking #{booking.id.slice(-6)}
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>
+                      Customer: {booking.customerName} | Service: {booking.serviceType}
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>
+                      Status: {booking.dispute?.status || 'unknown'}
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#666', marginBottom: '8px' }}>
+                      Dispute Reason: {booking.dispute?.reason || 'No reason provided'}
+                    </div>
+                    <button
+                      onClick={() => navigate('/admin/bookings')}
+                      style={{
+                        padding: '8px 16px',
+                        background: booking.dispute?.status === 'resolved' ? '#10b981' : '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      Handle Dispute
+                    </button>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

@@ -17,6 +17,7 @@ import {
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functionsInstance } from '../firebase';
+import { calculateFinalPrice } from '../utils/pricing';
 
 // Status colors to give admins quick visual cues about the load
 const STATUS_COLORS = {
@@ -332,7 +333,7 @@ export default function AdminBookings() {
 
     if (method === 'submitQuote') {
       console.log('🟢 runSparkFallback: submitQuote called');
-      const { bookingId, price } = data;
+      const { bookingId, price, finalPrice, pricing } = data;
       const bookingRef = doc(db, 'bookings', bookingId);
       const snap = await getDoc(bookingRef);
       if (!snap.exists()) throw new Error('Booking not found');
@@ -343,7 +344,14 @@ export default function AdminBookings() {
 
       const adminDoc = await getDoc(doc(db, 'admins', uid));
       const adminName = adminDoc.exists() ? (adminDoc.data().name || adminDoc.data().email || 'Admin') : 'Admin';
-      const updatedQuotes = [...quotesList, { adminId: uid, adminName, price: Number(price), createdAt: new Date() }];
+      const updatedQuotes = [...quotesList, { 
+        adminId: uid, 
+        adminName, 
+        price: Number(price),
+        finalPrice: Number(finalPrice),
+        pricing: pricing,
+        createdAt: new Date() 
+      }];
 
       // Don't change status to 'quoted' - keep it open for other masons to submit quotes
       // Status will only change when user accepts a quote
@@ -635,18 +643,35 @@ export default function AdminBookings() {
   /**
    * Action: Admin sets a price quote for the job.
    * Logic: Appends to a "quotes" array so multiple admins can bid.
+   * Pricing: Automatically adds 15% platform fee + 2% payment charges to base amount.
    */
   const setPriceQuote = async (bookingId) => {
-    const price = quotes[bookingId];
-    if (!price || isNaN(price) || price <= 0) {
+    const basePrice = quotes[bookingId];
+    if (!basePrice || isNaN(basePrice) || basePrice <= 0) {
       alert('Please enter a valid amount.');
       return;
     }
 
-    console.log('🔵 Submitting quote:', { bookingId, price, uid, adminRole });
-    await callBackend('submitQuote', { bookingId, price: Number(price) });
+    // Calculate final price with platform fee (15%) and payment charges (2%)
+    const pricing = calculateFinalPrice(basePrice);
+    const confirmMsg = `Submit quote with following breakdown?\n\nBase Amount: ₹${pricing.baseAmount}\nPlatform Fee (15%): ₹${pricing.platformFee}\nPayment Charges (2%): ₹${pricing.paymentCharge}\n\n════════════════════\nFinal Total for Customer: ₹${pricing.finalTotal}\n\nYou will receive: ₹${pricing.baseAmount}`;
+    
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    console.log('🔵 Submitting quote:', { bookingId, basePrice, finalPrice: pricing.finalTotal, uid, adminRole });
+    
+    // Store both base price and final price in quote
+    await callBackend('submitQuote', { 
+      bookingId, 
+      price: Number(basePrice),
+      finalPrice: Number(pricing.finalTotal),
+      pricing: pricing
+    });
+    
     setQuotes(prev => { const n = { ...prev }; delete n[bookingId]; return n; });
-    alert('Quote sent! User will be notified.');
+    alert('Quote sent! User will be notified with final price: ₹' + pricing.finalTotal);
   };
 
   /* ──────────────────────────────────────────────────────────────────────────

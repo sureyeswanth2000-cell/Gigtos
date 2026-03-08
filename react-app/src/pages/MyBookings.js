@@ -17,6 +17,7 @@ import {
   doc, updateDoc, getDoc
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { calculateFinalPrice } from '../utils/pricing';
 
 // UI CONFIG: Color mapping for visual differentiation of booking states
 const statusColors = {
@@ -304,7 +305,12 @@ export default function MyBookings() {
      Transitions: pending/quoted -> accepted. Sets adminId to winning admin.
   */
   async function acceptQuote(id, quote) {
-    if (!window.confirm(`Accept quote for ₹${quote.price} from ${quote.adminName}?`)) return;
+    const finalPrice = quote.finalPrice || quote.price;
+    const breakdown = quote.pricing ? 
+      `\n\nPrice Breakdown:\n• Base Amount: ₹${quote.pricing.baseAmount}\n• Platform Fee (15%): ₹${quote.pricing.platformFee}\n• Payment Charges (2%): ₹${quote.pricing.paymentCharge}\n═══════════════\n• Total: ₹${finalPrice}` 
+      : '';
+    
+    if (!window.confirm(`Accept quote from ${quote.adminName}?${breakdown}`)) return;
     try {
       await callBackend('acceptQuote', { bookingId: id, adminId: quote.adminId });
       alert('✓ Quote accepted! Your regional pro will assign a worker shortly.');
@@ -597,28 +603,38 @@ export default function MyBookings() {
                 <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#4338ca', marginBottom: '8px' }}>
                   💰 Bids Received ({booking.quotes.length})
                 </div>
-                {booking.quotes.map((q, idx) => (
-                  <div key={idx} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '10px', background: 'white', borderRadius: '6px', marginBottom: '6px',
-                    border: '1px solid #e0e7ff'
-                  }}>
-                    <div>
-                      <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>{q.adminName}</div>
-                      <div style={{ fontSize: '14px', color: '#4f46e5', fontWeight: 'bold' }}>₹{q.price}</div>
+                {booking.quotes.map((q, idx) => {
+                  const finalPrice = q.finalPrice || q.price;
+                  const hasPricing = q.pricing && q.pricing.platformFee;
+                  
+                  return (
+                    <div key={idx} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '10px', background: 'white', borderRadius: '6px', marginBottom: '6px',
+                      border: '1px solid #e0e7ff'
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>{q.adminName}</div>
+                        <div style={{ fontSize: '14px', color: '#4f46e5', fontWeight: 'bold' }}>₹{finalPrice}</div>
+                        {hasPricing && (
+                          <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+                            Base: ₹{q.pricing.baseAmount} + Platform Fee: ₹{q.pricing.platformFee} + Payment: ₹{q.pricing.paymentCharge}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => acceptQuote(booking.id, q)}
+                        style={{
+                          padding: '6px 12px', background: '#4caf50', color: 'white',
+                          border: 'none', borderRadius: '4px', cursor: 'pointer',
+                          fontSize: '12px', fontWeight: 'bold'
+                        }}
+                      >
+                        Accept
+                      </button>
                     </div>
-                    <button
-                      onClick={() => acceptQuote(booking.id, q)}
-                      style={{
-                        padding: '6px 12px', background: '#4caf50', color: 'white',
-                        border: 'none', borderRadius: '4px', cursor: 'pointer',
-                        fontSize: '12px', fontWeight: 'bold'
-                      }}
-                    >
-                      Accept
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -626,7 +642,7 @@ export default function MyBookings() {
           {booking.status === 'accepted' && (
             <div style={{ width: '100%', marginBottom: '10px', padding: '12px', background: '#ecfdf5', borderRadius: '8px', border: '1px solid #10b981' }}>
               <div style={{ fontSize: '13px', color: '#065f46', fontWeight: 'bold' }}>
-                🤝 Price Accepted: ₹{booking.acceptedQuote?.price}
+                🤝 Price Accepted: ₹{booking.acceptedQuote?.finalPrice || booking.acceptedQuote?.price}
               </div>
               <div style={{ fontSize: '11px', color: '#059669' }}>
                 Admin: {booking.acceptedQuote?.adminName} | Worker assignment in progress.

@@ -245,5 +245,21 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    /* ============================
+       ADMIN ALERTS COLLECTION
+    ============================ */
+    match /admin_alerts/{alertId} {
+      // Region lead/admin sees own alerts; superadmin can inspect all.
+      allow read: if isLoggedIn() && (
+        resource.data.adminId == request.auth.uid || isSuperAdmin()
+      );
+
+      // Admin can mark own alert as read/closed; writes from backend are unrestricted by rules via Admin SDK.
+      allow update: if isLoggedIn() && resource.data.adminId == request.auth.uid;
+
+      // No direct client-side create/delete for alert integrity.
+      allow create, delete: if false;
+    }
+
   }
 }

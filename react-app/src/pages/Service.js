@@ -42,6 +42,7 @@ export default function Service() {
   const [isScheduled, setIsScheduled] = useState(false); // Toggle between immediate and future booking
   const [scheduledDate, setScheduledDate] = useState(''); // User selected date (YYYY-MM-DD)
   const [timeSlot, setTimeSlot] = useState(''); // User selected slot: 9-12, 12-3, 3-6
+  const [estimatedDays, setEstimatedDays] = useState(1); // Single day by default, multi-day supported
 
   // UI and feedback states
   const [loading, setLoading] = useState(false); // Spinner state during Firestore write
@@ -97,6 +98,11 @@ export default function Service() {
       return;
     }
 
+    if (!estimatedDays || Number(estimatedDays) < 1) {
+      setError('Estimated work days should be at least 1.');
+      return;
+    }
+
     setLoading(true); // Start loading spinner
     setError(''); // Clear previous errors
 
@@ -112,8 +118,13 @@ export default function Service() {
         address: address, // Service location
         phone: userPhone, // Contact number
         status: isScheduled ? 'scheduled' : 'pending', // Set status based on timing choice
+        statusUpdatedAt: new Date(),
         scheduledDate: isScheduled ? scheduledDate : null, // Future date if applicable
         timeSlot: isScheduled ? timeSlot : null, // Future slot if applicable
+        estimatedDays: Number(estimatedDays),
+        completedWorkDays: 0,
+        remainingWorkDays: Number(estimatedDays),
+        isMultiDay: Number(estimatedDays) > 1,
         createdAt: new Date(), // Permanent record of submission
         updatedAt: new Date() // Record of latest status change
       };
@@ -288,6 +299,28 @@ export default function Service() {
               </div>
             </div>
           )}
+
+          <div style={{ marginTop: '12px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#666', display: 'block', marginBottom: '5px' }}>
+              Estimated Work Days:
+            </label>
+            <select
+              value={estimatedDays}
+              onChange={e => setEstimatedDays(Number(e.target.value))}
+              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            >
+              <option value={1}>1 Day</option>
+              <option value={2}>2 Days</option>
+              <option value={3}>3 Days</option>
+              <option value={4}>4 Days</option>
+              <option value={5}>5+ Days</option>
+            </select>
+            {Number(estimatedDays) > 1 && (
+              <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px' }}>
+                Multi-day jobs will stay in progress until each day is marked complete.
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -398,6 +431,7 @@ export default function Service() {
                   <div><strong>🕒 Time Slot:</strong> {timeSlot}</div>
                 </>
               )}
+              <div style={{ marginTop: '8px' }}><strong>⏳ Estimated Days:</strong> {estimatedDays}</div>
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>

@@ -15,6 +15,34 @@
 9. [Real-Time Features](#real-time-features)
 10. [Security & Permissions](#security--permissions)
 11. [Tech Stack](#tech-stack)
+12. [Productivity Enhancements](#productivity-enhancements)
+
+---
+
+## PRODUCTIVITY ENHANCEMENTS
+
+### 1. 24h SLA Delay Monitoring
+- Backend tracks `statusUpdatedAt` and flags active bookings delayed beyond 24 hours.
+- Region lead receives an in-app alert via `admin_alerts` collection.
+- Admin bookings now supports delayed filter (`Delayed >24h`).
+
+### 2. Worker Auto-Pick + Mason Override
+- After user accepts quote, system can auto-pick best worker by rating + availability.
+- Mason/admin can still manually change worker before starting work.
+
+### 3. Quote Presets with Editable Add-ons
+- Mason quote form supports service-based presets (plumber/electrician/carpenter/painter).
+- Optional add-on amount can be included before final quote submission.
+- Final customer total still applies 15% + 2% pricing model.
+
+### 4. Advanced Search and Filters
+- Admin/RegionLead/Mason booking list supports text search, service filter, worker filter, date range, and delayed-only toggle.
+- User My Bookings now supports search + status filter.
+
+### 5. Multi-day Job Tracking
+- Service creation supports `estimatedDays`.
+- Booking tracks `completedWorkDays` and `remainingWorkDays`.
+- In-progress jobs use day-by-day completion before final finish.
 
 ---
 

@@ -36,6 +36,49 @@ const STATUS_COLORS = {
 // All statuses that require active attention from admins
 const ACTIVE_STATUSES = ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'];
 
+const QUOTE_PRESETS = {
+  plumber: [
+    { key: 'leak', label: 'Leak Fix', amount: 500 },
+    { key: 'tap', label: 'Tap/Fitting Replace', amount: 700 },
+    { key: 'line', label: 'Pipeline Work', amount: 1200 },
+  ],
+  electrician: [
+    { key: 'switch', label: 'Switch/Board Repair', amount: 600 },
+    { key: 'wiring', label: 'Wiring Fix', amount: 1400 },
+    { key: 'fixture', label: 'Fixture Installation', amount: 900 },
+  ],
+  carpenter: [
+    { key: 'door', label: 'Door Repair', amount: 800 },
+    { key: 'furniture', label: 'Furniture Repair', amount: 1300 },
+    { key: 'modular', label: 'Modular Work', amount: 1800 },
+  ],
+  painter: [
+    { key: 'patch', label: 'Patch Work', amount: 700 },
+    { key: 'single_room', label: 'Single Room Paint', amount: 2500 },
+    { key: 'full_home', label: 'Full Home Paint', amount: 9000 },
+  ],
+};
+
+const normalizeServiceType = (type) => {
+  if (!type) return '';
+  return type.trim().toLowerCase()
+    .replace(/electrican/i, 'electrician')
+    .replace(/plummer/i, 'plumber')
+    .replace(/carpanter/i, 'carpenter');
+};
+
+const getStatusTimestamp = (booking) => {
+  const statusAt = booking?.statusUpdatedAt || booking?.updatedAt || booking?.createdAt;
+  if (!statusAt) return null;
+  return statusAt.toDate ? statusAt.toDate() : new Date(statusAt);
+};
+
+const getStatusAgeHours = (booking) => {
+  const ts = getStatusTimestamp(booking);
+  if (!ts) return 0;
+  return (Date.now() - ts.getTime()) / (1000 * 60 * 60);
+};
+
 export default function AdminBookings() {
   /* ──────────────────────────────────────────────────────────────────────────
      STATE MANAGEMENT
@@ -52,6 +95,15 @@ export default function AdminBookings() {
   const [callNotes, setCallNotes] = useState('');      // Notes from the customer phone call
   const [disputeDecisions, setDisputeDecisions] = useState({}); // Tracking selected resolution types
   const [quotes, setQuotes] = useState({});            // Temporary quote prices being entered
+  const [quotePresets, setQuotePresets] = useState({});
+  const [quoteAddons, setQuoteAddons] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [serviceFilter, setServiceFilter] = useState('all');
+  const [workerFilter, setWorkerFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [showDelayedOnly, setShowDelayedOnly] = useState(false);
+  const [autoAssigningBookingIds, setAutoAssigningBookingIds] = useState({});
   const fileInputRefs = useRef({});                    // Dynamic refs for hidden file inputs
   const [isSuperAdmin, setIsSuperAdmin] = useState(false); // Role check for permissions
   const [adminRole, setAdminRole] = useState('admin'); // admin/mason/regionLead/superadmin
@@ -377,6 +429,7 @@ export default function AdminBookings() {
         await updateDoc(bookingRef, {
           ...base,
           status: 'assigned',
+          statusUpdatedAt: new Date(),
           adminId: uid,
           assignedWorkerId: workerId,
           workerName,
@@ -387,17 +440,47 @@ export default function AdminBookings() {
       }
 
       if (action === 'admin_start_work') {
-        await updateDoc(bookingRef, { ...base, status: 'in_progress', startedAt: new Date(), adminId: booking.adminId || uid });
+        await updateDoc(bookingRef, {
+          ...base,
+          status: 'in_progress',
+          statusUpdatedAt: new Date(),
+          startedAt: new Date(),
+          adminId: booking.adminId || uid,
+        });
         return;
       }
 
       if (action === 'admin_mark_finished') {
-        await updateDoc(bookingRef, { ...base, status: 'awaiting_confirmation', finishedAt: new Date(), adminId: booking.adminId || uid });
+        const estimatedDays = Number(booking.estimatedDays || 1);
+        const completedWorkDays = Number(booking.completedWorkDays || 0);
+        const nextCompletedDays = completedWorkDays + 1;
+        const remainingWorkDays = Math.max(estimatedDays - nextCompletedDays, 0);
+
+        if (remainingWorkDays > 0) {
+          await updateDoc(bookingRef, {
+            ...base,
+            status: 'in_progress',
+            completedWorkDays: nextCompletedDays,
+            remainingWorkDays,
+            statusUpdatedAt: new Date(),
+            adminId: booking.adminId || uid,
+          });
+        } else {
+          await updateDoc(bookingRef, {
+            ...base,
+            status: 'awaiting_confirmation',
+            completedWorkDays: nextCompletedDays,
+            remainingWorkDays: 0,
+            statusUpdatedAt: new Date(),
+            finishedAt: new Date(),
+            adminId: booking.adminId || uid,
+          });
+        }
         return;
       }
 
       if (action === 'admin_cancelled') {
-        await updateDoc(bookingRef, { ...base, status: 'cancelled', adminId: booking.adminId || uid });
+        await updateDoc(bookingRef, { ...base, status: 'cancelled', statusUpdatedAt: new Date(), adminId: booking.adminId || uid });
         return;
       }
 
@@ -405,6 +488,7 @@ export default function AdminBookings() {
         await updateDoc(bookingRef, {
           ...base,
           status: 'pending',
+          statusUpdatedAt: new Date(),
           adminId: null,
           assignedWorkerId: null,
           workerName: null,
@@ -492,6 +576,53 @@ export default function AdminBookings() {
       }
     }
   };
+
+  const getRecommendedWorker = (booking, availableWorkers) => {
+    if (!availableWorkers || availableWorkers.length === 0) return null;
+    const desiredType = normalizeServiceType(booking.serviceType);
+
+    const ranked = [...availableWorkers].map((w) => {
+      const ratingScore = Number(w.rating || 0) * 100;
+      const utilizationPenalty = Number(w.completedJobs || 0);
+      const serviceBonus = normalizeServiceType(w.gigType) === desiredType ? 25 : 0;
+      return { worker: w, score: ratingScore + serviceBonus - utilizationPenalty };
+    }).sort((a, b) => b.score - a.score);
+
+    return ranked[0]?.worker || null;
+  };
+
+  useEffect(() => {
+    if (!uid) return;
+    const editableRoles = ['admin', 'mason', 'superadmin'];
+    if (!editableRoles.includes(adminRole)) return;
+
+    const acceptedMine = bookings.filter((b) => b.status === 'accepted' && b.adminId === uid && !b.assignedWorkerId);
+    acceptedMine.forEach((b) => {
+      if (autoAssigningBookingIds[b.id]) return;
+      const busyWorkerIds = bookings
+        .filter((bk) => ['assigned', 'in_progress'].includes(bk.status) && bk.id !== b.id)
+        .map((bk) => bk.assignedWorkerId);
+
+      const availableWorkers = workers.filter((w) => {
+        const matchesService = normalizeServiceType(w.gigType) === normalizeServiceType(b.serviceType);
+        return w.status === 'active' && !w.isFraud && !busyWorkerIds.includes(w.id) && matchesService;
+      });
+
+      const pick = getRecommendedWorker(b, availableWorkers);
+      if (!pick) return;
+
+      setAutoAssigningBookingIds((prev) => ({ ...prev, [b.id]: true }));
+      assignWorker(b, pick.id)
+        .catch((err) => console.error('Auto-assignment failed:', err))
+        .finally(() => {
+          setAutoAssigningBookingIds((prev) => {
+            const next = { ...prev };
+            delete next[b.id];
+            return next;
+          });
+        });
+    });
+  }, [bookings, workers, uid, adminRole]);
 
   /**
    * Action: Assing a specific worker to a pending request.
@@ -644,7 +775,9 @@ export default function AdminBookings() {
    * Pricing: Automatically adds 15% platform fee + 2% payment charges to base amount.
    */
   const setPriceQuote = async (bookingId) => {
-    const basePrice = quotes[bookingId];
+    const enteredBase = Number(quotes[bookingId] || 0);
+    const addonAmount = Number(quoteAddons[bookingId] || 0);
+    const basePrice = enteredBase + addonAmount;
     if (!basePrice || isNaN(basePrice) || basePrice <= 0) {
       alert('Please enter a valid amount.');
       return;
@@ -669,6 +802,8 @@ export default function AdminBookings() {
     });
     
     setQuotes(prev => { const n = { ...prev }; delete n[bookingId]; return n; });
+    setQuoteAddons(prev => { const n = { ...prev }; delete n[bookingId]; return n; });
+    setQuotePresets(prev => { const n = { ...prev }; delete n[bookingId]; return n; });
     alert('Quote sent! User will be notified with final price: ₹' + pricing.finalTotal);
   };
 
@@ -682,8 +817,40 @@ export default function AdminBookings() {
     if (filter === 'disputes') return b.dispute?.status === 'open';
     if (filter === 'quoted') return b.status === 'quoted' || (b.quotes?.length > 0 && b.status === 'pending');
     if (filter === 'escalated') return b.dispute?.escalationStatus === true && b.dispute?.status === 'open';
+    if (filter === 'delayed') return getStatusAgeHours(b) >= 24 || b.sla?.breached;
     return true;
+  }).filter((b) => {
+    const text = searchTerm.trim().toLowerCase();
+    if (!text) return true;
+    return [
+      b.id,
+      b.customerName,
+      b.phone,
+      b.address,
+      b.serviceType,
+      b.workerName,
+      b.assignedWorker,
+      b.status,
+    ].some((value) => (value || '').toString().toLowerCase().includes(text));
+  }).filter((b) => {
+    if (serviceFilter === 'all') return true;
+    return normalizeServiceType(b.serviceType) === normalizeServiceType(serviceFilter);
+  }).filter((b) => {
+    if (workerFilter === 'all') return true;
+    return (b.assignedWorkerId || '') === workerFilter;
+  }).filter((b) => {
+    if (!showDelayedOnly) return true;
+    return getStatusAgeHours(b) >= 24 || b.sla?.breached;
+  }).filter((b) => {
+    if (!dateFrom && !dateTo) return true;
+    const dt = getStatusTimestamp(b);
+    if (!dt) return false;
+    const fromOk = !dateFrom || dt >= new Date(`${dateFrom}T00:00:00`);
+    const toOk = !dateTo || dt <= new Date(`${dateTo}T23:59:59`);
+    return fromOk && toOk;
   });
+
+  const uniqueServices = Array.from(new Set(bookings.map((b) => b.serviceType).filter(Boolean)));
 
   return (
     <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '20px' }}>
@@ -717,6 +884,7 @@ export default function AdminBookings() {
           { key: 'disputes', label: '🚨 Disputes', color: '#dc2626' },
           { key: 'quoted', label: '💰 Quoted', color: '#6366f1' },
           { key: 'escalated', label: '⏰ Escalated', color: '#7c3aed' },
+          { key: 'delayed', label: '🕒 Delayed >24h', color: '#ef4444' },
           { key: 'all', label: 'All', color: '#667eea' },
         ].map(tab => (
           <button key={tab.key} onClick={() => setFilter(tab.key)}
@@ -730,18 +898,33 @@ export default function AdminBookings() {
         ))}
       </div>
 
+      <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', marginBottom: '16px' }}>
+        <input
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search by booking, customer, phone, address..."
+          style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '8px' }}
+        />
+        <select value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '8px' }}>
+          <option value="all">All Services</option>
+          {uniqueServices.map((svc) => <option key={svc} value={svc}>{svc}</option>)}
+        </select>
+        <select value={workerFilter} onChange={(e) => setWorkerFilter(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '8px' }}>
+          <option value="all">All Workers</option>
+          {workers.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+        </select>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '8px' }} />
+        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '8px' }} />
+      </div>
+
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '16px', fontSize: '13px' }}>
+        <input type="checkbox" checked={showDelayedOnly} onChange={(e) => setShowDelayedOnly(e.target.checked)} />
+        Show only delayed bookings (>24h in same status)
+      </label>
+
       {shown.map(b => {
         // LOGIC: Filter workers based on gig type AND availability for this booking ID
         const busyWorkerIds = bookings.filter(bk => ['assigned', 'in_progress'].includes(bk.status) && bk.id !== b.id).map(bk => bk.assignedWorkerId);
-        
-        // Normalize service type for matching (trim, lowercase, handle common spelling variations)
-        const normalizeServiceType = (type) => {
-          if (!type) return '';
-          return type.trim().toLowerCase()
-            .replace(/electrican/i, 'electrician')
-            .replace(/plummer/i, 'plumber')
-            .replace(/carpanter/i, 'carpenter');
-        };
         
         const bookingServiceType = normalizeServiceType(b.serviceType);
         const availableWorkers = workers.filter(w => {
@@ -822,6 +1005,11 @@ export default function AdminBookings() {
                     </>
                   )}
                 </div>
+                {Number(b.estimatedDays || 1) > 1 && (
+                  <div style={{ fontSize: '11px', color: '#4b5563', marginTop: '4px' }}>
+                    Multi-day job: {Number(b.completedWorkDays || 0)}/{Number(b.estimatedDays || 1)} days completed, {Number(b.remainingWorkDays || b.estimatedDays || 1)} day(s) left
+                  </div>
+                )}
               </div>
               <div style={{ textAlign: 'right' }}>
                 <span style={{ padding: '4px 10px', background: STATUS_COLORS[b.status], color: 'white', borderRadius: '20px', fontSize: '10px', fontWeight: 'bold' }}>
@@ -843,6 +1031,35 @@ export default function AdminBookings() {
               {(b.status === 'pending' || b.status === 'scheduled' || b.status === 'quoted') && (adminRole === 'admin' || adminRole === 'mason' || adminRole === 'worker') && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569' }}>💰 Submit Bid</div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <select
+                      value={quotePresets[b.id] || ''}
+                      onChange={(e) => {
+                        const presetKey = e.target.value;
+                        setQuotePresets(prev => ({ ...prev, [b.id]: presetKey }));
+                        const presets = QUOTE_PRESETS[normalizeServiceType(b.serviceType)] || [];
+                        const selected = presets.find((p) => p.key === presetKey);
+                        if (selected) {
+                          setQuotes(prev => ({ ...prev, [b.id]: selected.amount }));
+                        }
+                      }}
+                      disabled={b.quotes?.some(q => q.adminId === uid)}
+                      style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                    >
+                      <option value="">Select preset (optional)</option>
+                      {(QUOTE_PRESETS[normalizeServiceType(b.serviceType)] || []).map((preset) => (
+                        <option key={preset.key} value={preset.key}>{preset.label} (Rs.{preset.amount})</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      placeholder="Addon Rs"
+                      value={quoteAddons[b.id] || ''}
+                      onChange={e => setQuoteAddons(prev => ({ ...prev, [b.id]: e.target.value }))}
+                      disabled={b.quotes?.some(q => q.adminId === uid)}
+                      style={{ width: '120px', padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                    />
+                  </div>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <input
                       type="number"
@@ -888,11 +1105,16 @@ export default function AdminBookings() {
               {b.status === 'accepted' && (adminRole === 'admin' || adminRole === 'mason' || adminRole === 'superadmin') && (
                 <div style={{ width: '100%', padding: '12px', background: '#ecfdf5', borderRadius: '8px', border: '1px solid #10b981' }}>
                   <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#065f46', marginBottom: '8px' }}>
-                    🤝 Quote Accepted - Assign Gig to Complete Job
+                    🤝 Quote Accepted - Auto-picked worker (editable before Start Work)
                   </div>
                   <div style={{ fontSize: '12px', color: '#059669', marginBottom: '8px' }}>
-                    Accepted Price: ₹{b.acceptedQuote?.price} | Customer: {b.customerName}
+                    Accepted Price: ₹{b.acceptedQuote?.finalPrice || b.acceptedQuote?.price} | Customer: {b.customerName}
                   </div>
+                  {autoAssigningBookingIds[b.id] && (
+                    <div style={{ fontSize: '12px', color: '#0f766e', marginBottom: '8px' }}>
+                      Auto-picking best worker based on rating and availability...
+                    </div>
+                  )}
                   {availableWorkers.length > 0 ? (
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <select
@@ -913,6 +1135,24 @@ export default function AdminBookings() {
                           </option>
                         ))}
                       </select>
+                      <button
+                        onClick={() => {
+                          const pick = getRecommendedWorker(b, availableWorkers);
+                          if (pick) assignWorker(b, pick.id);
+                        }}
+                        style={{
+                          background: '#0ea5e9',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '8px 10px',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Auto Pick
+                      </button>
                     </div>
                   ) : (
                     <div style={{ fontSize: '12px', color: '#dc2626', padding: '8px', background: '#fef2f2', borderRadius: '4px' }}>
@@ -940,7 +1180,11 @@ export default function AdminBookings() {
               )}
               
               {b.status === 'assigned' && <button onClick={() => startWork(b)} style={{ background: '#9c27b0', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px' }}>Start Work</button>}
-              {b.status === 'in_progress' && <button onClick={() => markFinished(b)} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px' }}>Mark Finished</button>}
+              {b.status === 'in_progress' && (
+                <button onClick={() => markFinished(b)} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px' }}>
+                  {Number(b.remainingWorkDays || b.estimatedDays || 1) > 1 ? 'Mark Day Complete' : 'Mark Finished'}
+                </button>
+              )}
 
               {/* DISPUTE SUB-PANEL */}
               {b.dispute?.status === 'open' && (

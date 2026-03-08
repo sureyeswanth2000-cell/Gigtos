@@ -55,6 +55,8 @@ export default function MyBookings() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
   const [updating, setUpdating] = useState(false);
@@ -129,6 +131,7 @@ export default function MyBookings() {
         status: acceptedBooking.status,
         adminId: acceptedBooking.adminId,
         acceptedQuote: acceptedBooking.acceptedQuote,
+        statusUpdatedAt: new Date(),
         updatedAt: new Date(),
         userId: user.uid,
       });
@@ -145,12 +148,12 @@ export default function MyBookings() {
       if (booking.userId !== user.uid) throw new Error('Not owner');
 
       if (action === 'user_cancelled') {
-        await updateDoc(bookingRef, { status: 'cancelled', updatedAt: new Date(), userId: user.uid });
+        await updateDoc(bookingRef, { status: 'cancelled', statusUpdatedAt: new Date(), updatedAt: new Date(), userId: user.uid });
         return;
       }
 
       if (action === 'user_confirm_completion') {
-        await updateDoc(bookingRef, { status: 'completed', updatedAt: new Date(), userId: user.uid });
+        await updateDoc(bookingRef, { status: 'completed', statusUpdatedAt: new Date(), updatedAt: new Date(), userId: user.uid });
         return;
       }
 
@@ -319,9 +322,17 @@ export default function MyBookings() {
   }
 
   /* ── Booking groups ── */
-  const active = bookings.filter(b => ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status));
-  const completed = bookings.filter(b => b.status === 'completed');
-  const cancelled = bookings.filter(b => b.status === 'cancelled');
+  const filteredBookings = bookings.filter((b) => {
+    if (statusFilter !== 'all' && b.status !== statusFilter) return false;
+    const text = searchTerm.trim().toLowerCase();
+    if (!text) return true;
+    return [b.id, b.serviceType, b.status, b.address, b.assignedWorker, b.workerName]
+      .some((v) => (v || '').toString().toLowerCase().includes(text));
+  });
+
+  const active = filteredBookings.filter(b => ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status));
+  const completed = filteredBookings.filter(b => b.status === 'completed');
+  const cancelled = filteredBookings.filter(b => b.status === 'cancelled');
 
   /* ── COMPONENT: BookingCard ── 
      Logic: Renders the details of an individual booking.
@@ -417,6 +428,11 @@ export default function MyBookings() {
               {booking.address} ↗
             </a>
           </div>
+          {Number(booking.estimatedDays || 1) > 1 && (
+            <div style={{ marginTop: '4px', fontSize: '12px', color: '#4b5563' }}>
+              Multi-day progress: {Number(booking.completedWorkDays || 0)}/{Number(booking.estimatedDays || 1)} days completed
+            </div>
+          )}
 
           {/* WORKER ASSIGNMENT CARD */}
           {booking.assignedWorker && (
@@ -714,6 +730,27 @@ export default function MyBookings() {
   return (
     <div style={{ maxWidth: '650px', margin: '0 auto', padding: '20px' }}>
       <h2 style={{ fontSize: '24px', marginBottom: '20px', color: '#333' }}>📦 My Bookings</h2>
+
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+        <input
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search by service, status, location, booking id"
+          style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px' }}
+        />
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px' }}>
+          <option value="all">All</option>
+          <option value="pending">Pending</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="quoted">Quoted</option>
+          <option value="accepted">Accepted</option>
+          <option value="assigned">Assigned</option>
+          <option value="in_progress">In Progress</option>
+          <option value="awaiting_confirmation">Awaiting Confirmation</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
 
       {!user && (
         <div style={{ padding: '20px', textAlign: 'center', background: '#fff3cd', borderRadius: '8px', color: '#856404' }}>

@@ -13,6 +13,7 @@ export default function RegionLeadDashboard() {
   const [activeBookings, setActiveBookings] = useState([]);
   const [disputes, setDisputes] = useState([]);
   const [allDisputeBookings, setAllDisputeBookings] = useState([]);
+  const [alerts, setAlerts] = useState([]);
   const [disputeFilter, setDisputeFilter] = useState('open');
   const [stats, setStats] = useState({
     totalMasons: 0,
@@ -159,6 +160,21 @@ export default function RegionLeadDashboard() {
     return () => unsubscribers.forEach(fn => fn());
   }, [uid, childAdmins]);
 
+  useEffect(() => {
+    if (!uid) return;
+    const unsub = onSnapshot(
+      query(
+        collection(db, 'admin_alerts'),
+        where('adminId', '==', uid),
+        where('status', '==', 'open')
+      ),
+      (snap) => {
+        setAlerts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      }
+    );
+    return unsub;
+  }, [uid]);
+
   const createChildAdmin = async () => {
     if (!newAdminName || !newAdminEmail || !newAdminPassword) {
       alert('Please fill in all fields');
@@ -265,6 +281,26 @@ export default function RegionLeadDashboard() {
           fontWeight: 'bold'
         }}>
           ⚠️ Region Score: {stats.regionScore}/100 - Below threshold! Check performance metrics.
+        </div>
+      )}
+
+      {alerts.length > 0 && (
+        <div style={{ background: '#fff7ed', border: '2px solid #fb923c', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
+          <div style={{ fontWeight: 'bold', color: '#9a3412', marginBottom: '8px' }}>
+            SLA Alerts ({alerts.length})
+          </div>
+          {alerts.slice(0, 5).map((a) => (
+            <div key={a.id} style={{ background: 'white', border: '1px solid #fdba74', borderRadius: '6px', padding: '8px', marginBottom: '6px' }}>
+              <div style={{ fontSize: '12px', color: '#7c2d12', fontWeight: 'bold' }}>{a.title}</div>
+              <div style={{ fontSize: '12px', color: '#9a3412', marginTop: '2px' }}>{a.message}</div>
+              <button
+                onClick={() => updateDoc(doc(db, 'admin_alerts', a.id), { status: 'closed', readAt: new Date() })}
+                style={{ marginTop: '6px', padding: '4px 8px', border: 'none', borderRadius: '4px', background: '#ea580c', color: 'white', fontSize: '11px', cursor: 'pointer' }}
+              >
+                Mark Read
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

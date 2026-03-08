@@ -4,12 +4,38 @@ Date: 2026-03-08
 Source of truth compared: `COMPLETE_FEATURES_GUIDE.md` vs current code in `react-app/src` and Firebase files.
 
 ## Execution Status (Requested Steps)
-1. Profile extended fields and photo upload: PENDING (moved to `PENDING_TASKS.md`)
-2. Full payment/settlement pipeline UI: PENDING (moved to `PENDING_TASKS.md`)
-3. Worker missing schema fields (`certifications`, `bankDetails`, `totalEarnings`): PENDING (moved to `PENDING_TASKS.md`)
-4. Worker-specific job assignment flow (`workerId` linkage): PENDING (moved to `PENDING_TASKS.md`)
+1. Profile extended fields and photo upload: PENDING
+2. Full payment/settlement pipeline UI: PENDING
+3. Worker missing schema fields (`certifications`, `bankDetails`, `totalEarnings`): COMPLETED
+4. Worker-specific job assignment flow (`workerId` linkage): COMPLETED
 5. Automated test coverage expansion: COMPLETED
 6. QA validation run: COMPLETED
+
+## Newly Implemented Productivity Features (March 8, 2026)
+1. 24h SLA delay tracking for active bookings
+- Added `statusUpdatedAt` tracking during status transitions.
+- Added delayed booking indicators (`>24h`) in admin filtering.
+
+2. Region lead alerting for delayed bookings
+- Added scheduled backend check to flag active bookings delayed for more than 24h.
+- Added `admin_alerts` notifications for region leads and UI alert display in region dashboard.
+
+3. Auto assignment after quote acceptance with mason override
+- Accepted bookings are now auto-assigned to top eligible worker based on rating and availability.
+- Mason/admin can still edit worker assignment before work starts.
+
+4. Quote productivity enhancements
+- Added service-based quote presets with editable addon amount.
+- Pricing still applies platform fee (15%) + payment charges (2%) consistently.
+
+5. Search and filters for operations teams
+- Added admin booking filters: search, service, worker, date range, delayed-only.
+- Added user booking search + status filter in My Bookings.
+
+6. Multi-day work support
+- Service booking now captures `estimatedDays`.
+- Booking lifecycle now tracks `completedWorkDays` and `remainingWorkDays`.
+- In-progress multi-day jobs require day-complete updates before final finish.
 
 ## What Was Verified Working
 - Admin role-aware app routing is now implemented in `react-app/src/App.js`.
@@ -63,7 +89,7 @@ Source of truth compared: `COMPLETE_FEATURES_GUIDE.md` vs current code in `react
 
 2. Jest test suite
 - Command: `npm test -- --watchAll=false --passWithNoTests`
-- Result: success (2 suites, 15 tests passed)
+- Result: success (3 suites, 18 tests passed)
 
 3. Static diagnostics
 - No editor errors reported for modified files during this session.
@@ -72,6 +98,8 @@ Source of truth compared: `COMPLETE_FEATURES_GUIDE.md` vs current code in `react
 - Pricing workflow checks: PASS (`react-app/src/pages/AdminBookings.js`, `react-app/src/pages/MyBookings.js`, `react-app/src/utils/pricing.js`)
 - Admin redirect rules checks: PASS (`react-app/src/pages/Auth.js`, `react-app/src/utils/authRouting.js`)
 - Worker activation and role routing checks: PASS by code-path verification
+- SLA delay checks and region alerts: PASS by code-path verification (`functions/index.js`, `react-app/src/pages/RegionLeadDashboard.js`)
+- Multi-day work tracking and completion rules: PASS by code-path verification (`react-app/src/pages/Service.js`, `react-app/src/pages/AdminBookings.js`, `functions/index.js`)
 
 ## Notes
 - This audit validates code presence and build integrity.

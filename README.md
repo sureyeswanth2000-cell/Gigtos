@@ -161,24 +161,28 @@ npm start
 ### Phase 2 – Operational Stability
 6. ✅ Admin stats dashboard (basic)
 7. 📋 Admin stats dashboard (advanced — cancelled today, worker load %)
-8. 📋 Multi-day job handling
+8. ✅ Multi-day job handling (basic day-count lifecycle)
 9. 📋 Future/scheduled booking system (calendar-based)
+10. ✅ Search/filter improvements for Mason/RegionLead/User (basic)
+11. ✅ Quote presets + editable addons (basic)
+12. ✅ Auto-pick worker with manual override before start
+13. ✅ 24h delay tracking + region lead alerts (basic)
 
 ### Phase 3 – Proof & Trust Layer
-10. 📋 Photo upload system (before/after/complaint photos)
-11. 📋 Booking timeline visualization (full history)
-12. 📋 Dispute handling & escalation
-13. 📋 Rating system (worker performance metrics)
+14. 📋 Photo upload system (before/after/complaint photos)
+15. 📋 Booking timeline visualization (full history)
+16. 📋 Dispute handling & escalation (advanced)
+17. 📋 Rating system (worker performance metrics)
 
 ### Phase 4 – Scale & Business *(Last Phase)*
-14. 📋 **WhatsApp link / automation** ← *LAST PHASE*
-15. 📋 **Call masking** ← *LAST PHASE*
-16. 📋 **Payment gateway integration** ← *LAST PHASE*
-17. 📋 Aadhaar validation
-18. 📋 Commission tracking
-19. 📋 Multi-admin hierarchy
-20. 📋 Region-based admin control
-21. 📋 Activity logs
+18. 📋 **WhatsApp link / automation** ← *LAST PHASE*
+19. 📋 **Call masking** ← *LAST PHASE*
+20. 📋 **Payment gateway integration** ← *LAST PHASE*
+21. 📋 Aadhaar validation
+22. 📋 Commission tracking
+23. 📋 Multi-admin hierarchy
+24. 📋 Region-based admin control
+25. 📋 Activity logs
 
 ---
 

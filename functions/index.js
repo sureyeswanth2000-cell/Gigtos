@@ -73,6 +73,57 @@ async function logActivity(bookingId, action, actorRole, extra = {}) {
   }
 }
 
+function normalizeServiceType(value) {
+  return (value || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/electrican/g, 'electrician')
+    .replace(/plummer/g, 'plumber')
+    .replace(/carpanter/g, 'carpenter');
+}
+
+async function resolveRegionLeadForBooking(booking) {
+  if (!booking?.adminId) return null;
+  const adminDoc = await db.collection('admins').doc(booking.adminId).get();
+  if (!adminDoc.exists) return null;
+  const adminData = adminDoc.data();
+  if (adminData.role === 'regionLead') {
+    return { id: adminDoc.id, ...adminData };
+  }
+  if (!adminData.parentAdminId) return null;
+  const parentDoc = await db.collection('admins').doc(adminData.parentAdminId).get();
+  if (!parentDoc.exists) return null;
+  return { id: parentDoc.id, ...parentDoc.data() };
+}
+
+async function findBestWorkerForBooking(adminId, serviceType) {
+  const desiredType = normalizeServiceType(serviceType);
+  const workerSnap = await db.collection('gig_workers').where('adminId', '==', adminId).get();
+  if (workerSnap.empty) return null;
+
+  const eligibleWorkers = workerSnap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(w => {
+      const typeMatch = normalizeServiceType(w.gigType) === desiredType;
+      const active = (w.status || 'inactive') === 'active';
+      const approved = !w.approvalStatus || w.approvalStatus === 'approved';
+      const notFraud = !w.isFraud;
+      const available = w.isAvailable !== false;
+      return typeMatch && active && approved && notFraud && available;
+    });
+
+  if (eligibleWorkers.length === 0) return null;
+
+  eligibleWorkers.sort((a, b) => {
+    const scoreA = (Number(a.rating || 0) * 100) - Number(a.completedJobs || 0);
+    const scoreB = (Number(b.rating || 0) * 100) - Number(b.completedJobs || 0);
+    return scoreB - scoreA;
+  });
+
+  return eligibleWorkers[0];
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
    SECTION 2: GOVERNANCE & PERFORMANCE LOGIC
    Logic for calculating Region Lead scores and managing probation status.
@@ -230,6 +281,10 @@ exports.onBookingStatusChange = functions.firestore
       await logActivity(bookingId, 'status_changed', 'system', {
         fromStatus: before.status,
         toStatus: after.status,
+      });
+
+      await bookingRef.update({
+        statusUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
 
@@ -493,6 +548,74 @@ exports.checkCashbackExpiry = functions.pubsub
     return null;
   });
 
+/**
+ * SCHEDULED: Runs every 30 minutes.
+ * LOGIC: Escalates any active booking that has not moved status in the last 24 hours
+ * and pushes an alert to the corresponding Region Lead.
+ */
+exports.checkBookingSlaDelay = functions.pubsub
+  .schedule('every 30 minutes')
+  .onRun(async () => {
+    const activeStatuses = ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'];
+    const twentyFourHoursAgo = new Date(Date.now() - (24 * 60 * 60 * 1000));
+
+    const snapshot = await db.collection('bookings').where('status', 'in', activeStatuses).get();
+    let flagged = 0;
+
+    for (const docSnap of snapshot.docs) {
+      const booking = docSnap.data();
+      const statusAt = booking.statusUpdatedAt?.toDate?.()
+        || booking.updatedAt?.toDate?.()
+        || booking.createdAt?.toDate?.()
+        || null;
+
+      if (!statusAt || statusAt > twentyFourHoursAgo) continue;
+      if (booking?.sla?.notified) continue;
+
+      const regionLead = await resolveRegionLeadForBooking(booking);
+      const breachAt = admin.firestore.FieldValue.serverTimestamp();
+
+      await docSnap.ref.update({
+        sla: {
+          breached: true,
+          notified: true,
+          breachedAt: breachAt,
+          statusAtBreach: booking.status,
+          regionLeadId: regionLead?.id || null,
+        },
+      });
+
+      if (regionLead?.id) {
+        await db.collection('admin_alerts').add({
+          adminId: regionLead.id,
+          bookingId: docSnap.id,
+          type: 'booking_sla_delayed',
+          status: 'open',
+          title: 'Booking delayed beyond 24 hours',
+          message: `${booking.serviceType || 'Service'} booking is stuck in ${booking.status} for more than 24 hours.`,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        if (regionLead.email) {
+          await sendEmail(
+            regionLead.email,
+            'Gigto Alert: Booking delayed >24h',
+            `Booking ${docSnap.id} is stuck in status ${booking.status} for more than 24 hours.`
+          );
+        }
+      }
+
+      await logActivity(docSnap.id, 'booking_sla_delayed', 'system', {
+        status: booking.status,
+        regionLeadId: regionLead?.id || null,
+      });
+      flagged++;
+    }
+
+    console.log(`[SLA] Delayed bookings flagged: ${flagged}`);
+    return null;
+  });
+
 /* ──────────────────────────────────────────────────────────────────────────
    SECTION 5: SECURE CALLABLE FUNCTIONS (100% SECURITY)
    Endpoints to handle all state transitions, removing logic from the frontend.
@@ -599,22 +722,41 @@ exports.acceptQuote = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('not-found', 'Requested quote does not exist.');
     }
 
-    transaction.update(bookingRef, {
-      status: 'accepted',
+    const bestWorker = await findBestWorkerForBooking(adminId, booking.serviceType);
+
+    const nextUpdates = {
+      status: bestWorker ? 'assigned' : 'accepted',
       adminId: adminId, // Lock the booking to this admin
       acceptedQuote: acceptedQuote,
+      statusUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    };
+
+    if (bestWorker) {
+      nextUpdates.assignedWorkerId = bestWorker.id;
+      nextUpdates.workerName = bestWorker.name || '';
+      nextUpdates.workerPhone = bestWorker.contact || bestWorker.phone || '';
+      nextUpdates.assignedWorker = bestWorker.name || '';
+    }
+
+    transaction.update(bookingRef, nextUpdates);
+
+    if (bestWorker) {
+      transaction.update(db.collection('gig_workers').doc(bestWorker.id), {
+        isAvailable: false,
+      });
+    }
 
     // Securely log
     const logRef = db.collection('activity_logs').doc();
     transaction.set(logRef, {
       bookingId,
       actorId: context.auth.uid,
-      action: 'user_accepted_quote',
+      action: bestWorker ? 'user_accepted_quote_auto_assigned' : 'user_accepted_quote',
       price: acceptedQuote.price,
       adminId: acceptedQuote.adminId,
       adminName: acceptedQuote.adminName,
+      autoAssignedWorkerId: bestWorker?.id || null,
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
   });
@@ -654,12 +796,14 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
           throw new functions.https.HttpsError('failed-precondition', 'Booking has progressed too far to cancel.');
         }
         updates.status = 'cancelled';
+        updates.statusUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
         logAction = 'user_cancelled';
         break;
 
       case 'admin_cancelled':
         if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
         updates.status = 'cancelled';
+        updates.statusUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
         logAction = 'admin_cancelled';
         // Free worker safely
         if (booking.assignedWorkerId) {
@@ -682,6 +826,7 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
         }
 
         updates.status = 'assigned';
+        updates.statusUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
         updates.assignedWorkerId = workerId;
         updates.workerName = workerName;
         updates.workerPhone = workerPhone;
@@ -697,6 +842,7 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
         if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
         if (booking.status !== 'assigned') throw new functions.https.HttpsError('failed-precondition', 'Invalid state.');
         updates.status = 'in_progress';
+        updates.statusUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
         updates.startedAt = admin.firestore.FieldValue.serverTimestamp();
         logAction = 'admin_started_work';
         break;
@@ -704,15 +850,34 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
       case 'admin_mark_finished':
         if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
         if (booking.status !== 'in_progress') throw new functions.https.HttpsError('failed-precondition', 'Invalid state.');
-        updates.status = 'awaiting_confirmation';
-        updates.finishedAt = admin.firestore.FieldValue.serverTimestamp();
-        logAction = 'admin_marked_finished';
+        {
+          const estimatedDays = Number(booking.estimatedDays || 1);
+          const completedWorkDays = Number(booking.completedWorkDays || 0);
+          const nextCompletedDays = completedWorkDays + 1;
+          const remainingWorkDays = Math.max(estimatedDays - nextCompletedDays, 0);
+
+          updates.completedWorkDays = nextCompletedDays;
+          updates.remainingWorkDays = remainingWorkDays;
+
+          if (remainingWorkDays > 0) {
+            updates.status = 'in_progress';
+            updates.statusUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
+            logAction = 'admin_marked_workday_complete';
+            logExtra = { completedWorkDays: nextCompletedDays, remainingWorkDays };
+          } else {
+            updates.status = 'awaiting_confirmation';
+            updates.statusUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
+            updates.finishedAt = admin.firestore.FieldValue.serverTimestamp();
+            logAction = 'admin_marked_finished';
+          }
+        }
         break;
 
       case 'user_confirm_completion':
         if (!isOwner) throw new functions.https.HttpsError('permission-denied', 'Only owner can confirm.');
         if (booking.status !== 'awaiting_confirmation') throw new functions.https.HttpsError('failed-precondition', 'Invalid state.');
         updates.status = 'completed';
+        updates.statusUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
         logAction = 'user_confirmed_completion';
 
         // Free worker
@@ -729,6 +894,7 @@ exports.updateBookingStatus = functions.https.onCall(async (data, context) => {
         if (!isAssignedAdmin && !isSuperAdmin) throw new functions.https.HttpsError('permission-denied', 'Unauthorized.');
         if (booking.status !== 'cancelled') throw new functions.https.HttpsError('failed-precondition', 'Only cancelled bookings can be reopened.');
         updates.status = 'pending';
+        updates.statusUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
         // Erase worker assignment
         updates.assignedWorkerId = null;
         updates.workerName = null;

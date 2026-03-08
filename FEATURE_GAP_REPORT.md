@@ -104,6 +104,8 @@ Source of truth compared: `COMPLETE_FEATURES_GUIDE.md` vs current code in `react
 ## Notes
 - This audit validates code presence and build integrity.
 - Browser-side full E2E manual execution with real test accounts is still recommended before production launch.
+- Free-plan compatibility mode is enabled in frontend booking flows (`runSparkFallback` direct usage).
+- Cloud Functions deployment remains blocked until Blaze upgrade; client-side fallback paths currently keep core workflows operational on Spark/free plan.
 
 ## Role-by-Role QA Checklist (Run: 2026-03-08)
 

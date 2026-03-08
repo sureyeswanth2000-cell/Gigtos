@@ -35,6 +35,7 @@ const STATUS_COLORS = {
 
 // All statuses that require active attention from admins
 const ACTIVE_STATUSES = ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'];
+const USE_FREE_PLAN_MODE = true;
 
 const QUOTE_PRESETS = {
   plumber: [
@@ -549,14 +550,11 @@ export default function AdminBookings() {
   };
 
   const callBackend = async (method, data) => {
-    // For submitQuote, skip Cloud Function and use fallback directly
-    // because Cloud Function has old code (sets status: 'quoted') and we can't redeploy without Blaze plan
-    if (method === 'submitQuote') {
-      console.log('🔵 callBackend: Skipping Cloud Function, using fallback directly');
+    if (USE_FREE_PLAN_MODE) {
       try {
         await runSparkFallback(method, data);
       } catch (fallbackErr) {
-        console.error('🔴 Fallback error:', fallbackErr);
+        console.error('🔴 Free-plan fallback error:', fallbackErr);
         alert('Action failed: ' + fallbackErr.message);
       }
       return;

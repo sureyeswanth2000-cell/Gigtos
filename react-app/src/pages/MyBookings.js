@@ -51,6 +51,8 @@ const serviceIcons = {
   'Painter': '🎨',
 };
 
+const USE_FREE_PLAN_MODE = true;
+
 export default function MyBookings() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -182,6 +184,17 @@ export default function MyBookings() {
   };
 
   const callBackend = async (method, data) => {
+    if (USE_FREE_PLAN_MODE) {
+      try {
+        await runSparkFallback(method, data);
+      } catch (fallbackErr) {
+        console.error(fallbackErr);
+        alert('Action failed: ' + fallbackErr.message);
+        throw fallbackErr;
+      }
+      return;
+    }
+
     try {
       const func = httpsCallable(functionsInstance, method);
       await func(data);

@@ -4,6 +4,18 @@ import { collection, query, where, onSnapshot, doc, getDoc, setDoc, updateDoc } 
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../firebase';
 
+const getStatusTimestamp = (booking) => {
+  const statusAt = booking?.statusUpdatedAt || booking?.updatedAt || booking?.createdAt;
+  if (!statusAt) return null;
+  return statusAt.toDate ? statusAt.toDate() : new Date(statusAt);
+};
+
+const getStatusAgeHours = (booking) => {
+  const ts = getStatusTimestamp(booking);
+  if (!ts) return 0;
+  return (Date.now() - ts.getTime()) / (1000 * 60 * 60);
+};
+
 export default function RegionLeadDashboard() {
   const navigate = useNavigate();
   const [regionLeadData, setRegionLeadData] = useState(null);
@@ -14,6 +26,7 @@ export default function RegionLeadDashboard() {
   const [disputes, setDisputes] = useState([]);
   const [allDisputeBookings, setAllDisputeBookings] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [delayedBookings, setDelayedBookings] = useState([]);
   const [disputeFilter, setDisputeFilter] = useState('open');
   const [stats, setStats] = useState({
     totalMasons: 0,
@@ -133,6 +146,7 @@ export default function RegionLeadDashboard() {
           const active = allBookings.filter(b =>
             ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status)
           );
+          const delayed = active.filter((b) => getStatusAgeHours(b) >= 24 || b.sla?.breached);
           
           const disputeBookings = allBookings.filter(b => b.dispute?.status);
           const openDisputes = disputeBookings.filter(b => b.dispute?.status === 'open');
@@ -140,6 +154,7 @@ export default function RegionLeadDashboard() {
           console.log(`✅ Active bookings: ${active.length}, Open disputes: ${openDisputes.length}`);
           
           setActiveBookings(active);
+          setDelayedBookings(delayed);
           setAllDisputeBookings(disputeBookings);
           setDisputes(openDisputes);
           setStats(prev => ({
@@ -299,6 +314,20 @@ export default function RegionLeadDashboard() {
               >
                 Mark Read
               </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {delayedBookings.length > 0 && (
+        <div style={{ background: '#fef2f2', border: '2px solid #ef4444', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
+          <div style={{ fontWeight: 'bold', color: '#991b1b', marginBottom: '8px' }}>
+            Delayed Bookings {'>'}24h ({delayedBookings.length})
+          </div>
+          {delayedBookings.slice(0, 6).map((b) => (
+            <div key={b.id} style={{ background: 'white', border: '1px solid #fecaca', borderRadius: '6px', padding: '8px', marginBottom: '6px', fontSize: '12px' }}>
+              <div style={{ fontWeight: 'bold', color: '#7f1d1d' }}>{b.serviceType} - {b.customerName}</div>
+              <div style={{ color: '#991b1b' }}>Status: {b.status} | Booking: {b.id}</div>
             </div>
           ))}
         </div>

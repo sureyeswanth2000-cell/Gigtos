@@ -10,6 +10,8 @@ export default function Header() {
   const [user, setUser] = React.useState(null);
   const [isAdmin, setIsAdmin] = React.useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = React.useState(false);
+  const [isRegionLead, setIsRegionLead] = React.useState(false);
+  const [adminRole, setAdminRole] = React.useState(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -17,12 +19,17 @@ export default function Header() {
       setUser(currentUser);
       if (currentUser) {
         getDoc(doc(db, 'admins', currentUser.uid)).then(d => {
+          const role = d.data()?.role;
           setIsAdmin(d.exists());
-          setIsSuperAdmin(d.exists() && d.data()?.role === 'superadmin');
+          setAdminRole(role);
+          setIsSuperAdmin(d.exists() && role === 'superadmin');
+          setIsRegionLead(d.exists() && role === 'regionLead');
         }).catch(() => { });
       } else {
         setIsAdmin(false);
         setIsSuperAdmin(false);
+        setIsRegionLead(false);
+        setAdminRole(null);
       }
     });
     return unsubscribe;
@@ -70,6 +77,10 @@ export default function Header() {
                 <Link to="/admin/super" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,200,0,0.3)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(255,200,0,0.5)' }}>
                   🛡️ SuperAdmin Dash
                 </Link>
+              ) : isRegionLead ? (
+                <Link to="/admin/region-lead" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(100,200,255,0.3)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(100,200,255,0.5)' }}>
+                  📍 Region Lead Dash
+                </Link>
               ) : isAdmin ? (
                 <Link to="/admin" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '4px' }}>
                   👨‍💼 Admin Dash
@@ -110,13 +121,13 @@ export default function Header() {
                     <Link to="/" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
                       🏠 Home
                     </Link>
-                    {(isAdmin || isSuperAdmin) ? (
+                    {(isAdmin || isSuperAdmin || isRegionLead) ? (
                       <>
                         <Link to="/my-bookings" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
                           📅 My Bookings
                         </Link>
-                        <Link to={isSuperAdmin ? "/admin/super" : "/admin"} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
-                          {isSuperAdmin ? "🛡️ SuperAdmin Dash" : "👨‍💼 Admin Dash"}
+                        <Link to={isSuperAdmin ? "/admin/super" : isRegionLead ? "/admin/region-lead" : "/admin"} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
+                          {isSuperAdmin ? "🛡️ SuperAdmin Dash" : isRegionLead ? "📍 Region Lead Dash" : "👨‍💼 Admin Dash"}
                         </Link>
                       </>
                     ) : (

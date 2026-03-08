@@ -224,8 +224,8 @@ export default function SuperAdmin() {
 
     /* ── Derived data ── */
     const regionLeads = admins.filter(a => a.role === 'regionLead');
-    const childAdmins = admins.filter(a => a.role === 'admin' && !!a.parentAdminId);
-    const unassignedAdmins = admins.filter(a => a.role === 'admin' && !a.parentAdminId);
+    const childAdmins = admins.filter(a => ['admin', 'mason'].includes(a.role) && !!a.parentAdminId);
+    const unassignedAdmins = admins.filter(a => ['admin', 'mason'].includes(a.role) && !a.parentAdminId);
     const probationaryLeads = regionLeads.filter(a => a.probationStatus === true);
     const suspendedLeads = regionLeads.filter(a => a.regionStatus === 'suspended');
 
@@ -278,8 +278,8 @@ export default function SuperAdmin() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '30px' }}>
                 {[
                     { label: 'Region Admins', value: regionLeads.length, icon: '🌐', color: '#667eea' },
-                    { label: 'Child Admins', value: childAdmins.length, icon: '👤', color: '#3b82f6' },
-                    { label: 'Unassigned Admins', value: unassignedAdmins.length, icon: '⚠️', color: '#f97316' },
+                    { label: 'Masons', value: childAdmins.length, icon: '👤', color: '#3b82f6' },
+                    { label: 'Unassigned Masons', value: unassignedAdmins.length, icon: '⚠️', color: '#f97316' },
                     { label: 'On Probation', value: probationaryLeads.length, icon: '⚠️', color: '#f59e0b' },
                     { label: 'Suspended', value: suspendedLeads.length, icon: '🚫', color: '#ef4444' },
                     { label: 'Escalated Disputes', value: escalatedBookings.length, icon: '🚨', color: '#dc2626' },
@@ -529,7 +529,7 @@ export default function SuperAdmin() {
 
                     {unassignedAdmins.length > 0 && (
                         <div style={{ marginTop: '20px', padding: '14px', border: '1px solid #fb923c', borderRadius: '8px', background: '#fff7ed' }}>
-                            <div style={{ fontWeight: 'bold', color: '#9a3412', marginBottom: '12px' }}>⚠️ Unassigned Admins - Assign to Region Lead</div>
+                            <div style={{ fontWeight: 'bold', color: '#9a3412', marginBottom: '12px' }}>⚠️ Unassigned Masons - Assign to Region Lead</div>
                             {unassignedAdmins.map(a => (
                                 <div key={a.id} style={{ fontSize: '13px', color: '#7c2d12', marginBottom: '12px', padding: '10px', background: 'white', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <div style={{ flex: 1 }}>{a.name || a.email}</div>
@@ -556,10 +556,10 @@ export default function SuperAdmin() {
                         </div>
                     )}
 
-                    {/* Show assigned admins with ability to unassign */}
+                    {/* Show assigned masons with ability to unassign */}
                     {childAdmins.length > 0 && (
                         <div style={{ marginTop: '20px', padding: '14px', border: '1px solid #86efac', borderRadius: '8px', background: '#f0fdf4' }}>
-                            <div style={{ fontWeight: 'bold', color: '#166534', marginBottom: '12px' }}>✅ Assigned Admins</div>
+                            <div style={{ fontWeight: 'bold', color: '#166534', marginBottom: '12px' }}>✅ Assigned Masons</div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
                                 {childAdmins.map(a => {
                                     const regionLead = admins.find(r => r.id === a.parentAdminId);

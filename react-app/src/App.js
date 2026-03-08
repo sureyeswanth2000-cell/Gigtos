@@ -16,11 +16,14 @@ import Workers from './pages/Workers';
 import AdminBookings from './pages/AdminBookings';
 import Chat from './pages/Chat';
 import SuperAdmin from './pages/SuperAdmin';
+import RegionLeadDashboard from './pages/RegionLeadDashboard';
 
 function App() {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isRegionLead, setIsRegionLead] = useState(false);
+  const [adminRole, setAdminRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,11 +32,16 @@ function App() {
       if (currentUser) {
         const adminDoc = await getDoc(doc(db, 'admins', currentUser.uid));
         const isAdminUser = adminDoc.exists();
+        const role = adminDoc.data()?.role;
         setIsAdmin(isAdminUser);
-        setIsSuperAdmin(isAdminUser && adminDoc.data()?.role === 'superadmin');
+        setAdminRole(role);
+        setIsSuperAdmin(isAdminUser && role === 'superadmin');
+        setIsRegionLead(isAdminUser && role === 'regionLead');
       } else {
         setIsAdmin(false);
         setIsSuperAdmin(false);
+        setIsRegionLead(false);
+        setAdminRole(null);
       }
       setLoading(false);
     });
@@ -62,14 +70,21 @@ function App() {
     return children;
   };
 
+  // Determine redirect path based on role
+  const getAdminRedirect = () => {
+    if (isSuperAdmin) return "/admin/super";
+    if (isRegionLead) return "/admin/region-lead";
+    return "/admin/bookings";
+  };
+
   return (
     <BrowserRouter basename="/Gigtos">
       <Header />
       <main style={{ minHeight: '70vh' }}>
         <Routes>
           {/* Public Routes */}
-          <Route path="/" element={user ? (isAdmin ? <Navigate to="/admin/bookings" /> : <Home />) : <Home />} />
-          <Route path="/auth" element={user ? <Navigate to={isAdmin ? "/admin/bookings" : "/"} /> : <Auth />} />
+          <Route path="/" element={user ? (isAdmin ? <Navigate to={getAdminRedirect()} /> : <Home />) : <Home />} />
+          <Route path="/auth" element={user ? <Navigate to={isAdmin ? getAdminRedirect() : "/"} /> : <Auth />} />
 
           {/* Protected User Routes */}
           <Route path="/service" element={<ProtectedRoute><Service /></ProtectedRoute>} />
@@ -82,6 +97,7 @@ function App() {
           <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
           <Route path="/admin/workers" element={<ProtectedRoute requireAdmin><Workers /></ProtectedRoute>} />
           <Route path="/admin/bookings" element={<ProtectedRoute requireAdmin><AdminBookings /></ProtectedRoute>} />
+          <Route path="/admin/region-lead" element={<ProtectedRoute requireAdmin><RegionLeadDashboard /></ProtectedRoute>} />
 
           {/* Protected SuperAdmin Route */}
           <Route path="/admin/super" element={<ProtectedRoute requireSuperAdmin><SuperAdmin /></ProtectedRoute>} />

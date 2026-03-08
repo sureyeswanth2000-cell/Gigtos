@@ -547,8 +547,9 @@ exports.submitQuote = functions.https.onCall(async (data, context) => {
     };
 
     transaction.update(bookingRef, {
-      status: 'quoted', // Update status to reflect it has quotes
-      escrowStatus: 'pending_acceptance',  // ✅ ADD THIS - Track escrow status for quote acceptance
+      // Don't change status to 'quoted' - keep booking open for multiple masons to submit competing quotes
+      // Status will only change when user accepts a quote (becomes 'accepted')
+      escrowStatus: 'pending_acceptance',  // ✅ Track escrow status for quote acceptance
       quotes: admin.firestore.FieldValue.arrayUnion(newQuote),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });

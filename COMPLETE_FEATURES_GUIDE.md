@@ -1,5 +1,5 @@
 # GIGTO - COMPLETE FEATURES & OPTIONS GUIDE
-**Last Updated:** March 5, 2026 | **Build Status:** Production Ready ✅
+**Last Updated:** March 8, 2026 | **Build Status:** Production Ready ✅
 
 ---
 
@@ -56,8 +56,9 @@
   3. System checks `admins` collection for admin document
   4. **Role Detection:**
      - `role: 'superadmin'` → redirects to `/admin/super`
-     - `role: 'regionLead'` → redirects to `/admin/bookings`
+    - `role: 'regionLead'` → redirects to `/admin/region-lead`
      - `role: 'admin'` → redirects to `/admin/bookings`
+    - `role: 'mason'` → redirects to `/admin/bookings`
   5. Checks `regionStatus`:
      - If 'suspended' → error "Region has been suspended"
 - **Error Handling:**
@@ -232,9 +233,9 @@
   - **Escalated:** 24h+ unresolved disputes
 
 #### **For Region Leads**
-  - **Special Dashboard:** Blue info bar shows "🌐 Region Lead Dashboard | Child Admins: X | Bookings: Y"
-  - Only sees bookings from **child admins** (not own bookings)
-  - Cannot directly manage bookings - supervises child admins
+  - **Special Dashboard:** Blue info bar shows "🌐 Region Lead Dashboard | Masons: X | Bookings: Y"
+  - Only sees bookings from **mason accounts** (not own bookings)
+  - Cannot directly manage bookings - supervises masons
   - Access all region-wide bookings in real-time
 
 #### **Booking Card Actions**
@@ -295,7 +296,7 @@
 #### **Real-Time Features**
   - ✅ Auto-refresh all bookings
   - ✅ Auto-refresh worker list
-  - ✅ Child admin bookings auto-load (region leads)
+  - ✅ Mason bookings auto-load (region leads)
   - ✅ Activity logs real-time updates
 
 ### **Worker Management** (`/admin/workers`)
@@ -309,7 +310,7 @@
   - Service type dropdown
   - Status: Active (default)
   - On create: Set `status: 'active'`, `approvalStatus: 'approved'`, `adminId: [current admin]`
-  - **Validation:** Only `role: 'admin'` can create (not region leads) ✅
+  - **Validation:** `role: 'admin'` and `role: 'mason'` can create workers (not region leads) ✅
 
 ##### **Toggle Worker Status**
   - **Active** → Inactive (unavailable for jobs)
@@ -327,19 +328,19 @@
   
 ##### **Approve Pending Workers**
   - Shows workers with `approvalStatus: 'pending'`
-  - Dropdown to select child admin
+  - Dropdown to select mason
   - On approve: Sets `approvalStatus: 'approved'`, assigns `adminId`, sets `status: 'active'`
   - Logs: `approvedByRegionLeadId: [region lead uid]`
 
-##### **View Child Admin Workers**
-  - Filters workers by child admin ownership
-  - Shows count per child admin
+##### **View Mason Workers**
+  - Filters workers by mason ownership
+  - Shows count per mason
   - Real-time filtering
 
-##### **Create Child Admin**
+##### **Create Mason**
   - Form: name, email, password
-  - Creates admin document with `role: 'admin'`, `parentAdminId: [region lead]`
-  - Child admins can then manage their workers
+  - Creates admin document with `role: 'mason'`, `parentAdminId: [region lead]`
+  - Masons can then manage their workers
 
 ##### **Search Workers**
   - By name or phone
@@ -351,35 +352,35 @@
 
 ### **What is a Region Lead?**
 - Admin with `role: 'regionLead'`
-- Manages multiple child admins
+- Manages multiple masons
 - Supervises all bookings in their region
 - Approves workers
 - Cannot directly create/manage workers or bookings
 
-### **Region Lead Dashboard** (`/admin/bookings`)
-- **Special UI:** Blue info bar shows child admin count and booking count
-- **Booking View:** Shows all bookings from all child admins
-- **Real-Time Sync:** Auto-loads new child admin bookings
-- **Console Logs:** Shows role detection, child admin loading, per-child booking counts
+### **Region Lead Dashboard** (`/admin/region-lead`)
+- **Special UI:** Blue info bar shows mason count and booking count
+- **Booking View:** Shows all bookings from all masons
+- **Real-Time Sync:** Auto-loads new mason bookings
+- **Console Logs:** Shows role detection, mason loading, per-mason booking counts
 
 ### **Region Lead Capabilities**
 1. ✅ Login with email/password
-2. ✅ View all bookings (via child admins)
-3. ✅ View all workers (assigned to child admins)
+2. ✅ View all bookings (via masons)
+3. ✅ View all workers (assigned to masons)
 4. ✅ Approve pending workers
-5. ✅ Assign workers to child admins
-6. ✅ Create new child admins
+5. ✅ Assign workers to masons
+6. ✅ Create new masons
 7. ✅ Unassign admins from other regions (via SuperAdmin interface)
 
 ### **Data Visibility**
 - Can read all admin documents (including region leads) - Firestore rule updated
-- Can read bookings where child admin is assigned
-- Can read workers owned by child admins
-- Child admin hierarchy via `parentAdminId` field
+- Can read bookings where mason is assigned
+- Can read workers owned by masons
+- Mason hierarchy via `parentAdminId` field
 
 ### **Required Setup (SuperAdmin)**
-- Must assign child admins to region lead via SuperAdmin interface
-- Without child admins: Shows "Child Admins: 0" and no bookings visible
+- Must assign masons to region lead via SuperAdmin interface
+- Without masons: Shows "Masons: 0" and no bookings visible
 - Once assigned: Real-time data flows automatically
 
 ---

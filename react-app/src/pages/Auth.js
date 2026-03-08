@@ -53,16 +53,19 @@ function Auth() {
 
       const storedEmail = userDoc.data().email;
 
-      // ✅ SECURITY FIX: Removed hardcoded OTP check (101010)
-      // OTP should be verified through Firebase Phone Auth or a backend service
-      // For now, only password-based login is allowed
-      if (!password) {
+      // Use whichever field has the password (form stores it in 'otp' during login)
+      const userPassword = otp || password;
+      
+      if (!userPassword) {
         throw new Error('Please enter your password to login');
       }
       
-      await signInWithEmailAndPassword(auth, storedEmail, password);
+      console.log('🔐 Attempting login with phone:', phone);
+      await signInWithEmailAndPassword(auth, storedEmail, userPassword);
+      console.log('✅ Login successful!');
       navigate('/');
     } catch (err) {
+      console.error('❌ Login error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -159,7 +162,13 @@ function Auth() {
         throw new Error('❌ This region has been suspended. Contact SuperAdmin.');
       }
 
-      navigate('/admin/bookings');
+      if (role === 'superadmin') {
+        navigate('/admin/super');
+      } else if (role === 'regionLead') {
+        navigate('/admin/region-lead');
+      } else {
+        navigate('/admin/bookings');
+      }
     } catch (err) {
       console.error('❌ Admin login error:', err);
       setError(err.message);

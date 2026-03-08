@@ -6,7 +6,7 @@ import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, getDoc, s
 export default function Workers() {
   const [user, setUser] = useState(null);
   const [workers, setWorkers] = useState([]);
-  const [pendingWorkers, setPendingWorkers] = useState([]);
+  const [pendingGigs, setPendingGigs] = useState([]);
   const [adminRole, setAdminRole] = useState('admin');
   const [regionArea, setRegionArea] = useState('');
   const [childAdminIds, setChildAdminIds] = useState([]);
@@ -64,55 +64,78 @@ export default function Workers() {
   useEffect(() => {
     if (!user) return;
     
+    // Build query based on role
+    let workersQuery;
+    
+    if (adminRole === 'superadmin') {
+      // SuperAdmin can read all workers
+      workersQuery = query(collection(db, 'gig_workers'));
+    } else if (adminRole === 'regionLead') {
+      // Region Lead needs to see pending workers in their area + approved workers under child admins
+      // For now, query all and filter client-side (pending workers don't have adminId yet)
+      workersQuery = query(collection(db, 'gig_workers'));
+    } else {
+      // Admin/Mason: only query workers owned by themselves
+      workersQuery = query(collection(db, 'gig_workers'), where('adminId', '==', user.uid));
+    }
+    
     const unsub = onSnapshot(
-      query(collection(db, 'gig_workers')),
+      workersQuery,
       (snap) => {
         const allWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         
-        // Separate pending and approved workers
-        // Workers without approvalStatus field are treated as approved (created by admin directly)
+        console.log('👤 Current role:', adminRole);
+        console.log('📋 Total workers in DB:', allWorkers.length);
+        
+        // Separate pending and approved gigs
+        // Gigs without approvalStatus field are treated as approved (created by admin directly)
         const pending = allWorkers.filter(w => w.approvalStatus === 'pending');
         const approved = allWorkers.filter(w => {
           return !w.approvalStatus || w.approvalStatus === 'approved' || w.approvalStatus !== 'pending';
         });
 
         if (adminRole === 'superadmin') {
+          console.log('✅ SuperAdmin: showing all workers');
           setWorkers(approved);
-          setPendingWorkers(pending);
+          setPendingGigs(pending);
           return;
         }
 
         if (adminRole === 'regionLead') {
           // Region leads monitor workers owned by admins under their region
           const regionWorkers = approved.filter(w => childAdminIds.includes(w.adminId));
+          console.log('✅ Region Lead: showing', regionWorkers.length, 'workers');
           setWorkers(regionWorkers);
           
-          // Region leads see pending workers for their own area.
+          // Region leads see pending gigs for their own area.
           const regionPending = pending.filter(w =>
             (w.area || '').trim().toLowerCase() === (regionArea || '').trim().toLowerCase()
           );
-          setPendingWorkers(regionPending);
+          setPendingGigs(regionPending);
           return;
         }
 
-        // Admin/Mason: only workers owned by themselves
-        // Include workers with no approvalStatus (directly created) OR explicitly approved
-        // For backwards compatibility: include workers with no adminId (old workers) OR matching adminId
-        const myWorkers = approved.filter(w => {
-          return !w.adminId || w.adminId === user.uid;
-        });
-        setWorkers(myWorkers);
-        setPendingWorkers([]);
+        // Admin/Mason: workers are already filtered by the query
+        console.log('✅ Admin/Mason: showing', approved.length, 'workers for uid:', user.uid);
+        console.log('Worker details:', approved.map(w => ({ name: w.name, adminId: w.adminId })));
+        setWorkers(approved);
+        setPendingGigs([]);
       },
-      err => console.error(err)
+      err => {
+        console.error('❌ Firestore error:', err);
+        console.error('Error code:', err.code);
+        console.error('Error message:', err.message);
+      }
     );
     return () => unsub();
   }, [user, adminRole, childAdminIds, regionArea]);
 
   async function createWorker() {
     if (!user) return alert('Not authenticated');
-    if (adminRole !== 'admin' && adminRole !== 'superadmin') return alert('Only admins can create workers');
-    if (adminRole === 'regionLead') return alert('Region leads cannot create workers.');
+    if (adminRole === 'regionLead') return alert('Region leads cannot create workers directly.');
+    if (adminRole !== 'admin' && adminRole !== 'superadmin' && adminRole !== 'mason') {
+      return alert('Only admins and masons can create workers');
+    }
     if (!name.trim()) return alert('Worker name is required');
     if (!/^[0-9]{10}$/.test(contact)) return alert('Enter valid 10 digit phone');
     try {
@@ -185,7 +208,7 @@ export default function Workers() {
   async function approveWorker(workerId) {
     if (!user) return alert('Not authenticated');
     const targetAdminId = approvalAssignments[workerId];
-    if (!targetAdminId) return alert('Please select an admin before approval.');
+    if (!targetAdminId) return alert('Please select a mason before approval.');
     try {
       await updateDoc(doc(db, 'gig_workers', workerId), {
         approvalStatus: 'approved',
@@ -194,7 +217,7 @@ export default function Workers() {
         approvedAt: new Date(),
         approvedByRegionLeadId: user.uid,
       });
-      alert('✅ Worker approved successfully!');
+      alert('✅ Gig approved successfully!');
     } catch (e) {
       console.error(e);
       alert('Error approving worker: ' + e.message);
@@ -215,8 +238,8 @@ export default function Workers() {
   }
 
   async function createChildAdmin() {
-    if (adminRole !== 'regionLead') return alert('Only region admins can create child admins.');
-    if (!newAdminName || !newAdminEmail || !newAdminPassword) return alert('Fill all child admin fields.');
+    if (adminRole !== 'regionLead') return alert('Only region leads can create masons.');
+    if (!newAdminName || !newAdminEmail || !newAdminPassword) return alert('Fill all mason fields.');
     if (newAdminPassword.length < 6) return alert('Password must be at least 6 characters.');
 
     try {
@@ -225,38 +248,58 @@ export default function Workers() {
       await setDoc(doc(db, 'admins', newUid), {
         name: newAdminName,
         email: newAdminEmail,
-        role: 'admin',
+        role: 'mason',
         parentAdminId: user.uid,
         areaName: regionArea || '',
         createdAt: new Date(),
       });
-      alert('✅ Child admin created successfully.');
+      alert('✅ Mason created successfully.');
       setNewAdminName('');
       setNewAdminEmail('');
       setNewAdminPassword('');
     } catch (e) {
       console.error(e);
-      alert('Error creating child admin: ' + e.message);
+      alert('Error creating mason: ' + e.message);
     }
   }
 
   return (
     <div style={{ padding: 20 }}>
       <h2>Workers</h2>
+      
+      {/* DEBUG: Show current role */}
+      <div style={{ 
+        background: '#f0f9ff', 
+        border: '2px solid #3b82f6', 
+        color: '#1e40af', 
+        padding: 10, 
+        borderRadius: 8, 
+        marginBottom: 12,
+        fontSize: 12,
+        fontWeight: 'bold'
+      }}>
+        🔐 Current Role: {adminRole || 'loading...'} | UID: {user?.uid?.slice(0, 8)}...
+        {(adminRole === 'admin' || adminRole === 'mason') && (
+          <div style={{ marginTop: 4, fontSize: 11, fontWeight: 'normal' }}>
+            🔒 You can ONLY see and manage gigs that YOU created. Other {adminRole}s' gigs are hidden.
+          </div>
+        )}
+      </div>
+      
       {adminRole === 'regionLead' && (
         <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', padding: 10, borderRadius: 8, marginBottom: 12 }}>
-          Region Admin Mode: approve worker registrations in your area and assign each approved worker to a child admin.
+          Region Admin Mode: approve gig registrations in your area and assign each approved gig to a mason.
         </div>
       )}
 
       {adminRole === 'regionLead' && (
         <div style={{ background: '#fff', padding: 12, borderRadius: 8, marginBottom: 12, border: '1px solid #dbeafe' }}>
-          <h4>Create Child Admin</h4>
-          <input placeholder="Admin Name" value={newAdminName} onChange={e => setNewAdminName(e.target.value)} style={{ padding: 8, marginRight: 8 }} />
-          <input placeholder="Admin Email" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} style={{ padding: 8, marginRight: 8 }} />
+          <h4>Create Mason</h4>
+          <input placeholder="Mason Name" value={newAdminName} onChange={e => setNewAdminName(e.target.value)} style={{ padding: 8, marginRight: 8 }} />
+          <input placeholder="Mason Email" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} style={{ padding: 8, marginRight: 8 }} />
           <input placeholder="Password" type="password" value={newAdminPassword} onChange={e => setNewAdminPassword(e.target.value)} style={{ padding: 8, marginRight: 8 }} />
           <button onClick={createChildAdmin} style={{ padding: 8, background: '#2563eb', color: 'white', border: 'none', borderRadius: 4 }}>
-            Create Admin
+            Create Mason
           </button>
         </div>
       )}
@@ -275,16 +318,16 @@ export default function Workers() {
         </button>
       </div>
 
-      {/* PENDING WORKER APPROVALS - For Region Leads */}
-      {adminRole === 'regionLead' && pendingWorkers.length > 0 && (
+      {/* PENDING GIG APPROVALS - For Region Leads */}
+      {adminRole === 'regionLead' && pendingGigs.length > 0 && (
         <div style={{ background: '#fef3c7', padding: 16, borderRadius: 8, marginBottom: 16, border: '2px solid #fcd34d' }}>
-          <h4 style={{ margin: '0 0 12px 0', color: '#92400e' }}>⏳ Pending Worker Approvals ({pendingWorkers.length})</h4>
+          <h4 style={{ margin: '0 0 12px 0', color: '#92400e' }}>⏳ Pending Gig Approvals ({pendingGigs.length})</h4>
           {childAdmins.length === 0 && (
             <div style={{ marginBottom: 10, padding: 8, background: '#fff7ed', border: '1px solid #fdba74', color: '#9a3412', borderRadius: 6, fontSize: 12 }}>
-              Create at least one child admin under this region admin before approving workers.
+              Create at least one mason under this region lead before approving gigs.
             </div>
           )}
-          {pendingWorkers.map(w => (
+          {pendingGigs.map(w => (
             <div key={w.id} style={{
               background: 'white',
               padding: 12,
@@ -307,7 +350,7 @@ export default function Workers() {
                     onChange={e => setApprovalAssignments(prev => ({ ...prev, [w.id]: e.target.value }))}
                     style={{ padding: 6, minWidth: 220 }}
                   >
-                    <option value="">Assign to child admin...</option>
+                    <option value="">Assign to mason...</option>
                     {childAdmins.map(a => (
                       <option key={a.id} value={a.id}>{a.name || a.email}</option>
                     ))}
@@ -337,7 +380,7 @@ export default function Workers() {
                 </button>
                 <button
                   onClick={() => {
-                    if (window.confirm('Reject this worker application?')) {
+                    if (window.confirm('Reject this gig application?')) {
                       rejectWorker(w.id);
                     }
                   }}
@@ -361,7 +404,11 @@ export default function Workers() {
       )}
 
       <div>
-        <h4>All Workers ({workers.length})</h4>
+        <h4>
+          {adminRole === 'superadmin' ? 'All Workers' : 
+           adminRole === 'regionLead' ? `Workers in Your Region` : 
+           'Your Workers'} ({workers.length})
+        </h4>
         
         {workers.length === 0 ? (
           <div style={{
@@ -374,7 +421,9 @@ export default function Workers() {
           }}>
             <div style={{ fontWeight: 'bold', marginBottom: 8 }}>📭 No workers created yet</div>
             <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-              Create your first worker using the form above. Your workers will appear here once created.
+              {adminRole === 'mason' || adminRole === 'admin' 
+                ? 'Create your first worker using the form above. Only workers YOU create will appear here.'
+                : 'Create your first worker using the form above. Your workers will appear here once created.'}
               <br />
               <span style={{ fontSize: 11, color: '#15803d', marginTop: 8, display: 'block' }}>
                 👉 Tip: Each worker can be assigned to multiple jobs across the platform.

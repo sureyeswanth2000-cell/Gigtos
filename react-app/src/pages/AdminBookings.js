@@ -126,7 +126,43 @@ export default function AdminBookings() {
     let myDocs = [];
 
     const mergeAndSet = () => {
-      const merged = [...openDocs, ...myDocs];
+      let merged = [...openDocs, ...myDocs];
+      
+      // GOVERNANCE RULE: Masons only see bookings matching their gig types
+      if (adminRole === 'admin' || adminRole === 'mason') {
+        const gigTypes = [...new Set(workers.map(w => w.gigType).filter(Boolean))];
+        console.log('🎯 Filtering bookings by mason gig types:', gigTypes);
+        
+        if (gigTypes.length > 0) {
+          // Normalize both booking service types and gig types for comparison
+          const normalizeType = (type) => {
+            if (!type) return '';
+            return type.trim().toLowerCase()
+              .replace(/electrican/i, 'electrician')
+              .replace(/plummer/i, 'plumber')
+              .replace(/carpanter/i, 'carpenter');
+          };
+          
+          const normalizedGigTypes = gigTypes.map(normalizeType);
+          console.log('🔧 Normalized gig types:', normalizedGigTypes);
+          
+          merged = merged.filter(b => {
+            const isMyBooking = b.adminId === uid;
+            const matchesGigType = normalizedGigTypes.includes(normalizeType(b.serviceType));
+            const shouldShow = isMyBooking || matchesGigType;
+            
+            if (!shouldShow && b.status === 'pending') {
+              console.log('❌ Filtered out:', b.serviceType, '(not in mason gig types)');
+            }
+            
+            return shouldShow;
+          });
+        } else {
+          console.warn('⚠️ Mason has no gig types - showing only assigned bookings');
+          merged = merged.filter(b => b.adminId === uid);
+        }
+      }
+      
       const byId = new Map();
       merged.forEach(item => byId.set(item.id, item));
       const unique = Array.from(byId.values());
@@ -143,6 +179,7 @@ export default function AdminBookings() {
       snap => {
         setReadError('');
         openDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        console.log('📂 Open bookings (pending/scheduled/quoted):', openDocs.length);
         mergeAndSet();
       },
       (err) => {
@@ -156,6 +193,7 @@ export default function AdminBookings() {
       snap => {
         setReadError('');
         myDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        console.log('📂 My assigned bookings (adminId matches):', myDocs.length);
         mergeAndSet();
       },
       (err) => {
@@ -197,23 +235,64 @@ export default function AdminBookings() {
   useEffect(() => {
     if (!uid) return;
     
+    // CRITICAL FIX: Security rules require where() clause for non-superadmins
+    // Querying all workers fails for masons because rules block reads where adminId != uid
+    let workerQuery;
+    if (isSuperAdmin) {
+      // SuperAdmin can query all workers (no restriction)
+      workerQuery = query(collection(db, 'gig_workers'));
+    } else if (adminRole === 'regionLead') {
+      // Region Lead can query all workers (they filter by childAdminIds after)
+      workerQuery = query(collection(db, 'gig_workers'));
+    } else {
+      // Admin/Mason MUST query only their own workers (security rule requirement)
+      workerQuery = query(collection(db, 'gig_workers'), where('adminId', '==', uid));
+    }
+    
     const unsub = onSnapshot(
-      query(collection(db, 'gig_workers')),
+      workerQuery,
       snap => {
         const allWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         const approvedWorkers = allWorkers.filter(w => !w.approvalStatus || w.approvalStatus === 'approved');
         
+        console.log('🔧 Workers loading:', {
+          total: allWorkers.length,
+          approved: approvedWorkers.length,
+          currentUid: uid,
+          adminRole: adminRole,
+          allAdminIds: [...new Set(allWorkers.map(w => w.adminId))]
+        });
+        
         // SuperAdmin sees all workers
         if (isSuperAdmin) {
           setWorkers(approvedWorkers);
+          console.log('👑 SuperAdmin sees all workers:', approvedWorkers.length);
         } else if (adminRole === 'regionLead') {
           // Region lead monitors workers in their area (owned by child admins)
           const areaWorkers = approvedWorkers.filter(w => childAdminIds.includes(w.adminId));
           setWorkers(areaWorkers);
+          console.log('🌍 Region lead sees area workers:', areaWorkers.length);
         } else {
-          // Admin/Mason sees only own workers
-          const myWorkers = approvedWorkers.filter(w => w.adminId === uid);
-          setWorkers(myWorkers);
+          // Admin/Mason sees only own workers (already filtered by query)
+          setWorkers(approvedWorkers);
+          
+          console.log('👤 Mason/Admin workers:', {
+            count: approvedWorkers.length,
+            workers: approvedWorkers.map(w => ({ name: w.name, gigType: w.gigType, adminId: w.adminId, status: w.status }))
+          });
+          
+          // Get unique gig types this mason has (for filtering bookings)
+          const gigTypes = [...new Set(approvedWorkers.map(w => w.gigType).filter(Boolean))];
+          console.log('🎯 Mason gig types:', gigTypes);
+        }
+      },
+      (err) => {
+        console.error('❌ Workers query error:', err);
+        console.error('   Error code:', err.code);
+        console.error('   Error message:', err.message);
+        if (err.code === 'permission-denied') {
+          console.error('   ⚠️ PERMISSION DENIED: Security rules blocking worker reads');
+          console.error('   ⚠️ Make sure workers have adminId field matching your UID');
         }
       }
     );
@@ -252,11 +331,13 @@ export default function AdminBookings() {
     if (!uid) throw new Error('Not authenticated');
 
     if (method === 'submitQuote') {
+      console.log('🟢 runSparkFallback: submitQuote called');
       const { bookingId, price } = data;
       const bookingRef = doc(db, 'bookings', bookingId);
       const snap = await getDoc(bookingRef);
       if (!snap.exists()) throw new Error('Booking not found');
       const booking = snap.data();
+      console.log('🟢 Current booking status:', booking.status, '| Existing quotes:', booking.quotes?.length || 0);
       const quotesList = booking.quotes || [];
       if (quotesList.some(q => q.adminId === uid)) throw new Error('Quote already submitted');
 
@@ -264,11 +345,15 @@ export default function AdminBookings() {
       const adminName = adminDoc.exists() ? (adminDoc.data().name || adminDoc.data().email || 'Admin') : 'Admin';
       const updatedQuotes = [...quotesList, { adminId: uid, adminName, price: Number(price), createdAt: new Date() }];
 
+      // Don't change status to 'quoted' - keep it open for other masons to submit quotes
+      // Status will only change when user accepts a quote
+      console.log('🟢 Updating booking - NOT changing status (keeping:', booking.status + ')');
       await updateDoc(bookingRef, {
         quotes: updatedQuotes,
-        status: 'quoted',
+        // status remains 'pending' or 'scheduled' so other masons can still see and quote
         updatedAt: new Date(),
       });
+      console.log('🟢 Quote submitted successfully! Status should still be:', booking.status);
       return;
     }
 
@@ -374,6 +459,19 @@ export default function AdminBookings() {
   };
 
   const callBackend = async (method, data) => {
+    // For submitQuote, skip Cloud Function and use fallback directly
+    // because Cloud Function has old code (sets status: 'quoted') and we can't redeploy without Blaze plan
+    if (method === 'submitQuote') {
+      console.log('🔵 callBackend: Skipping Cloud Function, using fallback directly');
+      try {
+        await runSparkFallback(method, data);
+      } catch (fallbackErr) {
+        console.error('🔴 Fallback error:', fallbackErr);
+        alert('Action failed: ' + fallbackErr.message);
+      }
+      return;
+    }
+
     try {
       const func = httpsCallable(functionsInstance, method);
       await func(data);
@@ -396,10 +494,32 @@ export default function AdminBookings() {
   const assignWorker = async (b, workerId) => {
     if (!workerId) return;
     const worker = workers.find(w => w.id === workerId);
+    
+    if (!worker) {
+      alert('Worker not found');
+      console.error('❌ Worker not found:', workerId);
+      return;
+    }
+    
+    const workerPhone = worker.contact || worker.phone || '';
+    
+    if (!workerPhone) {
+      alert('⚠️ Worker has no phone number. Please update worker details first.');
+      console.error('❌ Worker missing phone:', worker);
+      return;
+    }
+    
+    console.log('🔧 Assigning worker:', { 
+      workerId, 
+      workerName: worker.name, 
+      workerPhone,
+      bookingId: b.id 
+    });
+    
     await callBackend('updateBookingStatus', {
       bookingId: b.id,
       action: 'admin_assign_worker',
-      extraArgs: { workerId, workerName: worker?.name, workerPhone: worker?.phone }
+      extraArgs: { workerId, workerName: worker.name, workerPhone }
     });
   };
 
@@ -523,6 +643,7 @@ export default function AdminBookings() {
       return;
     }
 
+    console.log('🔵 Submitting quote:', { bookingId, price, uid, adminRole });
     await callBackend('submitQuote', { bookingId, price: Number(price) });
     setQuotes(prev => { const n = { ...prev }; delete n[bookingId]; return n; });
     alert('Quote sent! User will be notified.');
@@ -589,7 +710,60 @@ export default function AdminBookings() {
       {shown.map(b => {
         // LOGIC: Filter workers based on gig type AND availability for this booking ID
         const busyWorkerIds = bookings.filter(bk => ['assigned', 'in_progress'].includes(bk.status) && bk.id !== b.id).map(bk => bk.assignedWorkerId);
-        const availableWorkers = workers.filter(w => w.status === 'active' && !busyWorkerIds.includes(w.id) && !w.isFraud && ((b.serviceType || '').toLowerCase() === (w.gigType || '').toLowerCase()));
+        
+        // Normalize service type for matching (trim, lowercase, handle common spelling variations)
+        const normalizeServiceType = (type) => {
+          if (!type) return '';
+          return type.trim().toLowerCase()
+            .replace(/electrican/i, 'electrician')
+            .replace(/plummer/i, 'plumber')
+            .replace(/carpanter/i, 'carpenter');
+        };
+        
+        const bookingServiceType = normalizeServiceType(b.serviceType);
+        const availableWorkers = workers.filter(w => {
+          const workerGigType = normalizeServiceType(w.gigType);
+          const isMatch = w.status === 'active' && !busyWorkerIds.includes(w.id) && !w.isFraud && bookingServiceType === workerGigType;
+          return isMatch;
+        });
+        
+        // Log worker matching info for accepted bookings
+        if (b.status === 'accepted') {
+          if (availableWorkers.length > 0) {
+            console.log('✅ Available workers for accepted booking:', {
+              bookingId: b.id,
+              bookingService: b.serviceType,
+              availableCount: availableWorkers.length,
+              workers: availableWorkers.map(w => ({
+                id: w.id,
+                name: w.name,
+                gigType: w.gigType,
+                contact: w.contact,
+                phone: w.phone,
+                status: w.status
+              }))
+            });
+          } else {
+            console.log('🚨 No workers available for accepted booking:', {
+              bookingId: b.id,
+              bookingService: b.serviceType,
+              normalizedBooking: bookingServiceType,
+              totalWorkers: workers.length,
+              myWorkers: workers.filter(w => w.adminId === uid).length,
+              myGigTypes: workers.filter(w => w.adminId === uid).map(w => w.gigType),
+              allWorkerDetails: workers.map(w => ({ 
+                name: w.name, 
+                gigType: w.gigType, 
+                normalized: normalizeServiceType(w.gigType), 
+                active: w.status === 'active',
+                status: w.status,
+                isFraud: w.isFraud,
+                adminId: w.adminId,
+                matchesService: normalizeServiceType(w.gigType) === bookingServiceType
+              }))
+            });
+          }
+        }
 
         const escalation = getEscalationInfo(b.dispute);
 
@@ -642,7 +816,8 @@ export default function AdminBookings() {
 
             {/* ACTION BUTTONS: Drive the backend triggers */}
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {(b.status === 'pending' || b.status === 'scheduled') && (
+              {/* Show quote UI for bookings that haven't been accepted yet - includes 'pending', 'scheduled', and 'quoted' statuses */}
+              {(b.status === 'pending' || b.status === 'scheduled' || b.status === 'quoted') && (adminRole === 'admin' || adminRole === 'mason' || adminRole === 'worker') && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569' }}>💰 Submit Bid</div>
                   <div style={{ display: 'flex', gap: '6px' }}>
@@ -671,8 +846,76 @@ export default function AdminBookings() {
                       {b.quotes.length} bid(s) already received for this job.
                     </div>
                   )}
+                  {/* Show the mason's own submitted quote */}
+                  {b.quotes?.find(q => q.adminId === uid) && (
+                    <div style={{ marginTop: '8px', padding: '8px', background: '#dbeafe', borderRadius: '6px', border: '1px solid #3b82f6' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e40af' }}>✅ Your Submitted Quote</div>
+                      <div style={{ fontSize: '13px', color: '#1e3a8a', marginTop: '4px' }}>
+                        ₹{b.quotes.find(q => q.adminId === uid).price}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+                        Submitted: {b.quotes.find(q => q.adminId === uid).createdAt?.toDate?.().toLocaleString() || 'Just now'}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
+              
+              {/* WORKER ASSIGNMENT: Show for accepted bookings so mason can assign a gig to complete the job */}
+              {b.status === 'accepted' && (adminRole === 'admin' || adminRole === 'mason' || adminRole === 'superadmin') && (
+                <div style={{ width: '100%', padding: '12px', background: '#ecfdf5', borderRadius: '8px', border: '1px solid #10b981' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#065f46', marginBottom: '8px' }}>
+                    🤝 Quote Accepted - Assign Gig to Complete Job
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#059669', marginBottom: '8px' }}>
+                    Accepted Price: ₹{b.acceptedQuote?.price} | Customer: {b.customerName}
+                  </div>
+                  {availableWorkers.length > 0 ? (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <select
+                        onChange={(e) => assignWorker(b, e.target.value)}
+                        style={{
+                          flex: 1,
+                          padding: '8px',
+                          borderRadius: '4px',
+                          border: '1px solid #10b981',
+                          fontSize: '13px'
+                        }}
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Select a gig to assign...</option>
+                        {availableWorkers.map(w => (
+                          <option key={w.id} value={w.id}>
+                            {w.name} - {w.gigType} ({w.contact || w.phone || 'No phone'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '12px', color: '#dc2626', padding: '8px', background: '#fef2f2', borderRadius: '4px' }}>
+                      <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                        ⚠️ No available gigs for {b.serviceType}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#7f1d1d', marginTop: '4px', lineHeight: '1.6' }}>
+                        <strong>Debug Info:</strong>
+                        <br />
+                        • Total workers in state: {workers.length}
+                        <br />
+                        • Your workers (adminId={uid?.substring(0, 8)}...): {workers.filter(w => w.adminId === uid).length}
+                        <br />
+                        • Your gig types & status: {workers.filter(w => w.adminId === uid).map(w => `${w.gigType}(${w.status})`).join(', ') || 'None'}
+                        <br />
+                        • Booking needs: {b.serviceType} → normalized: "{normalizeServiceType(b.serviceType)}"
+                        <br />
+                        • Active gigs: {workers.filter(w => w.status === 'active' && w.adminId === uid).length}
+                        <br />
+                        📋 <strong>Open console (F12) to see detailed matching info!</strong>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
               {b.status === 'assigned' && <button onClick={() => startWork(b)} style={{ background: '#9c27b0', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px' }}>Start Work</button>}
               {b.status === 'in_progress' && <button onClick={() => markFinished(b)} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px' }}>Mark Finished</button>}
 

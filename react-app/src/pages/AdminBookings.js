@@ -110,6 +110,7 @@ export default function AdminBookings() {
   const [adminRole, setAdminRole] = useState('admin'); // admin/mason/regionLead/superadmin
   const [childAdminIds, setChildAdminIds] = useState([]); // For regionLead area monitoring
   const [readError, setReadError] = useState('');      // Firestore read errors for troubleshooting
+  const [isIndependentWorker, setIsIndependentWorker] = useState(false); // Independent worker check (no adminId)
 
   const uid = auth.currentUser?.uid;
 
@@ -126,6 +127,17 @@ export default function AdminBookings() {
         console.log('🔐 Admin role detected:', role);
         setAdminRole(role);
         setIsSuperAdmin(role === 'superadmin');
+
+        // Check if this is an independent worker (role='worker' with no adminId in gig_workers)
+        if (role === 'worker') {
+          const workerDoc = await getDoc(doc(db, 'gig_workers', uid));
+          if (workerDoc.exists()) {
+            const workerData = workerDoc.data();
+            const hasNoAdmin = !workerData.adminId || workerData.adminId === '' || workerData.adminId === null;
+            setIsIndependentWorker(hasNoAdmin);
+            console.log('🔧 Worker independence check:', hasNoAdmin ? 'INDEPENDENT' : 'Under admin', workerData.adminId);
+          }
+        }
 
         if (role === 'regionLead') {
           console.log('📍 Region Lead detected - loading child admins...');
@@ -1026,7 +1038,7 @@ export default function AdminBookings() {
             {/* ACTION BUTTONS: Drive the backend triggers */}
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               {/* Show quote UI for bookings that haven't been accepted yet - includes 'pending', 'scheduled', and 'quoted' statuses */}
-              {(b.status === 'pending' || b.status === 'scheduled' || b.status === 'quoted') && (adminRole === 'admin' || adminRole === 'mason' || adminRole === 'worker') && (
+              {(b.status === 'pending' || b.status === 'scheduled' || b.status === 'quoted') && (adminRole === 'admin' || adminRole === 'mason' || (adminRole === 'worker' && isIndependentWorker)) && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569' }}>💰 Submit Bid</div>
                   <div style={{ display: 'flex', gap: '6px' }}>

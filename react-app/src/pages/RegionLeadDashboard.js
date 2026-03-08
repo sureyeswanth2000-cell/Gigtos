@@ -124,53 +124,70 @@ export default function RegionLeadDashboard() {
     
     // Use state to properly track bookings from multiple sources
     const bookingsByAdmin = {};
+    let unassignedBookings = [];
+    
+    const aggregateAndUpdate = () => {
+      // Combine assigned bookings from all child admins + unassigned bookings
+      const assignedBookings = Object.values(bookingsByAdmin).flat();
+      const allBookings = [...assignedBookings, ...unassignedBookings];
+      
+      console.log(`📊 Total bookings: ${allBookings.length} (${assignedBookings.length} assigned, ${unassignedBookings.length} unassigned)`);
+      
+      const active = allBookings.filter(b =>
+        ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status)
+      );
+      const delayed = active.filter((b) => getStatusAgeHours(b) >= 24 || b.sla?.breached);
+      
+      const disputeBookings = allBookings.filter(b => b.dispute?.status);
+      const openDisputes = disputeBookings.filter(b => b.dispute?.status === 'open');
+      
+      console.log(`✅ Active: ${active.length}, Delayed: ${delayed.length}, Open disputes: ${openDisputes.length}`);
+      
+      setActiveBookings(active);
+      setDelayedBookings(delayed);
+      setAllDisputeBookings(disputeBookings);
+      setDisputes(openDisputes);
+      setStats(prev => ({
+        ...prev,
+        activeBookings: active.length,
+        openDisputes: openDisputes.length,
+      }));
+    };
     
     console.log('🔍 RegionLead loading bookings for masons:', childAdminIds);
     
+    // Query 1: Listen to bookings assigned to child admins
     childAdminIds.forEach(adminId => {
       const unsub = onSnapshot(
         query(collection(db, 'bookings'), where('adminId', '==', adminId)),
         (snap) => {
-          const bookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          
-          console.log(`📦 Loaded ${bookings.length} bookings for mason ${adminId}`);
-          
-          // Store bookings for this admin
-          bookingsByAdmin[adminId] = bookings;
-          
-          // Combine all bookings from all admins
-          const allBookings = Object.values(bookingsByAdmin).flat();
-          
-          console.log(`📊 Total combined bookings: ${allBookings.length}`);
-          
-          const active = allBookings.filter(b =>
-            ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status)
-          );
-          const delayed = active.filter((b) => getStatusAgeHours(b) >= 24 || b.sla?.breached);
-          
-          const disputeBookings = allBookings.filter(b => b.dispute?.status);
-          const openDisputes = disputeBookings.filter(b => b.dispute?.status === 'open');
-          
-          console.log(`✅ Active bookings: ${active.length}, Open disputes: ${openDisputes.length}`);
-          
-          setActiveBookings(active);
-          setDelayedBookings(delayed);
-          setAllDisputeBookings(disputeBookings);
-          setDisputes(openDisputes);
-          setStats(prev => ({
-            ...prev,
-            activeBookings: active.length,
-            openDisputes: openDisputes.length,
-          }));
+          bookingsByAdmin[adminId] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          console.log(`📦 Loaded ${bookingsByAdmin[adminId].length} bookings for mason ${adminId}`);
+          aggregateAndUpdate();
         },
         (error) => {
           console.error(`❌ Error loading bookings for mason ${adminId}:`, error.message);
-          console.error('Error code:', error.code);
-          console.error('Full error:', error);
         }
       );
       unsubscribers.push(unsub);
     });
+    
+    // Query 2: Listen to unassigned bookings (no adminId yet - awaiting quotes)
+    const unsubUnassigned = onSnapshot(
+      query(
+        collection(db, 'bookings'),
+        where('adminId', '==', null)
+      ),
+      (snap) => {
+        unassignedBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        console.log(`📦 Loaded ${unassignedBookings.length} unassigned bookings`);
+        aggregateAndUpdate();
+      },
+      (error) => {
+        console.error('❌ Error loading unassigned bookings:', error.message);
+      }
+    );
+    unsubscribers.push(unsubUnassigned);
     
     return () => unsubscribers.forEach(fn => fn());
   }, [uid, childAdmins]);

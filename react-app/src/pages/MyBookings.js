@@ -14,7 +14,7 @@ import { auth, db, functionsInstance } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection, query, where, onSnapshot,
-  doc, updateDoc, getDoc
+  doc, updateDoc, getDoc, getDocs
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { acceptQuote as applyAcceptedQuote } from '../utils/bookingWorkflow';
@@ -327,7 +327,83 @@ export default function MyBookings() {
     
     if (!window.confirm(`Accept quote from ${quote.adminName}?${breakdown}`)) return;
     try {
+      // Step 1: Accept the quote (sets adminId and status)
       await callBackend('acceptQuote', { bookingId: id, adminId: quote.adminId });
+      
+      // Step 2: Immediate auto-assignment in free-plan mode
+      if (USE_FREE_PLAN_MODE) {
+        try {
+          console.log('🤖 Triggering immediate auto-assignment for booking:', id);
+          
+          // Find the booking to get serviceType
+          const booking = bookings.find(b => b.id === id);
+          if (!booking) {
+            console.error('❌ Booking not found for auto-assignment');
+            alert('✓ Quote accepted! Admin will assign a worker shortly.');
+            return;
+          }
+          
+          // Query workers for this admin
+          const workersSnap = await getDocs(
+            query(
+              collection(db, 'gig_workers'),
+              where('adminId', '==', quote.adminId),
+              where('status', '==', 'active')
+            )
+          );
+          
+          const allWorkers = workersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          
+          // Filter for available workers matching service type
+          const busyWorkerIds = bookings
+            .filter(b => ['assigned', 'in_progress'].includes(b.status) && b.id !== id)
+            .map(b => b.assignedWorkerId);
+          
+          const normalizeServiceType = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '');
+          const desiredType = normalizeServiceType(booking.serviceType);
+          
+          const availableWorkers = allWorkers.filter(w => {
+            const matchesService = normalizeServiceType(w.gigType) === desiredType;
+            return !w.isFraud && !busyWorkerIds.includes(w.id) && matchesService;
+          });
+          
+          if (availableWorkers.length === 0) {
+            console.log('⚠️ No available workers found for auto-assignment');
+            alert('✓ Quote accepted! Admin will assign a worker manually.');
+            return;
+          }
+          
+          // Score and rank workers
+          const ranked = availableWorkers.map(w => {
+            const ratingScore = Number(w.rating || 0) * 100;
+            const utilizationPenalty = Number(w.completedJobs || 0);
+            const serviceBonus = 25; // Already filtered by service type
+            return { worker: w, score: ratingScore + serviceBonus - utilizationPenalty };
+          }).sort((a, b) => b.score - a.score);
+          
+          const bestWorker = ranked[0].worker;
+          
+          // Assign the worker
+          const bookingRef = doc(db, 'bookings', id);
+          await updateDoc(bookingRef, {
+            status: 'assigned',
+            assignedWorkerId: bestWorker.id,
+            workerName: bestWorker.name || 'Worker',
+            assignedAt: new Date(),
+            statusUpdatedAt: new Date(),
+            updatedAt: new Date(),
+          });
+          
+          console.log(`✅ Auto-assigned worker: ${bestWorker.name} (${bestWorker.id})`);
+          alert(`✓ Quote accepted and worker assigned: ${bestWorker.name}! They'll contact you shortly.`);
+          return;
+        } catch (autoAssignErr) {
+          console.error('❌ Auto-assignment failed:', autoAssignErr);
+          alert('✓ Quote accepted! Admin will assign a worker shortly.');
+          return;
+        }
+      }
+      
       alert('✓ Quote accepted! Your regional pro will assign a worker shortly.');
     } catch (e) {
       // Error handled by callBackend

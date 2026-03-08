@@ -1,1 +1,22 @@
+# Dependencies
 node_modules
+
+# Production build
+react-app/build
+build
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db

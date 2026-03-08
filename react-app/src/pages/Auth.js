@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 function Auth() {
   const navigate = useNavigate();
@@ -33,6 +33,22 @@ function Auth() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const resetAllFields = () => {
+    setError('');
+    setOtp('');
+    setPassword('');
+    setConfirmPassword('');
+    setPhone('');
+    setEmail('');
+    setWorkerName('');
+    setWorkerPhone('');
+    setWorkerEmail('');
+    setWorkerPassword('');
+    setWorkerConfirmPassword('');
+    setWorkerGigType('');
+    setWorkerArea('');
+  };
 
   // ============= USER PHONE LOGIN =============
   const handleUserPhoneLogin = async (e) => {
@@ -229,9 +245,150 @@ function Auth() {
         createdAt: new Date()
       });
 
+      // Keep phone lookup so workers can log in by phone number.
+      await setDoc(doc(db, 'workers_by_phone', workerPhone), {
+        phone: workerPhone,
+        email: workerEmail,
+        uid,
+        name: workerName,
+        gigType: workerGigType,
+        area: workerArea,
+        approvalStatus: 'pending',
+        status: 'inactive',
+        createdAt: new Date()
+      }, { merge: true });
+
+      // Worker role marker used by app routing.
+      await setDoc(doc(db, 'worker_auth', uid), {
+        uid,
+        phone: workerPhone,
+        email: workerEmail,
+        name: workerName,
+        gigType: workerGigType,
+        area: workerArea,
+        approvalStatus: 'pending',
+        status: 'inactive',
+        createdAt: new Date()
+      }, { merge: true });
+
       alert('✅ Registration successful! Waiting for region lead approval.');
       navigate('/');
     } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============= WORKER LOGIN (PHONE + PASSWORD) =============
+  const handleWorkerLogin = async (e) => {
+    e.preventDefault();
+    if (!phone || !password) {
+      setError('Please enter phone number and password');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const workerPhoneDoc = await getDoc(doc(db, 'workers_by_phone', phone));
+      if (!workerPhoneDoc.exists()) {
+        throw new Error('Worker phone not found. Ask your mason/admin to add your worker profile first.');
+      }
+
+      const workerPhoneData = workerPhoneDoc.data();
+      if (!workerPhoneData?.email) {
+        throw new Error('Your worker account is not activated. Use "Activate existing worker" first.');
+      }
+
+      const userCred = await signInWithEmailAndPassword(auth, workerPhoneData.email, password);
+      const uid = userCred.user.uid;
+      const workerAuthDoc = await getDoc(doc(db, 'worker_auth', uid));
+
+      if (!workerAuthDoc.exists()) {
+        await signOut(auth);
+        throw new Error('Worker profile missing. Please use activate worker flow.');
+      }
+
+      const workerState = workerAuthDoc.data();
+      if (workerState?.approvalStatus === 'rejected') {
+        await signOut(auth);
+        throw new Error('Your worker account was rejected. Contact your region lead.');
+      }
+
+      if (workerState?.approvalStatus !== 'approved' || workerState?.status !== 'active') {
+        await signOut(auth);
+        throw new Error('Your worker account is pending approval. Please contact your region lead.');
+      }
+
+      navigate('/worker/dashboard');
+    } catch (err) {
+      console.error('❌ Worker login error:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============= ACTIVATE EXISTING MASON-CREATED WORKER =============
+  const handleWorkerActivate = async (e) => {
+    e.preventDefault();
+    if (!phone || !email || !password || !confirmPassword) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const workerPhoneDoc = await getDoc(doc(db, 'workers_by_phone', phone));
+      if (!workerPhoneDoc.exists()) {
+        throw new Error('Phone number not found in worker records. Ask your mason/admin to add you first.');
+      }
+
+      const workerData = workerPhoneDoc.data();
+      if (workerData?.uid && workerData?.email) {
+        throw new Error('This worker is already activated. Please login using phone + password.');
+      }
+
+      const userCred = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCred.user.uid;
+
+      await setDoc(doc(db, 'worker_auth', uid), {
+        uid,
+        phone,
+        email,
+        name: workerData?.name || '',
+        gigType: workerData?.gigType || 'other',
+        area: workerData?.area || '',
+        adminId: workerData?.adminId || '',
+        approvalStatus: workerData?.approvalStatus || 'approved',
+        status: workerData?.status || 'active',
+        activatedAt: new Date(),
+        createdAt: workerData?.createdAt || new Date()
+      }, { merge: true });
+
+      await updateDoc(doc(db, 'workers_by_phone', phone), {
+        uid,
+        email,
+        activatedAt: new Date()
+      });
+
+      navigate('/worker/dashboard');
+    } catch (err) {
+      console.error('❌ Worker activation error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -317,8 +474,8 @@ function Auth() {
           <button
             onClick={() => {
               setUserType('worker');
-              setPhase('signup');
-              setError('');
+              setPhase('workerSelect');
+              resetAllFields();
             }}
             style={{
               padding: '40px',
@@ -347,6 +504,86 @@ function Auth() {
             </div>
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (userType === 'worker' && phase === 'workerSelect') {
+    return (
+      <div style={{ maxWidth: '500px', margin: '60px auto', padding: '30px', textAlign: 'center' }}>
+        <h2 style={{ marginBottom: '8px' }}>👷 Worker Access</h2>
+        <p style={{ color: '#666', marginBottom: '24px' }}>Choose how you want to continue</p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <button
+            onClick={() => {
+              setPhase('login');
+              setError('');
+            }}
+            style={{
+              padding: '18px',
+              border: '2px solid #10b981',
+              borderRadius: '10px',
+              background: '#ecfdf5',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            🔓 Login (Phone + Password)
+          </button>
+
+          <button
+            onClick={() => {
+              setPhase('activate');
+              setError('');
+            }}
+            style={{
+              padding: '18px',
+              border: '2px solid #0ea5e9',
+              borderRadius: '10px',
+              background: '#f0f9ff',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            📱 Activate Existing Worker (Already Added By Mason)
+          </button>
+
+          <button
+            onClick={() => {
+              setPhase('signup');
+              setError('');
+            }}
+            style={{
+              padding: '18px',
+              border: '2px solid #10b981',
+              borderRadius: '10px',
+              background: '#f0fdf4',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            ✍️ Register New Worker
+          </button>
+        </div>
+
+        <button
+          onClick={() => {
+            setUserType('user');
+            setPhase('typeSelect');
+            resetAllFields();
+          }}
+          style={{
+            marginTop: '20px',
+            width: '100%',
+            padding: '10px',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer'
+          }}
+        >
+          ← Back
+        </button>
       </div>
     );
   }
@@ -627,8 +864,203 @@ function Auth() {
         </form>
       )}
 
+      {/* WORKER LOGIN */}
+      {userType === 'worker' && phase === 'login' && (
+        <form onSubmit={handleWorkerLogin}>
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Phone Number:
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="10-digit phone number"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Password:
+            </label>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '11px',
+              backgroundColor: loading ? '#ccc' : '#10b981',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '15px',
+              fontWeight: 'bold',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              marginBottom: '12px'
+            }}
+          >
+            {loading ? '⏳ Logging in...' : 'Worker Login'}
+          </button>
+
+          <div style={{ textAlign: 'center', fontSize: '13px', color: '#666' }}>
+            No login yet for this phone?{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setPhase('activate');
+                setError('');
+                setPassword('');
+                setConfirmPassword('');
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#0ea5e9',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                textDecoration: 'underline'
+              }}
+            >
+              Activate existing worker
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* WORKER ACTIVATION (for mason-created worker records) */}
+      {userType === 'worker' && phase === 'activate' && (
+        <form onSubmit={handleWorkerActivate}>
+          <div style={{ marginBottom: '12px', fontSize: '12px', color: '#0f766e', background: '#ecfeff', padding: '8px', borderRadius: '6px' }}>
+            Use this if your mason already added your phone number in the system.
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Worker Phone Number:
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="10-digit phone number"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              New Login Email:
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="worker@email.com"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              New Password:
+            </label>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Minimum 6 characters"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+              Confirm Password:
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter password"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '11px',
+              backgroundColor: loading ? '#ccc' : '#0ea5e9',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '15px',
+              fontWeight: 'bold',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              marginBottom: '12px'
+            }}
+          >
+            {loading ? '⏳ Activating...' : 'Activate Worker Login'}
+          </button>
+        </form>
+      )}
+
       {/* WORKER REGISTRATION */}
-      {userType === 'worker' && (
+      {userType === 'worker' && phase === 'signup' && (
         <form onSubmit={handleWorkerSignup}>
           <div style={{ marginBottom: '15px' }}>
             <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
@@ -806,20 +1238,8 @@ function Auth() {
       {/* Back Button */}
       <button
         onClick={() => {
-          setPhase('typeSelect');
-          setError('');
-          setOtp('');
-          setPassword('');
-          setConfirmPassword('');
-          setPhone('');
-          setEmail('');
-          setWorkerName('');
-          setWorkerPhone('');
-          setWorkerEmail('');
-          setWorkerPassword('');
-          setWorkerConfirmPassword('');
-          setWorkerGigType('');
-          setWorkerArea('');
+          setPhase(userType === 'worker' ? 'workerSelect' : 'typeSelect');
+          resetAllFields();
         }}
         style={{
           width: '100%',

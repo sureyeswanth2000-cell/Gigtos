@@ -51,6 +51,35 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /workers_by_phone/{phoneNumber} {
+      // Public read allows phone->email lookup for worker login.
+      allow read: if true;
+
+      // Admin hierarchy can maintain worker phone index.
+      // Worker can only update their own mapping after activation.
+      allow create, update: if isAdmin() || (
+        request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.phone == phoneNumber
+      );
+
+      allow delete: if false;
+    }
+
+    match /worker_auth/{workerUid} {
+      // Worker reads own profile; admins can read for support.
+      allow read: if isLoggedIn() && (
+        request.auth.uid == workerUid || isAdmin()
+      );
+
+      // Worker creates/updates own auth profile; admins can maintain it too.
+      allow create, update: if isLoggedIn() && (
+        request.auth.uid == workerUid || isAdmin()
+      );
+
+      allow delete: if isSuperAdmin();
+    }
+
     /* ============================
        BOOKINGS COLLECTION
     ============================ */

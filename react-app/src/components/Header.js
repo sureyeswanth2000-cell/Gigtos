@@ -11,6 +11,7 @@ export default function Header() {
   const [isAdmin, setIsAdmin] = React.useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = React.useState(false);
   const [isRegionLead, setIsRegionLead] = React.useState(false);
+  const [isWorker, setIsWorker] = React.useState(false);
   const [adminRole, setAdminRole] = React.useState(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
 
@@ -18,9 +19,13 @@ export default function Header() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        getDoc(doc(db, 'admins', currentUser.uid)).then(d => {
+        Promise.all([
+          getDoc(doc(db, 'admins', currentUser.uid)),
+          getDoc(doc(db, 'worker_auth', currentUser.uid))
+        ]).then(([d, workerDoc]) => {
           const role = d.data()?.role;
           setIsAdmin(d.exists());
+          setIsWorker(workerDoc.exists());
           setAdminRole(role);
           setIsSuperAdmin(d.exists() && role === 'superadmin');
           setIsRegionLead(d.exists() && role === 'regionLead');
@@ -29,6 +34,7 @@ export default function Header() {
         setIsAdmin(false);
         setIsSuperAdmin(false);
         setIsRegionLead(false);
+        setIsWorker(false);
         setAdminRole(null);
       }
     });
@@ -85,6 +91,10 @@ export default function Header() {
                 <Link to="/admin" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '4px' }}>
                   👨‍💼 Admin Dash
                 </Link>
+              ) : isWorker ? (
+                <Link to="/worker/dashboard" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(16,185,129,0.35)', padding: '6px 12px', borderRadius: '4px' }}>
+                  👷 Worker Dash
+                </Link>
               ) : (
                 <Link to="/my-bookings" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>My Bookings</Link>
               )}
@@ -131,9 +141,17 @@ export default function Header() {
                         </Link>
                       </>
                     ) : (
-                      <Link to="/my-bookings" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
-                        📅 My Bookings
-                      </Link>
+                      <>
+                        {isWorker ? (
+                          <Link to="/worker/dashboard" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
+                            👷 Worker Dashboard
+                          </Link>
+                        ) : (
+                          <Link to="/my-bookings" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
+                            📅 My Bookings
+                          </Link>
+                        )}
+                      </>
                     )}
                   </div>
 

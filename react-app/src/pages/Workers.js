@@ -19,6 +19,25 @@ export default function Workers() {
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [newAdminPassword, setNewAdminPassword] = useState('');
 
+  async function upsertWorkerPhoneIndex(workerId, workerData, extra = {}) {
+    const phone = (workerData?.contact || '').toString().trim();
+    if (!phone) return;
+
+    await setDoc(doc(db, 'workers_by_phone', phone), {
+      phone,
+      workerDocId: workerId,
+      name: workerData?.name || '',
+      gigType: workerData?.gigType || '',
+      area: workerData?.area || '',
+      adminId: workerData?.adminId || '',
+      approvalStatus: workerData?.approvalStatus || 'approved',
+      status: workerData?.status || 'active',
+      email: workerData?.email || '',
+      updatedAt: new Date(),
+      ...extra
+    }, { merge: true });
+  }
+
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, u => setUser(u));
     return () => unsubAuth();
@@ -83,6 +102,11 @@ export default function Workers() {
       workersQuery,
       (snap) => {
         const allWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        // Keep phone lookup in sync so mason-created workers can activate login by phone.
+        allWorkers.forEach(w => {
+          upsertWorkerPhoneIndex(w.id, w).catch(err => console.error('Phone index sync failed:', err));
+        });
         
         console.log('👤 Current role:', adminRole);
         console.log('📋 Total workers in DB:', allWorkers.length);
@@ -139,7 +163,7 @@ export default function Workers() {
     if (!name.trim()) return alert('Worker name is required');
     if (!/^[0-9]{10}$/.test(contact)) return alert('Enter valid 10 digit phone');
     try {
-      await addDoc(collection(db, 'gig_workers'), {
+      const newWorkerPayload = {
         name, 
         contact, 
         gigType, 
@@ -148,7 +172,11 @@ export default function Workers() {
         approvalStatus: 'approved',  // ✅ Explicitly mark as approved when admin creates
         createdAt: new Date(),
         approvedAt: new Date()
-      });
+      };
+
+      const newRef = await addDoc(collection(db, 'gig_workers'), newWorkerPayload);
+      await upsertWorkerPhoneIndex(newRef.id, newWorkerPayload);
+
       setName(''); 
       setContact('');
       alert('✅ Worker created successfully!');
@@ -174,6 +202,11 @@ export default function Workers() {
       await updateDoc(doc(db, 'gig_workers', id), { 
         status: status === 'active' ? 'inactive' : 'active' 
       });
+
+      const updatedSnap = await getDoc(doc(db, 'gig_workers', id));
+      if (updatedSnap.exists()) {
+        await upsertWorkerPhoneIndex(id, updatedSnap.data());
+      }
     } catch (e) { 
       console.error(e); 
       alert(e.message); 
@@ -217,6 +250,12 @@ export default function Workers() {
         approvedAt: new Date(),
         approvedByRegionLeadId: user.uid,
       });
+
+      const updatedSnap = await getDoc(doc(db, 'gig_workers', workerId));
+      if (updatedSnap.exists()) {
+        await upsertWorkerPhoneIndex(workerId, updatedSnap.data());
+      }
+
       alert('✅ Gig approved successfully!');
     } catch (e) {
       console.error(e);
@@ -230,6 +269,12 @@ export default function Workers() {
         approvalStatus: 'rejected',
         status: 'inactive'
       });
+
+      const updatedSnap = await getDoc(doc(db, 'gig_workers', workerId));
+      if (updatedSnap.exists()) {
+        await upsertWorkerPhoneIndex(workerId, updatedSnap.data());
+      }
+
       alert('Worker application rejected.');
     } catch (e) {
       console.error(e);

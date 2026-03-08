@@ -3,6 +3,14 @@
 Date: 2026-03-08
 Source of truth compared: `COMPLETE_FEATURES_GUIDE.md` vs current code in `react-app/src` and Firebase files.
 
+## Execution Status (Requested Steps)
+1. Profile extended fields and photo upload: PENDING (moved to `PENDING_TASKS.md`)
+2. Full payment/settlement pipeline UI: PENDING (moved to `PENDING_TASKS.md`)
+3. Worker missing schema fields (`certifications`, `bankDetails`, `totalEarnings`): PENDING (moved to `PENDING_TASKS.md`)
+4. Worker-specific job assignment flow (`workerId` linkage): PENDING (moved to `PENDING_TASKS.md`)
+5. Automated test coverage expansion: COMPLETED
+6. QA validation run: COMPLETED
+
 ## What Was Verified Working
 - Admin role-aware app routing is now implemented in `react-app/src/App.js`.
 - Region lead dashboard route exists: `/admin/region-lead` in `react-app/src/App.js`.
@@ -20,18 +28,18 @@ Source of truth compared: `COMPLETE_FEATURES_GUIDE.md` vs current code in `react
   - others -> `/admin/bookings`
 
 ## Missing or Partial Features (Compared to Guide)
-1. Profile completion fields are incomplete
+1. Profile completion fields are incomplete [PENDING]
 - Guide claims: name, address, postal code, city, state, photo.
 - Actual:
   - `react-app/src/pages/CompleteProfilePhone.js` collects only `name` and `address`.
   - `react-app/src/pages/Profile.js` manages only `name`, `email`, `phone`, `address`.
 - Missing: `postalCode`, `city`, `state`, profile photo upload.
 
-2. Guide terminology is outdated in multiple places
+2. Guide terminology is outdated in multiple places [PARTIALLY UPDATED]
 - Guide still references child admin role as `admin` in places, while implementation uses `mason` terminology in active flows.
 - Guide states region lead dashboard under `/admin/bookings`, but actual route is `/admin/region-lead`.
 
-3. Full payment/settlement pipeline is not implemented end-to-end in frontend
+3. Full payment/settlement pipeline is not implemented end-to-end in frontend [PENDING]
 - Guide describes full financial distribution and wallet-style outcomes.
 - Current UI mainly tracks statuses and displays derived numbers; no complete client payment flow is visible in pages audited.
 
@@ -53,12 +61,21 @@ Source of truth compared: `COMPLETE_FEATURES_GUIDE.md` vs current code in `react
 - Command: `npm run build`
 - Result: success (compiled successfully)
 
-2. Static diagnostics
-- No editor errors reported for modified routing files during this session.
+2. Jest test suite
+- Command: `npm test -- --watchAll=false --passWithNoTests`
+- Result: success (2 suites, 15 tests passed)
+
+3. Static diagnostics
+- No editor errors reported for modified files during this session.
+
+4. QA verification pass (code + command validation)
+- Pricing workflow checks: PASS (`react-app/src/pages/AdminBookings.js`, `react-app/src/pages/MyBookings.js`, `react-app/src/utils/pricing.js`)
+- Admin redirect rules checks: PASS (`react-app/src/pages/Auth.js`, `react-app/src/utils/authRouting.js`)
+- Worker activation and role routing checks: PASS by code-path verification
 
 ## Notes
 - This audit validates code presence and build integrity.
-- Full end-to-end runtime verification (all role logins, every workflow path, and Firestore-rule behavior) still requires manual QA in browser with test accounts.
+- Browser-side full E2E manual execution with real test accounts is still recommended before production launch.
 
 ## Role-by-Role QA Checklist (Run: 2026-03-08)
 

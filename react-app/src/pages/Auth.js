@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { getAdminRedirectPath, isRegionSuspended } from '../utils/authRouting';
 
 function Auth() {
   const navigate = useNavigate();
@@ -173,18 +174,12 @@ function Auth() {
       const role = adminData?.role || 'unknown';
       console.log('🔐 Admin role:', role);
 
-      if (adminData?.regionStatus === 'suspended') {
+      if (isRegionSuspended(adminData)) {
         await signOut(auth);
         throw new Error('❌ This region has been suspended. Contact SuperAdmin.');
       }
 
-      if (role === 'superadmin') {
-        navigate('/admin/super');
-      } else if (role === 'regionLead') {
-        navigate('/admin/region-lead');
-      } else {
-        navigate('/admin/bookings');
-      }
+      navigate(getAdminRedirectPath(adminData));
     } catch (err) {
       console.error('❌ Admin login error:', err);
       setError(err.message);

@@ -230,6 +230,9 @@ function Auth() {
         email: workerEmail,
         gigType: workerGigType,
         area: workerArea,
+        certifications: '',
+        bankDetails: '',
+        totalEarnings: 0,
         adminId: '', // Will be assigned by region lead on approval
         approvalStatus: 'pending', // New field for approval tracking
         status: 'inactive', // Inactive until approved
@@ -248,6 +251,9 @@ function Auth() {
         name: workerName,
         gigType: workerGigType,
         area: workerArea,
+        certifications: '',
+        bankDetails: '',
+        totalEarnings: 0,
         approvalStatus: 'pending',
         status: 'inactive',
         createdAt: new Date()
@@ -368,6 +374,9 @@ function Auth() {
         name: workerData?.name || '',
         gigType: workerData?.gigType || 'other',
         area: workerData?.area || '',
+        certifications: workerData?.certifications || '',
+        bankDetails: workerData?.bankDetails || '',
+        totalEarnings: Number(workerData?.totalEarnings || 0),
         adminId: workerData?.adminId || '',
         approvalStatus: workerData?.approvalStatus || 'approved',
         status: workerData?.status || 'active',

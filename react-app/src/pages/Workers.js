@@ -15,6 +15,11 @@ export default function Workers() {
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [gigType, setGigType] = useState('Plumber');
+  const [certifications, setCertifications] = useState('');
+  const [bankDetails, setBankDetails] = useState('');
+  const [totalEarnings, setTotalEarnings] = useState('0');
+  const [editingWorkerId, setEditingWorkerId] = useState(null);
+  const [editWorkerData, setEditWorkerData] = useState({ certifications: '', bankDetails: '', totalEarnings: '0' });
   const [newAdminName, setNewAdminName] = useState('');
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [newAdminPassword, setNewAdminPassword] = useState('');
@@ -29,6 +34,9 @@ export default function Workers() {
       name: workerData?.name || '',
       gigType: workerData?.gigType || '',
       area: workerData?.area || '',
+      certifications: workerData?.certifications || '',
+      bankDetails: workerData?.bankDetails || '',
+      totalEarnings: Number(workerData?.totalEarnings || 0),
       adminId: workerData?.adminId || '',
       approvalStatus: workerData?.approvalStatus || 'approved',
       status: workerData?.status || 'active',
@@ -162,11 +170,16 @@ export default function Workers() {
     }
     if (!name.trim()) return alert('Worker name is required');
     if (!/^[0-9]{10}$/.test(contact)) return alert('Enter valid 10 digit phone');
+    const parsedEarnings = Number(totalEarnings);
+    if (Number.isNaN(parsedEarnings) || parsedEarnings < 0) return alert('Total earnings must be 0 or more');
     try {
       const newWorkerPayload = {
         name, 
         contact, 
         gigType, 
+        certifications: certifications.trim(),
+        bankDetails: bankDetails.trim(),
+        totalEarnings: parsedEarnings,
         status: 'active', 
         adminId: user.uid, 
         approvalStatus: 'approved',  // ✅ Explicitly mark as approved when admin creates
@@ -179,10 +192,49 @@ export default function Workers() {
 
       setName(''); 
       setContact('');
+      setCertifications('');
+      setBankDetails('');
+      setTotalEarnings('0');
       alert('✅ Worker created successfully!');
     } catch (e) { 
       console.error(e); 
       alert('Error: ' + e.message); 
+    }
+  }
+
+  function startEditWorker(worker) {
+    setEditingWorkerId(worker.id);
+    setEditWorkerData({
+      certifications: worker.certifications || '',
+      bankDetails: worker.bankDetails || '',
+      totalEarnings: String(worker.totalEarnings ?? 0),
+    });
+  }
+
+  async function saveWorkerSchema(workerId) {
+    const parsedEarnings = Number(editWorkerData.totalEarnings);
+    if (Number.isNaN(parsedEarnings) || parsedEarnings < 0) {
+      return alert('Total earnings must be 0 or more');
+    }
+    try {
+      await updateDoc(doc(db, 'gig_workers', workerId), {
+        certifications: (editWorkerData.certifications || '').trim(),
+        bankDetails: (editWorkerData.bankDetails || '').trim(),
+        totalEarnings: parsedEarnings,
+        updatedAt: new Date(),
+      });
+
+      const updatedSnap = await getDoc(doc(db, 'gig_workers', workerId));
+      if (updatedSnap.exists()) {
+        await upsertWorkerPhoneIndex(workerId, updatedSnap.data());
+      }
+
+      setEditingWorkerId(null);
+      setEditWorkerData({ certifications: '', bankDetails: '', totalEarnings: '0' });
+      alert('✅ Worker details updated');
+    } catch (e) {
+      console.error(e);
+      alert('Error updating worker: ' + e.message);
     }
   }
 
@@ -358,6 +410,9 @@ export default function Workers() {
           <option value="Carpenter">Carpenter</option>
           <option value="Painter">Painter</option>
         </select>
+        <input placeholder="Certifications (comma separated)" value={certifications} onChange={e => setCertifications(e.target.value)} style={{ padding: 8, marginRight: 8, minWidth: 260, marginTop: 8 }} />
+        <input placeholder="Bank Details" value={bankDetails} onChange={e => setBankDetails(e.target.value)} style={{ padding: 8, marginRight: 8, minWidth: 220, marginTop: 8 }} />
+        <input placeholder="Total Earnings" value={totalEarnings} onChange={e => setTotalEarnings(e.target.value)} style={{ padding: 8, marginRight: 8, width: 140, marginTop: 8 }} />
         <button onClick={createWorker} disabled={adminRole === 'regionLead'} style={{ padding: 8, opacity: adminRole === 'regionLead' ? 0.6 : 1 }}>
           Create
         </button>
@@ -506,6 +561,34 @@ export default function Workers() {
                   🏆 Top Listed Worker
                 </div>
               )}
+              {editingWorkerId === w.id ? (
+                <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+                  <input
+                    placeholder="Certifications"
+                    value={editWorkerData.certifications}
+                    onChange={e => setEditWorkerData(prev => ({ ...prev, certifications: e.target.value }))}
+                    style={{ padding: 6, fontSize: 12, minWidth: 260 }}
+                  />
+                  <input
+                    placeholder="Bank Details"
+                    value={editWorkerData.bankDetails}
+                    onChange={e => setEditWorkerData(prev => ({ ...prev, bankDetails: e.target.value }))}
+                    style={{ padding: 6, fontSize: 12, minWidth: 260 }}
+                  />
+                  <input
+                    placeholder="Total Earnings"
+                    value={editWorkerData.totalEarnings}
+                    onChange={e => setEditWorkerData(prev => ({ ...prev, totalEarnings: e.target.value }))}
+                    style={{ padding: 6, fontSize: 12, width: 140 }}
+                  />
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: '#374151', marginTop: 6, lineHeight: 1.5 }}>
+                  <div>Certifications: {w.certifications || 'N/A'}</div>
+                  <div>Bank Details: {w.bankDetails || 'N/A'}</div>
+                  <div>Total Earnings: Rs.{Number(w.totalEarnings || 0)}</div>
+                </div>
+              )}
             </div>
             <div style={{ textAlign: 'right' }}>
               <button 
@@ -527,6 +610,34 @@ export default function Workers() {
                 }}>
                 {w.status === 'active' ? '⏸️ Disable' : '▶️ Enable'}
               </button>
+              <div style={{ marginTop: 8, display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                {editingWorkerId === w.id ? (
+                  <>
+                    <button
+                      onClick={() => saveWorkerSchema(w.id)}
+                      style={{ padding: '6px 10px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingWorkerId(null);
+                        setEditWorkerData({ certifications: '', bankDetails: '', totalEarnings: '0' });
+                      }}
+                      style={{ padding: '6px 10px', background: '#9ca3af', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => startEditWorker(w)}
+                    style={{ padding: '6px 10px', background: '#0ea5e9', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}
+                  >
+                    Edit Details
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}

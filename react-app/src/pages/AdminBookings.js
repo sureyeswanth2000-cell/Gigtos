@@ -18,6 +18,7 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'fire
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functionsInstance } from '../firebase';
 import { calculateFinalPrice } from '../utils/pricing';
+import { submitQuote as buildBookingWithQuote } from '../utils/bookingWorkflow';
 
 // Status colors to give admins quick visual cues about the load
 const STATUS_COLORS = {
@@ -333,31 +334,28 @@ export default function AdminBookings() {
 
     if (method === 'submitQuote') {
       console.log('🟢 runSparkFallback: submitQuote called');
-      const { bookingId, price, finalPrice, pricing } = data;
+      const { bookingId, price } = data;
       const bookingRef = doc(db, 'bookings', bookingId);
       const snap = await getDoc(bookingRef);
       if (!snap.exists()) throw new Error('Booking not found');
       const booking = snap.data();
       console.log('🟢 Current booking status:', booking.status, '| Existing quotes:', booking.quotes?.length || 0);
-      const quotesList = booking.quotes || [];
-      if (quotesList.some(q => q.adminId === uid)) throw new Error('Quote already submitted');
 
       const adminDoc = await getDoc(doc(db, 'admins', uid));
       const adminName = adminDoc.exists() ? (adminDoc.data().name || adminDoc.data().email || 'Admin') : 'Admin';
-      const updatedQuotes = [...quotesList, { 
-        adminId: uid, 
-        adminName, 
-        price: Number(price),
-        finalPrice: Number(finalPrice),
-        pricing: pricing,
-        createdAt: new Date() 
-      }];
+      const bookingWithQuote = buildBookingWithQuote(booking, {
+        adminId: uid,
+        adminName,
+        basePrice: Number(price),
+      });
+      const latestQuote = bookingWithQuote.quotes[bookingWithQuote.quotes.length - 1];
+      latestQuote.createdAt = new Date();
 
       // Don't change status to 'quoted' - keep it open for other masons to submit quotes
       // Status will only change when user accepts a quote
       console.log('🟢 Updating booking - NOT changing status (keeping:', booking.status + ')');
       await updateDoc(bookingRef, {
-        quotes: updatedQuotes,
+        quotes: bookingWithQuote.quotes,
         // status remains 'pending' or 'scheduled' so other masons can still see and quote
         updatedAt: new Date(),
       });

@@ -17,7 +17,7 @@ import {
   doc, updateDoc, getDoc
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { calculateFinalPrice } from '../utils/pricing';
+import { acceptQuote as applyAcceptedQuote } from '../utils/bookingWorkflow';
 
 // UI CONFIG: Color mapping for visual differentiation of booking states
 const statusColors = {
@@ -123,13 +123,12 @@ export default function MyBookings() {
       const bookingSnap = await getDoc(bookingRef);
       if (!bookingSnap.exists()) throw new Error('Booking not found');
       const booking = bookingSnap.data();
-      const acceptedQuote = (booking.quotes || []).find(q => q.adminId === adminId);
-      if (!acceptedQuote) throw new Error('Quote not found');
+      const acceptedBooking = applyAcceptedQuote(booking, adminId);
 
       await updateDoc(bookingRef, {
-        status: 'accepted',
-        adminId,
-        acceptedQuote,
+        status: acceptedBooking.status,
+        adminId: acceptedBooking.adminId,
+        acceptedQuote: acceptedBooking.acceptedQuote,
         updatedAt: new Date(),
         userId: user.uid,
       });

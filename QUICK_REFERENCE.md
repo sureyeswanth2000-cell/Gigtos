@@ -132,29 +132,37 @@ Worker signup          → Should redirect to /worker/dashboard after approval
 
 ## 🧪 ROLE TESTING MATRIX
 
+> **Full credential reference:** see [`TEST_ACCOUNTS.md`](./TEST_ACCOUNTS.md)  
+> To create/reset all test accounts at once run:  
+> `node scripts/seed-test-accounts.js`
+
 ### User Role Test
 ```
-✅ Phone: 8374532598, Password: user123 → Works
+✅ Phone: 9999900001, Password: TestUser@123 → Works   (seeded)
+✅ Phone: 8374532598, Password: user123      → Works   (legacy)
 ✅ Can navigate to /service, /my-bookings
 ✅ Bookings show correctly
 ```
 
-### Admin Role Test
+### Mason Role Test
 ```
-✅ Email: sri@gmail.com, Password: Sri123 → Works
+✅ Email: testmason@gigto.dev,  Password: TestMason@123 → Works (seeded)
+✅ Email: sri@gmail.com,        Password: Sri123         → Works (legacy)
 ✅ Redirects to /admin/bookings
 ✅ Can view and quote bookings
 ```
 
-### Region Lead Test  
+### Region Lead Test
 ```
-✅ Redirects to /admin/region-lead (FIXED)
-✅ Disputes visible (FIXED)
+✅ Email: testregionlead@gigto.dev, Password: TestRegLead@123 → Works (seeded)
+✅ Redirects to /admin/region-lead
+✅ Disputes visible
 ✅ Can manage workers
 ```
 
 ### Super Admin Test
 ```
+✅ Email: testsuperadmin@gigto.dev, Password: TestSuperAdmin@123 → Works (seeded)
 ✅ Redirects to /admin/super
 ✅ Can create admins
 ✅ Can manage all regions
@@ -162,9 +170,9 @@ Worker signup          → Should redirect to /worker/dashboard after approval
 
 ### Worker Role Test
 ```
-❌ Cannot login - no login handler
-❌ No dashboard - no route
-❌ Cannot accept jobs - no flow
+✅ Phone: 9999900005, Password: TestWorker@123 → Works (seeded, pre-approved)
+   Login path: /auth → "Register as Worker" → "Login (Phone + Password)"
+✅ Redirects to /worker/dashboard
 ```
 
 ---

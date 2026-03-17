@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "dependencies": {
-    "firebase-admin": "^11.11.1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "emulator": "firebase emulators:start",
+    "seed:emulator": "node scripts/seed-emulator.js",
+    "dev": "concurrently \"npm run emulator\" \"cd react-app && npm run start:emulator\""
   },
   "devDependencies": {
+    "concurrently": "^8.2.2",
+    "firebase-admin": "^13.7.0",
     "gh-pages": "^6.3.0"
   }
 }

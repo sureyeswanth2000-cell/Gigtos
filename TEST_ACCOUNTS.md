@@ -1,126 +1,169 @@
 # 🔑 Gigto – Test Accounts
 
 > **For development and manual QA only.**  
-> These accounts exist in the development Firebase project (`gigto-c0c83`).  
-> Never use or replicate these credentials in production.
+> Test accounts are created in the **local Firebase Emulator** — no cloud project access or service-account key required.
 
 ---
 
-## How to create (or recreate) the accounts
+## ⚡ Quick Start (5 minutes)
 
-Run the seed script once with a service-account key that has **Firebase Admin** access:
+### Step 1 – Install Firebase CLI (once)
 
 ```bash
-# 1. Set up credentials (download from Firebase Console → Project Settings → Service accounts)
-export GOOGLE_APPLICATION_CREDENTIALS="/path/to/serviceAccountKey.json"
-
-# 2. Install the Admin SDK (only needed once)
-npm install --save-dev firebase-admin
-
-# 3. Run the seed script from the repo root
-node scripts/seed-test-accounts.js
+npm install -g firebase-tools
 ```
 
-The script is **idempotent** – you can re-run it safely to reset all test accounts to a known state.
+### Step 2 – Install repo dependencies (once, from repo root)
+
+```bash
+# from repo root
+npm install
+```
+
+### Step 3 – Start the emulators
+
+```bash
+# from repo root
+npm run emulator
+# OR: firebase emulators:start
+```
+
+Wait until you see **"All emulators ready!"**
+
+> Emulator UI (browse data): http://localhost:4000
+
+### Step 4 – Seed all test accounts
+
+In a **new terminal** (keep the emulator running):
+
+```bash
+# from repo root
+npm run seed:emulator
+```
+
+You should see **"✅ ALL TEST ACCOUNTS SEEDED"** with each role listed.
+
+### Step 5 – Start the React app connected to the emulators
+
+In another new terminal:
+
+```bash
+cd react-app
+npm run start:emulator
+# OR from root: npm run dev   (starts emulators + React app together)
+```
+
+App opens at **http://localhost:3000/Gigtos**  
+Go to **/Gigtos/auth** to log in.
 
 ---
 
-## 👤 User
+## 🔑 Test Credentials
 
-| Field    | Value            |
-|----------|-----------------|
-| Login at | `/auth` → "Book Services as a User" |
-| Phone    | `9999900001`    |
-| Password | `TestUser@123`  |
-| Dashboard| `/` (Home)      |
+### 👤 User
 
-**What you can test:**  
-Book services, view bookings, chat with mason, edit profile.
+| Field | Value |
+|---|---|
+| Login path | Auth screen → **"Book Services as a User"** |
+| Phone | `9999900001` |
+| Password | `TestUser@123` |
+| Dashboard | `/` (Home) |
 
----
-
-## 👷 Mason
-
-| Field    | Value                    |
-|----------|--------------------------|
-| Login at | `/auth` → "Manage Services as Admin" |
-| Email    | `testmason@gigto.dev`    |
-| Password | `TestMason@123`          |
-| Dashboard| `/admin/bookings`        |
-
-**What you can test:**  
-Quote bookings, accept/reject jobs, create workers, view reports.
+**Test scope:** Book services, view bookings, chat, edit profile.
 
 ---
 
-## 🗺️ Region Lead
+### 👷 Mason
 
-| Field    | Value                        |
-|----------|------------------------------|
-| Login at | `/auth` → "Manage Services as Admin" |
-| Email    | `testregionlead@gigto.dev`   |
-| Password | `TestRegLead@123`            |
-| Dashboard| `/admin/region-lead`         |
+| Field | Value |
+|---|---|
+| Login path | Auth screen → **"Manage Services as Admin"** |
+| Email | `testmason@gigto.dev` |
+| Password | `TestMason@123` |
+| Dashboard | `/admin/bookings` |
 
-**What you can test:**  
-Approve pending workers, manage masons in region, view disputes, assign workers to masons.
-
----
-
-## 🛡️ Super Admin
-
-| Field    | Value                         |
-|----------|-------------------------------|
-| Login at | `/auth` → "Manage Services as Admin" |
-| Email    | `testsuperadmin@gigto.dev`    |
-| Password | `TestSuperAdmin@123`          |
-| Dashboard| `/admin/super`                |
-
-**What you can test:**  
-Create admins (masons / region leads), manage regions, suspend regions, full platform visibility.
+**Test scope:** Quote bookings, accept/reject jobs, create workers, view reports.
 
 ---
 
-## 🔧 Worker
+### 🗺️ Region Lead (Region Admin)
 
-| Field    | Value                               |
-|----------|-------------------------------------|
-| Login at | `/auth` → "Register as Worker" → "Login (Phone + Password)" |
-| Phone    | `9999900005`                        |
-| Password | `TestWorker@123`                    |
-| Dashboard| `/worker/dashboard`                 |
-| Status   | Pre-approved (`approvalStatus: approved`, `status: active`) |
+| Field | Value |
+|---|---|
+| Login path | Auth screen → **"Manage Services as Admin"** |
+| Email | `testregionlead@gigto.dev` |
+| Password | `TestRegLead@123` |
+| Dashboard | `/admin/region-lead` |
 
-**What you can test:**  
-View worker profile and dashboard. (Job assignment UI can be connected as the next feature step.)
-
-> **Note:** If a worker is pending approval their login will be blocked with  
-> _"Your worker account is pending approval."_  
-> The seed script pre-approves the test worker so login works immediately.
+**Test scope:** Approve pending workers, manage masons, view disputes, assign workers.
 
 ---
 
-## Pre-existing test accounts (already in Firebase)
+### 🛡️ Super Admin
 
-These accounts were set up manually and are also usable:
+| Field | Value |
+|---|---|
+| Login path | Auth screen → **"Manage Services as Admin"** |
+| Email | `testsuperadmin@gigto.dev` |
+| Password | `TestSuperAdmin@123` |
+| Dashboard | `/admin/super` |
 
-| Role  | Login method | Credential |
-|-------|-------------|-----------|
-| User  | Phone `8374532598` | Password `user123` |
+**Test scope:** Create admins, manage regions, suspend regions, full platform visibility.
+
+---
+
+### 🔧 Worker
+
+| Field | Value |
+|---|---|
+| Login path | Auth screen → **"Register as Worker"** → **"Login (Phone + Password)"** |
+| Phone | `9999900005` |
+| Password | `TestWorker@123` |
+| Dashboard | `/worker/dashboard` |
+| Pre-seeded status | `approvalStatus: approved` · `status: active` |
+
+**Test scope:** View worker dashboard and profile.
+
+> **Why pre-approved?**  
+> Normally a Worker's account is blocked until a Region Lead approves them.  
+> The seed script sets the test worker to `approved`/`active` so you can log in immediately.
+
+---
+
+## ℹ️ How emulator login differs from production
+
+| | Local emulator | Production cloud |
+|---|---|---|
+| Auth port | `localhost:9099` | `gigto-c0c83.firebaseapp.com` |
+| Firestore port | `localhost:8080` | Cloud Firestore |
+| Credentials needed | **None** | Firebase service-account key |
+| Data persisted | RAM only (reset on emulator restart) | Permanent |
+| React start command | `npm run start:emulator` | `npm start` |
+
+---
+
+## Pre-existing legacy accounts (cloud project only)
+
+These were created manually in the real Firebase project and are **not** available in the emulator:
+
+| Role | Login | Credential |
+|---|---|---|
+| User | Phone `8374532598` | Password `user123` |
 | Mason | Email `sri@gmail.com` | Password `Sri123` |
 
 ---
 
-## Firestore collections used
+## Firestore structure (for reference)
 
-| Role        | Auth document location  | Role-check collection |
-|-------------|-------------------------|-----------------------|
-| User        | `users/{uid}`           | `users_by_phone/{phone}` |
-| Mason       | `admins/{uid}`          | role `mason` |
-| Region Lead | `admins/{uid}`          | role `regionLead` |
-| Super Admin | `admins/{uid}`          | role `superadmin` |
-| Worker      | `gig_workers/{uid}`     | `worker_auth/{uid}`, `workers_by_phone/{phone}` |
+| Role | Auth role-check collection | Firestore document |
+|---|---|---|
+| User | `users_by_phone/{phone}` → email lookup | `users/{uid}` |
+| Mason | `admins/{uid}` (role `mason`) | same |
+| Region Lead | `admins/{uid}` (role `regionLead`) | same |
+| Super Admin | `admins/{uid}` (role `superadmin`) | same |
+| Worker | `worker_auth/{uid}` + `workers_by_phone/{phone}` | `gig_workers/{uid}` |
 
 ---
 
 *Last updated: March 2026*
+

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, updateDoc, doc, query, where, orderBy, setDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
+import { initializeApp, deleteApp } from 'firebase/app';
 import { auth, db, functionsInstance } from '../firebase';
+import app from '../firebase';
 
 export default function SuperAdmin() {
     const [admins, setAdmins] = useState([]);
@@ -169,9 +171,14 @@ export default function SuperAdmin() {
 
         setCreateLoading(true);
 
+        // Use a secondary Firebase app instance so that createUserWithEmailAndPassword
+        // does not sign out the current SuperAdmin session.
+        const secondaryApp = initializeApp(app.options, `secondary-${Math.random().toString(36).slice(2)}`);
+        const secondaryAuth = getAuth(secondaryApp);
+
         try {
-            // Step 1: Create Firebase Auth user
-            const userCred = await createUserWithEmailAndPassword(auth, email, password);
+            // Step 1: Create Firebase Auth user via the secondary app (preserves SuperAdmin session)
+            const userCred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
             const uid = userCred.user.uid;
 
             // Step 2: Create admin document in Firestore
@@ -190,16 +197,7 @@ export default function SuperAdmin() {
 
             await setDoc(doc(db, 'admins', uid), adminData);
 
-            // Step 3: ✅ FIX - Log back in as SuperAdmin (createUserWithEmailAndPassword auto-logged in the new user)
-            const superAdminUser = auth.currentUser;
-            if (superAdminUser) {
-                // Get SuperAdmin credentials and re-authenticate
-                // For now, we'll stay logged in as the newly created region lead briefly, 
-                // but show a message that they should log out and back in as SuperAdmin
-                console.log('⚠️ NEW REGION LEAD CREATED - You are now logged in as:', email);
-            }
-
-            setCreateSuccess(`✅ Region Admin "${name}" created successfully! You are logged in as the new region lead. Please LOGOUT and log back in to return to SuperAdmin mode.`);
+            setCreateSuccess(`✅ Region Admin "${name}" created successfully!`);
             
             // Reset form
             setCreateForm({
@@ -212,12 +210,13 @@ export default function SuperAdmin() {
                 areaName: '',
             });
 
-            // Longer timeout since they need to read the message
             setTimeout(() => setCreateSuccess(''), 5000);
         } catch (err) {
             setCreateError('Error: ' + (err.message || err));
             console.error('Create region admin error:', err);
         } finally {
+            // Clean up the secondary app to avoid resource leaks
+            await deleteApp(secondaryApp).catch(err => console.warn('Failed to delete secondary app:', err));
             setCreateLoading(false);
         }
     };

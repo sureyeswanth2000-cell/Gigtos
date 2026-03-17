@@ -20,3 +20,7 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Firebase service account key (contains secrets — never commit)
+serviceAccountKey.json
+*-serviceAccountKey.json

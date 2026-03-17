@@ -4,6 +4,51 @@ Home services app (Plumbing, Electrical, etc.) for Kavali — with customer book
 
 ---
 
+## 🛡️ Super Admin Setup (First-Time)
+
+The Super Admin is the highest-level account and must be created **once** via a server-side script — it cannot be created through the app UI.
+
+### What gets created in Firestore
+
+A document is added to the `admins` collection with your Firebase Auth UID as the document ID:
+
+```
+admins/<your-uid>
+├── name:          "Super Admin"        ← display name
+├── email:         "admin@example.com"  ← login email
+├── role:          "superadmin"         ← grants full access
+├── regionStatus:  "active"
+└── createdAt:     <timestamp>
+```
+
+### Step-by-step
+
+1. **Get a Firebase service account key**
+   - Firebase Console → Project Settings → Service accounts → **Generate new private key**
+   - Save the downloaded file as `serviceAccountKey.json` in the project root
+   - ⚠️ **Never commit this file** (it is already in `.gitignore`)
+
+2. **Install root dependencies** (if you haven't already):
+   ```bash
+   npm install
+   ```
+
+3. **Run the setup script**:
+   ```bash
+   node scripts/createSuperAdmin.js \
+     --serviceAccount=./serviceAccountKey.json \
+     --email=superadmin@example.com \
+     --password=YourStrongPassword \
+     --name="Super Admin"
+   ```
+
+4. **Log in** at `/auth` using the **Admin** tab with the email and password you chose.
+   The app detects `role: "superadmin"` and redirects you to `/admin/super`.
+
+> **Security note:** The script can only be run by someone who already has the service account key — i.e., someone with Firebase project owner access. This is the safe, production-grade way to bootstrap the first super admin.
+
+---
+
 ## ✅ Fully Implemented
 
 ### 🔐 Authentication

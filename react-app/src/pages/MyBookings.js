@@ -14,7 +14,7 @@ import { auth, db, functionsInstance } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection, query, where, onSnapshot,
-  doc, updateDoc, getDoc, getDocs
+  doc, updateDoc, getDoc
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { acceptQuote as applyAcceptedQuote } from '../utils/bookingWorkflow';
@@ -68,7 +68,6 @@ export default function MyBookings() {
   const [reviewText, setReviewText] = useState('');
   const [selectedStar, setSelectedStar] = useState(0);
   const [cashbacks, setCashbacks] = useState([]);
-  const [workerDetails, setWorkerDetails] = useState({});
   const [readError, setReadError] = useState('');
 
   /* ── Auth Listener ── */
@@ -89,17 +88,6 @@ export default function MyBookings() {
       const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       items.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
       setBookings(items);
-
-      // Fetch worker details for top-listing badge (Governance feature)
-      items.forEach(item => {
-        if (item.assignedWorkerId && !workerDetails[item.assignedWorkerId]) {
-          getDoc(doc(db, 'gig_workers', item.assignedWorkerId)).then(wDoc => {
-            if (wDoc.exists()) {
-              setWorkerDetails(prev => ({ ...prev, [item.assignedWorkerId]: wDoc.data() }));
-            }
-          }).catch(() => { });
-        }
-      });
     }, err => {
       console.error('snapshot error', err);
       setReadError(err?.message || 'Unable to load bookings');
@@ -327,83 +315,8 @@ export default function MyBookings() {
     
     if (!window.confirm(`Accept quote from ${quote.adminName}?${breakdown}`)) return;
     try {
-      // Step 1: Accept the quote (sets adminId and status)
       await callBackend('acceptQuote', { bookingId: id, adminId: quote.adminId });
-      
-      // Step 2: Immediate auto-assignment in free-plan mode
-      if (USE_FREE_PLAN_MODE) {
-        try {
-          console.log('🤖 Triggering immediate auto-assignment for booking:', id);
-          
-          // Find the booking to get serviceType
-          const booking = bookings.find(b => b.id === id);
-          if (!booking) {
-            console.error('❌ Booking not found for auto-assignment');
-            alert('✓ Quote accepted! Admin will assign a worker shortly.');
-            return;
-          }
-          
-          // Query workers for this admin
-          const workersSnap = await getDocs(
-            query(
-              collection(db, 'gig_workers'),
-              where('adminId', '==', quote.adminId),
-              where('status', '==', 'active')
-            )
-          );
-          
-          const allWorkers = workersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-          
-          // Filter for available workers matching service type
-          const busyWorkerIds = bookings
-            .filter(b => ['assigned', 'in_progress'].includes(b.status) && b.id !== id)
-            .map(b => b.assignedWorkerId);
-          
-          const normalizeServiceType = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '');
-          const desiredType = normalizeServiceType(booking.serviceType);
-          
-          const availableWorkers = allWorkers.filter(w => {
-            const matchesService = normalizeServiceType(w.gigType) === desiredType;
-            return !w.isFraud && !busyWorkerIds.includes(w.id) && matchesService;
-          });
-          
-          if (availableWorkers.length === 0) {
-            console.log('⚠️ No available workers found for auto-assignment');
-            alert('✓ Quote accepted! Admin will assign a worker manually.');
-            return;
-          }
-          
-          // Score and rank workers
-          const ranked = availableWorkers.map(w => {
-            const ratingScore = Number(w.rating || 0) * 100;
-            const utilizationPenalty = Number(w.completedJobs || 0);
-            const serviceBonus = 25; // Already filtered by service type
-            return { worker: w, score: ratingScore + serviceBonus - utilizationPenalty };
-          }).sort((a, b) => b.score - a.score);
-          
-          const bestWorker = ranked[0].worker;
-          
-          // Assign the worker
-          const bookingRef = doc(db, 'bookings', id);
-          await updateDoc(bookingRef, {
-            status: 'assigned',
-            assignedWorkerId: bestWorker.id,
-            workerName: bestWorker.name || 'Worker',
-            assignedAt: new Date(),
-            statusUpdatedAt: new Date(),
-            updatedAt: new Date(),
-          });
-          
-          console.log(`✅ Auto-assigned worker: ${bestWorker.name} (${bestWorker.id})`);
-          alert(`✓ Quote accepted and worker assigned: ${bestWorker.name}! They'll contact you shortly.`);
-          return;
-        } catch (autoAssignErr) {
-          console.error('❌ Auto-assignment failed:', autoAssignErr);
-          alert('✓ Quote accepted! Admin will assign a worker shortly.');
-          return;
-        }
-      }
-      
+
       alert('✓ Quote accepted! Your regional pro will assign a worker shortly.');
     } catch (e) {
       // Error handled by callBackend
@@ -541,15 +454,9 @@ export default function MyBookings() {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '11px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 'bold' }}>Assigned Professional</div>
                 <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#111827' }}>{booking.assignedWorker}</div>
-                {/* Governance badge for veteran workers */}
-                {booking.assignedWorkerId && workerDetails[booking.assignedWorkerId]?.isTopListed ? (
-                  <div style={{ fontSize: '12px', color: '#f59e0b' }}>
-                    ⭐ <span style={{ fontWeight: 'bold' }}>Top Rated</span>
-                    <span style={{ color: '#6b7280', fontSize: '11px', marginLeft: '4px' }}>({workerDetails[booking.assignedWorkerId]?.completedJobs || 0}+ jobs)</span>
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '12px', color: '#6b7280' }}>👷 Professional Worker</div>
-                )}
+                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                  {booking.workerPhone ? `📞 ${booking.workerPhone}` : '👷 Professional Worker'}
+                </div>
               </div>
             </div>
           )}

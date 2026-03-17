@@ -83,81 +83,103 @@ export default function Workers() {
 
   // Run migration on component mount to fix existing workers without adminId
   useEffect(() => {
-    if (user && adminRole !== 'regionLead') {
+    if (user && adminRole === 'superadmin') {
       migrateWorkersWithoutAdminId();
     }
   }, [user, adminRole]);
 
   useEffect(() => {
     if (!user) return;
-    
-    // Build query based on role
-    let workersQuery;
-    
+    const syncPhoneIndex = (items) => {
+      items.forEach(w => {
+        upsertWorkerPhoneIndex(w.id, w).catch(err => console.error('Phone index sync failed:', err));
+      });
+    };
+
+    const handleError = (err) => {
+      console.error('❌ Firestore error:', err);
+      console.error('Error code:', err.code);
+      console.error('Error message:', err.message);
+    };
+
     if (adminRole === 'superadmin') {
-      // SuperAdmin can read all workers
-      workersQuery = query(collection(db, 'gig_workers'));
-    } else if (adminRole === 'regionLead') {
-      // Region Lead needs to see pending workers in their area + approved workers under child admins
-      // For now, query all and filter client-side (pending workers don't have adminId yet)
-      workersQuery = query(collection(db, 'gig_workers'));
-    } else {
-      // Admin/Mason: only query workers owned by themselves
-      workersQuery = query(collection(db, 'gig_workers'), where('adminId', '==', user.uid));
-    }
-    
-    const unsub = onSnapshot(
-      workersQuery,
-      (snap) => {
-        const allWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const unsub = onSnapshot(
+        query(collection(db, 'gig_workers')),
+        (snap) => {
+          const allWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          syncPhoneIndex(allWorkers);
 
-        // Keep phone lookup in sync so mason-created workers can activate login by phone.
-        allWorkers.forEach(w => {
-          upsertWorkerPhoneIndex(w.id, w).catch(err => console.error('Phone index sync failed:', err));
-        });
-        
-        console.log('👤 Current role:', adminRole);
-        console.log('📋 Total workers in DB:', allWorkers.length);
-        
-        // Separate pending and approved gigs
-        // Gigs without approvalStatus field are treated as approved (created by admin directly)
-        const pending = allWorkers.filter(w => w.approvalStatus === 'pending');
-        const approved = allWorkers.filter(w => {
-          return !w.approvalStatus || w.approvalStatus === 'approved' || w.approvalStatus !== 'pending';
-        });
-
-        if (adminRole === 'superadmin') {
-          console.log('✅ SuperAdmin: showing all workers');
+          const pending = allWorkers.filter(w => w.approvalStatus === 'pending');
+          const approved = allWorkers.filter(w => !w.approvalStatus || w.approvalStatus === 'approved' || w.approvalStatus !== 'pending');
           setWorkers(approved);
           setPendingGigs(pending);
-          return;
-        }
+        },
+        handleError
+      );
+      return () => unsub();
+    }
 
-        if (adminRole === 'regionLead') {
-          // Region leads monitor workers owned by admins under their region
-          const regionWorkers = approved.filter(w => childAdminIds.includes(w.adminId));
-          console.log('✅ Region Lead: showing', regionWorkers.length, 'workers');
-          setWorkers(regionWorkers);
-          
-          // Region leads see pending gigs for their own area.
-          const regionPending = pending.filter(w =>
-            (w.area || '').trim().toLowerCase() === (regionArea || '').trim().toLowerCase()
-          );
-          setPendingGigs(regionPending);
-          return;
-        }
+    if (adminRole === 'regionLead') {
+      const unsubs = [];
 
-        // Admin/Mason: workers are already filtered by the query
+      if (regionArea) {
+        unsubs.push(onSnapshot(
+          query(
+            collection(db, 'gig_workers'),
+            where('approvalStatus', '==', 'pending'),
+            where('area', '==', regionArea)
+          ),
+          (snap) => {
+            const pending = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            syncPhoneIndex(pending);
+            setPendingGigs(pending);
+          },
+          handleError
+        ));
+      } else {
+        setPendingGigs([]);
+      }
+
+      if (childAdminIds.length === 0) {
+        setWorkers([]);
+        return () => unsubs.forEach(fn => fn());
+      }
+
+      const workersByAdmin = {};
+      const updateRegionWorkers = () => {
+        const merged = Object.values(workersByAdmin).flat();
+        const approved = merged.filter(w => !w.approvalStatus || w.approvalStatus === 'approved' || w.approvalStatus !== 'pending');
+        syncPhoneIndex(approved);
+        setWorkers(approved);
+      };
+
+      childAdminIds.forEach((adminId) => {
+        unsubs.push(onSnapshot(
+          query(collection(db, 'gig_workers'), where('adminId', '==', adminId)),
+          (snap) => {
+            workersByAdmin[adminId] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            updateRegionWorkers();
+          },
+          handleError
+        ));
+      });
+
+      return () => unsubs.forEach(fn => fn());
+    }
+
+    const unsub = onSnapshot(
+      query(collection(db, 'gig_workers'), where('adminId', '==', user.uid)),
+      (snap) => {
+        const allWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        syncPhoneIndex(allWorkers);
+
+        const approved = allWorkers.filter(w => !w.approvalStatus || w.approvalStatus === 'approved' || w.approvalStatus !== 'pending');
         console.log('✅ Admin/Mason: showing', approved.length, 'workers for uid:', user.uid);
         console.log('Worker details:', approved.map(w => ({ name: w.name, adminId: w.adminId })));
         setWorkers(approved);
         setPendingGigs([]);
       },
-      err => {
-        console.error('❌ Firestore error:', err);
-        console.error('Error code:', err.code);
-        console.error('Error message:', err.message);
-      }
+      handleError
     );
     return () => unsub();
   }, [user, adminRole, childAdminIds, regionArea]);
@@ -267,7 +289,7 @@ export default function Workers() {
 
   // ✅ Migration: Automatically set adminId on existing workers without it
   async function migrateWorkersWithoutAdminId() {
-    if (!user || adminRole === 'regionLead') return;
+    if (!user || adminRole !== 'superadmin') return;
     try {
       const snapshot = await getDocs(collection(db, 'gig_workers'));
       const workersToMigrate = snapshot.docs.filter(d => !d.data().adminId);

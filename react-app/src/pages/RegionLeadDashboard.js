@@ -85,34 +85,48 @@ export default function RegionLeadDashboard() {
   // Load gigs (both pending and approved)
   useEffect(() => {
     if (!uid || !regionLeadData?.areaName) return;
-    const unsub = onSnapshot(
-      query(collection(db, 'gig_workers')),
+    const unsubs = [];
+
+    unsubs.push(onSnapshot(
+      query(
+        collection(db, 'gig_workers'),
+        where('approvalStatus', '==', 'pending'),
+        where('area', '==', regionLeadData.areaName)
+      ),
       (snap) => {
-        const allW = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        
-        // Pending gigs in this region
-        const pending = allW.filter(w =>
-          w.approvalStatus === 'pending' &&
-          (w.area || '').trim().toLowerCase() === (regionLeadData.areaName || '').trim().toLowerCase()
-        );
+        const pending = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setPendingGigs(pending);
-        
-        // Approved gigs under child admins
-        const childAdminIds = childAdmins.map(a => a.id);
-        const approved = allW.filter(w =>
-          childAdminIds.includes(w.adminId) &&
-          (!w.approvalStatus || w.approvalStatus === 'approved')
-        );
-        setAllGigs(approved);
-        
-        setStats(prev => ({
-          ...prev,
-          pendingApprovals: pending.length,
-          totalGigs: approved.length,
-        }));
-      }
-    );
-    return unsub;
+        setStats(prev => ({ ...prev, pendingApprovals: pending.length }));
+      },
+      (error) => console.error('❌ Error loading pending gigs:', error.message)
+    ));
+
+    const childIds = childAdmins.map(a => a.id);
+    if (childIds.length === 0) {
+      setAllGigs([]);
+      setStats(prev => ({ ...prev, totalGigs: 0 }));
+      return () => unsubs.forEach(fn => fn());
+    }
+
+    const gigsByAdmin = {};
+    const updateApprovedGigs = () => {
+      const approved = Object.values(gigsByAdmin).flat().filter(w => !w.approvalStatus || w.approvalStatus === 'approved');
+      setAllGigs(approved);
+      setStats(prev => ({ ...prev, totalGigs: approved.length }));
+    };
+
+    childIds.forEach((adminId) => {
+      unsubs.push(onSnapshot(
+        query(collection(db, 'gig_workers'), where('adminId', '==', adminId)),
+        (snap) => {
+          gigsByAdmin[adminId] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          updateApprovedGigs();
+        },
+        (error) => console.error(`❌ Error loading gigs for mason ${adminId}:`, error.message)
+      ));
+    });
+
+    return () => unsubs.forEach(fn => fn());
   }, [uid, regionLeadData, childAdmins]);
 
   // Load bookings and disputes

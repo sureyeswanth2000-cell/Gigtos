@@ -301,67 +301,79 @@ export default function AdminBookings() {
   // Listen to workers - admin only sees their own workers (unless SuperAdmin)
   useEffect(() => {
     if (!uid) return;
-    
-    // CRITICAL FIX: Security rules require where() clause for non-superadmins
-    // Querying all workers fails for masons because rules block reads where adminId != uid
-    let workerQuery;
-    if (isSuperAdmin) {
-      // SuperAdmin can query all workers (no restriction)
-      workerQuery = query(collection(db, 'gig_workers'));
-    } else if (adminRole === 'regionLead') {
-      // Region Lead can query all workers (they filter by childAdminIds after)
-      workerQuery = query(collection(db, 'gig_workers'));
-    } else {
-      // Admin/Mason MUST query only their own workers (security rule requirement)
-      workerQuery = query(collection(db, 'gig_workers'), where('adminId', '==', uid));
-    }
-    
-    const unsub = onSnapshot(
-      workerQuery,
-      snap => {
-        const allWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        const approvedWorkers = allWorkers.filter(w => !w.approvalStatus || w.approvalStatus === 'approved');
-        
-        console.log('🔧 Workers loading:', {
-          total: allWorkers.length,
-          approved: approvedWorkers.length,
-          currentUid: uid,
-          adminRole: adminRole,
-          allAdminIds: [...new Set(allWorkers.map(w => w.adminId))]
+    const handleApprovedWorkers = (allWorkers) => {
+      const approvedWorkers = allWorkers.filter(w => !w.approvalStatus || w.approvalStatus === 'approved');
+
+      console.log('🔧 Workers loading:', {
+        total: allWorkers.length,
+        approved: approvedWorkers.length,
+        currentUid: uid,
+        adminRole: adminRole,
+        allAdminIds: [...new Set(allWorkers.map(w => w.adminId))]
+      });
+
+      setWorkers(approvedWorkers);
+
+      if (isSuperAdmin) {
+        console.log('👑 SuperAdmin sees all workers:', approvedWorkers.length);
+      } else if (adminRole === 'regionLead') {
+        console.log('🌍 Region lead sees area workers:', approvedWorkers.length);
+      } else {
+        console.log('👤 Mason/Admin workers:', {
+          count: approvedWorkers.length,
+          workers: approvedWorkers.map(w => ({ name: w.name, gigType: w.gigType, adminId: w.adminId, status: w.status }))
         });
-        
-        // SuperAdmin sees all workers
-        if (isSuperAdmin) {
-          setWorkers(approvedWorkers);
-          console.log('👑 SuperAdmin sees all workers:', approvedWorkers.length);
-        } else if (adminRole === 'regionLead') {
-          // Region lead monitors workers in their area (owned by child admins)
-          const areaWorkers = approvedWorkers.filter(w => childAdminIds.includes(w.adminId));
-          setWorkers(areaWorkers);
-          console.log('🌍 Region lead sees area workers:', areaWorkers.length);
-        } else {
-          // Admin/Mason sees only own workers (already filtered by query)
-          setWorkers(approvedWorkers);
-          
-          console.log('👤 Mason/Admin workers:', {
-            count: approvedWorkers.length,
-            workers: approvedWorkers.map(w => ({ name: w.name, gigType: w.gigType, adminId: w.adminId, status: w.status }))
-          });
-          
-          // Get unique gig types this mason has (for filtering bookings)
-          const gigTypes = [...new Set(approvedWorkers.map(w => w.gigType).filter(Boolean))];
-          console.log('🎯 Mason gig types:', gigTypes);
-        }
-      },
-      (err) => {
-        console.error('❌ Workers query error:', err);
-        console.error('   Error code:', err.code);
-        console.error('   Error message:', err.message);
-        if (err.code === 'permission-denied') {
-          console.error('   ⚠️ PERMISSION DENIED: Security rules blocking worker reads');
-          console.error('   ⚠️ Make sure workers have adminId field matching your UID');
-        }
+
+        const gigTypes = [...new Set(approvedWorkers.map(w => w.gigType).filter(Boolean))];
+        console.log('🎯 Mason gig types:', gigTypes);
       }
+    };
+
+    const handleWorkerError = (err) => {
+      console.error('❌ Workers query error:', err);
+      console.error('   Error code:', err.code);
+      console.error('   Error message:', err.message);
+      if (err.code === 'permission-denied') {
+        console.error('   ⚠️ PERMISSION DENIED: Security rules blocking worker reads');
+      }
+    };
+
+    if (isSuperAdmin) {
+      const unsub = onSnapshot(
+        query(collection(db, 'gig_workers')),
+        snap => handleApprovedWorkers(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+        handleWorkerError
+      );
+      return unsub;
+    }
+
+    if (adminRole === 'regionLead') {
+      if (childAdminIds.length === 0) {
+        setWorkers([]);
+        return () => {};
+      }
+
+      const byAdminId = {};
+      const mergeWorkers = () => {
+        handleApprovedWorkers(Object.values(byAdminId).flat());
+      };
+
+      const unsubs = childAdminIds.map((childId) => onSnapshot(
+        query(collection(db, 'gig_workers'), where('adminId', '==', childId)),
+        (snap) => {
+          byAdminId[childId] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          mergeWorkers();
+        },
+        handleWorkerError
+      ));
+
+      return () => unsubs.forEach((fn) => fn());
+    }
+
+    const unsub = onSnapshot(
+      query(collection(db, 'gig_workers'), where('adminId', '==', uid)),
+      snap => handleApprovedWorkers(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      handleWorkerError
     );
     return unsub;
   }, [uid, isSuperAdmin, adminRole, childAdminIds]);
@@ -929,7 +941,7 @@ export default function AdminBookings() {
 
       <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '16px', fontSize: '13px' }}>
         <input type="checkbox" checked={showDelayedOnly} onChange={(e) => setShowDelayedOnly(e.target.checked)} />
-        Show only delayed bookings (>24h in same status)
+        Show only delayed bookings (&gt;24h in same status)
       </label>
 
       {shown.map(b => {
@@ -998,6 +1010,14 @@ export default function AdminBookings() {
                 </div>
                 <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
                   {['pending', 'scheduled', 'quoted'].includes(b.status) ? (
+                    <>
+                      📍 Location:
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.address)}`}
+                        target="_blank" rel="noreferrer" style={{ color: '#2196f3', textDecoration: 'none', marginLeft: '4px' }}>
+                        {b.address} ↗
+                      </a>
+                    </>
+                  ) : adminRole === 'mason' ? (
                     <>
                       📍 Location:
                       <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.address)}`}

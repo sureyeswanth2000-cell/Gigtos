@@ -18,9 +18,17 @@ service cloud.firestore {
       return isLoggedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    function currentAdminData() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
+    }
+
+    function isRegionLead() {
+      return isAdmin() && currentAdminData().role == "regionLead";
+    }
+
     function isWorkerOwnerRole() {
       return isAdmin() &&
-        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role != "regionLead";
+        currentAdminData().role != "regionLead";
     }
 
     // New: Check if the current admin is the parent of another admin (to support hierarchy)
@@ -207,6 +215,10 @@ service cloud.firestore {
       allow read: if isLoggedIn() && (
         workerId == request.auth.uid ||
         resource.data.adminId == request.auth.uid ||
+        (isRegionLead()
+          && resource.data.approvalStatus == "pending"
+          && resource.data.adminId in [null, ""]
+          && resource.data.area == currentAdminData().areaName) ||
         (resource.data.adminId != null && isParentOf(resource.data.adminId)) ||
         isSuperAdmin()
       );
@@ -225,6 +237,10 @@ service cloud.firestore {
       allow update: if isLoggedIn() && (
         workerId == request.auth.uid ||
         resource.data.adminId == request.auth.uid ||
+        (isRegionLead()
+          && resource.data.approvalStatus == "pending"
+          && resource.data.adminId in [null, ""]
+          && resource.data.area == currentAdminData().areaName) ||
         isParentOf(resource.data.adminId) ||
         isSuperAdmin()
       );

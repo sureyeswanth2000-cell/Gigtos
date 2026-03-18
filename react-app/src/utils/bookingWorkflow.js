@@ -5,10 +5,6 @@ export function submitQuote(booking, { adminId, adminName, basePrice }) {
   if (!adminId) throw new Error('adminId is required');
 
   const quotes = booking.quotes || [];
-  if (quotes.some((q) => q.adminId === adminId)) {
-    throw new Error('Quote already submitted');
-  }
-
   const pricing = calculateFinalPrice(basePrice);
   const quote = {
     adminId,
@@ -16,11 +12,25 @@ export function submitQuote(booking, { adminId, adminName, basePrice }) {
     price: pricing.baseAmount,
     finalPrice: pricing.finalTotal,
     pricing,
+    updatedAt: new Date(),
   };
+
+  // Check if admin already has a quote
+  const existingIdx = quotes.findIndex((q) => q.adminId === adminId);
+  let updatedQuotes;
+  
+  if (existingIdx !== -1) {
+    // Update existing quote
+    updatedQuotes = [...quotes];
+    updatedQuotes[existingIdx] = quote;
+  } else {
+    // Add new quote
+    updatedQuotes = [...quotes, quote];
+  }
 
   return {
     ...booking,
-    quotes: [...quotes, quote],
+    quotes: updatedQuotes,
   };
 }
 

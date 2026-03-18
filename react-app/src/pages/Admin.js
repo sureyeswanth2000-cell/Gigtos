@@ -11,7 +11,6 @@ export default function Admin() {
     completedBookings: 0,
     totalEarnings: 0,
     workerPayouts: 0,
-    gigtoShare: 0,
     topListedWorkers: 0,
   });
   const [regionPerf, setRegionPerf] = useState({
@@ -89,7 +88,6 @@ export default function Admin() {
         completedBookings: count,
         totalEarnings: count * 20,
         workerPayouts: count * 80,
-        gigtoShare: count * 50
       }));
     });
 
@@ -115,7 +113,6 @@ export default function Admin() {
     { title: 'Active Jobs', value: stats.activeBookings, icon: '⏳', color: '#f59e0b', path: '/admin/bookings' },
     { title: 'My Earnings', value: `₹${stats.totalEarnings}`, icon: '💰', color: '#8b5cf6', path: '#' },
     { title: 'Worker Payouts', value: `₹${stats.workerPayouts}`, icon: '💸', color: '#10b981', path: '#' },
-    { title: 'Gigto Share', value: `₹${stats.gigtoShare}`, icon: '🏢', color: '#ef4444', path: '#' }
   ];
 
   return (

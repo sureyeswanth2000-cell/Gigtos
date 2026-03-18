@@ -49,20 +49,23 @@ describe('booking workflow integration', () => {
     expect(completed.status).toBe('completed');
   });
 
-  it('rejects duplicate quote from same admin', () => {
+  it('updates existing quote from same admin', () => {
     const booking = {
       id: 'b2',
       status: 'pending',
       quotes: [{ adminId: 'a1', price: 500, finalPrice: 586.5 }],
     };
 
-    expect(() =>
-      submitQuote(booking, {
-        adminId: 'a1',
-        adminName: 'Mason One',
-        basePrice: 600,
-      })
-    ).toThrow('Quote already submitted');
+    const updated = submitQuote(booking, {
+      adminId: 'a1',
+      adminName: 'Mason One',
+      basePrice: 600,
+    });
+
+    expect(updated.quotes).toHaveLength(1);
+    expect(updated.quotes[0].adminId).toBe('a1');
+    expect(updated.quotes[0].price).toBe(600);
+    expect(updated.quotes[0].finalPrice).toBe(703.8);
   });
 
   it('enforces valid status order', () => {

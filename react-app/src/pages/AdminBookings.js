@@ -844,16 +844,17 @@ export default function AdminBookings() {
   }).filter((b) => {
     const text = searchTerm.trim().toLowerCase();
     if (!text) return true;
-    return [
+    const searchableFields = [
       b.id,
       b.customerName,
-      b.phone,
       b.address,
       b.serviceType,
       b.workerName,
       b.assignedWorker,
       b.status,
-    ].some((value) => (value || '').toString().toLowerCase().includes(text));
+      ...(adminRole === 'mason' ? [] : [b.phone]),
+    ];
+    return searchableFields.some((value) => (value || '').toString().toLowerCase().includes(text));
   }).filter((b) => {
     if (serviceFilter === 'all') return true;
     return normalizeServiceType(b.serviceType) === normalizeServiceType(serviceFilter);
@@ -924,7 +925,7 @@ export default function AdminBookings() {
         <input
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search by booking, customer, phone, address..."
+          placeholder={adminRole === 'mason' ? 'Search by booking, customer, address...' : 'Search by booking, customer, phone, address...'}
           style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '8px' }}
         />
         <select value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '8px' }}>
@@ -1040,13 +1041,27 @@ export default function AdminBookings() {
                     Multi-day job: {Number(b.completedWorkDays || 0)}/{Number(b.estimatedDays || 1)} days completed, {Number(b.remainingWorkDays || b.estimatedDays || 1)} day(s) left
                   </div>
                 )}
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ padding: '4px 10px', background: STATUS_COLORS[b.status], color: 'white', borderRadius: '20px', fontSize: '10px', fontWeight: 'bold' }}>
-                  {b.status.toUpperCase()}
-                </span>
-              </div>
             </div>
+            <div style={{ textAlign: 'right' }}>
+              <span style={{ padding: '4px 10px', background: STATUS_COLORS[b.status], color: 'white', borderRadius: '20px', fontSize: '10px', fontWeight: 'bold' }}>
+                {b.status.toUpperCase()}
+              </span>
+            </div>
+          </div>
+
+            {/* USER REQUESTED PHOTOS */}
+            {b.requestedPhotos?.length > 0 && (
+              <div style={{ marginBottom: '12px', padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>📸 User Requested Photos:</div>
+                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                  {b.requestedPhotos.map((p, i) => (
+                    <a key={i} href={p.url} target="_blank" rel="noreferrer">
+                      <img src={p.url} alt={`Request ${i}`} style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #cbd5e1' }} />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ESCALATION TIMER: Informs admin of urgency */}
             {escalation && !escalation.isEscalated && (
@@ -1086,7 +1101,6 @@ export default function AdminBookings() {
                       placeholder="Addon Rs"
                       value={quoteAddons[b.id] || ''}
                       onChange={e => setQuoteAddons(prev => ({ ...prev, [b.id]: e.target.value }))}
-                      disabled={b.quotes?.some(q => q.adminId === uid)}
                       style={{ width: '120px', padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
                     />
                   </div>
@@ -1096,19 +1110,17 @@ export default function AdminBookings() {
                       placeholder="Your Quote ₹"
                       value={quotes[b.id] || ''}
                       onChange={e => setQuotes(prev => ({ ...prev, [b.id]: e.target.value }))}
-                      disabled={b.quotes?.some(q => q.adminId === uid)}
                       style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
                     />
                     <button
                       onClick={() => setPriceQuote(b.id)}
-                      disabled={b.quotes?.some(q => q.adminId === uid)}
                       style={{
-                        background: b.quotes?.some(q => q.adminId === uid) ? '#94a3b8' : '#6366f1',
+                        background: '#6366f1',
                         color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px',
                         fontSize: '12px', fontWeight: 'bold', cursor: 'pointer'
                       }}
                     >
-                      {b.quotes?.some(q => q.adminId === uid) ? 'Bid Sent' : 'Send Quote'}
+                      {b.quotes?.some(q => q.adminId === uid) ? 'Update Quote' : 'Send Quote'}
                     </button>
                   </div>
                   {b.quotes?.length > 0 && (
@@ -1232,6 +1244,38 @@ export default function AdminBookings() {
                     </select>
                     <button onClick={() => resolveDispute(b)} style={{ padding: '4px 8px', fontSize: '11px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '4px' }}>Resolve</button>
                   </div>
+                </div>
+              )}
+
+              {/* WORKER PHOTO UPLOAD SECTION */}
+              {['assigned', 'in_progress'].includes(b.status) && (
+                <div style={{ width: '100%', marginTop: '10px', padding: '10px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #0ea5e9' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#0369a1', marginBottom: '8px' }}>📸 Submit Work Photos</div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={el => fileInputRefs.current[b.id] = el}
+                      style={{ display: 'none' }}
+                      onChange={e => uploadPhoto(b.id, 'work_progress', e.target.files[0])}
+                    />
+                    <button
+                      onClick={() => fileInputRefs.current[b.id].click()}
+                      disabled={uploading[b.id]}
+                      style={{ padding: '6px 12px', fontSize: '11px', background: '#0ea5e9', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                    >
+                      {uploading[b.id] ? '⌛ Uploading...' : '➕ Upload Work Photo'}
+                    </button>
+                  </div>
+                  {b.photos?.length > 0 && (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px', overflowX: 'auto' }}>
+                      {b.photos.map((p, i) => (
+                        <a key={i} href={p.url} target="_blank" rel="noreferrer">
+                          <img src={p.url} alt={`Work ${i}`} style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px' }} />
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

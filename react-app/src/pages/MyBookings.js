@@ -29,6 +29,7 @@ const statusColors = {
   'cancelled': '#757575',         // Discarded/Invalidated
   'quoted': '#6366f1',            // Price sent to user
   'accepted': '#ec4899',          // User agreed to price
+  'scheduled': '#0ea5e9',         // Future dated jobs
 };
 
 // UI CONFIG: Human-readable labels for the user interface
@@ -41,6 +42,7 @@ const statusLabels = {
   'cancelled': '✕ Cancelled',
   'quoted': '💰 Quote Received',
   'accepted': '🤝 Price Accepted',
+  'scheduled': '📅 Scheduled',
 };
 
 // UI CONFIG: Category-specific iconography
@@ -542,7 +544,7 @@ export default function MyBookings() {
       {editingId !== booking.id && (
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {/* ACTIONS: Pending jobs can be edited or cancelled */}
-          {isActive && booking.status === 'pending' && (
+          {isActive && ['pending', 'scheduled'].includes(booking.status) && (
             <>
               <button onClick={() => { setEditingId(booking.id); setEditData({ address: booking.address, phone: booking.phone }); }}
                 style={{ flex: '1 0 auto', padding: '8px 12px', background: '#2196f3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>

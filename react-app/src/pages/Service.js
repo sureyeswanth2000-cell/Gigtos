@@ -15,6 +15,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { collection, addDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const serviceIcons = {
   'Plumber': '🧰',
@@ -50,6 +51,8 @@ export default function Service() {
   const [success, setSuccess] = useState(''); // Success message display
   const [showConfirm, setShowConfirm] = useState(false); // State for the final confirmation modal
   const [profileIncomplete, setProfileIncomplete] = useState(false); // Flag if name/address/phone is missing
+  const [requestedPhoto, setRequestedPhoto] = useState(null); // URL of uploaded work photo
+  const [uploadingPhoto, setUploadingPhoto] = useState(false); // Loading state for photo upload
 
   // Effect to load existing user profile data from Firestore on mount
   useEffect(() => {
@@ -82,6 +85,23 @@ export default function Service() {
 
     loadUserData(); // Execute profile fetch
   }, [auth.currentUser, location.state]); // Re-run if auth or rebook state changes
+
+  const handlePhotoUpload = async (file) => {
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const storage = getStorage();
+      const path = `bookings/requested/${Date.now()}_${file.name}`;
+      const snap = await uploadBytes(storageRef(storage, path), file);
+      const url = await getDownloadURL(snap.ref);
+      setRequestedPhoto(url);
+    } catch (err) {
+      console.error('Photo upload failed:', err);
+      setError('Photo upload failed. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   // Main booking submission handler
   const handleBooking = async () => {
@@ -125,6 +145,7 @@ export default function Service() {
         completedWorkDays: 0,
         remainingWorkDays: Number(estimatedDays),
         isMultiDay: Number(estimatedDays) > 1,
+        requestedPhotos: requestedPhoto ? [{ url: requestedPhoto, label: 'User Requested', uploadedAt: new Date() }] : [],
         createdAt: new Date(), // Permanent record of submission
         updatedAt: new Date() // Record of latest status change
       };
@@ -320,6 +341,29 @@ export default function Service() {
                 Multi-day jobs will stay in progress until each day is marked complete.
               </div>
             )}
+          </div>
+
+          <div style={{ marginTop: '20px', borderTop: '1px solid #ddd', paddingTop: '20px' }}>
+            <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#333', display: 'block', marginBottom: '10px' }}>
+              📸 Upload Photo of Work (Optional)
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => handlePhotoUpload(e.target.files[0])}
+              disabled={uploadingPhoto}
+              style={{ fontSize: '13px', marginBottom: '10px' }}
+            />
+            {uploadingPhoto && <div style={{ fontSize: '12px', color: '#667eea' }}>⏳ Uploading photo...</div>}
+            {requestedPhoto && (
+              <div style={{ marginTop: '10px' }}>
+                <img src={requestedPhoto} alt="Requested work" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd' }} />
+                <div style={{ fontSize: '11px', color: '#10b981' }}>✅ Photo attached</div>
+              </div>
+            )}
+            <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
+              Note: Uploading a clear photo helps professionals provide more accurate quotes.
+            </p>
           </div>
         </div>
       </div>

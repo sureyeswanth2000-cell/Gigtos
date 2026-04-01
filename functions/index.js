@@ -11,6 +11,7 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+const https = require('https');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -122,6 +123,241 @@ async function findBestWorkerForBooking(adminId, serviceType) {
   });
 
   return eligibleWorkers[0];
+}
+
+function canonicalServiceName(value) {
+  const normalized = normalizeServiceType(value);
+  const serviceMap = {
+    plumber: 'Plumber',
+    electrician: 'Electrician',
+    carpenter: 'Carpenter',
+    painter: 'Painter',
+  };
+  return serviceMap[normalized] || '';
+}
+
+function detectServiceFromMessage(message = '') {
+  const normalizedMessage = normalizeServiceType(message);
+  const keywordMap = {
+    Plumber: ['plumber', 'pipe', 'leak', 'water', 'tap', 'sink', 'drain', 'toilet'],
+    Electrician: ['electrician', 'wire', 'wiring', 'fan', 'light', 'switch', 'socket', 'power'],
+    Carpenter: ['carpenter', 'wood', 'door', 'cupboard', 'furniture', 'shelf', 'table'],
+    Painter: ['painter', 'paint', 'wall', 'colour', 'color', 'coating', 'putty'],
+  };
+
+  return Object.entries(keywordMap).find(([, keywords]) =>
+    keywords.some((keyword) => normalizedMessage.includes(keyword))
+  )?.[0] || '';
+}
+
+function formatMarketPrice(insight = {}) {
+  const minQuote = Number(insight.minQuote || 0);
+  const maxQuote = Number(insight.maxQuote || 0);
+  const averageQuote = Number(insight.averageQuote || 0);
+  const quoteCount = Number(insight.quoteCount || 0);
+
+  if (!minQuote || !maxQuote) return 'quote on request';
+
+  const avgText = averageQuote ? ` (avg ₹${Math.round(averageQuote)} from ${quoteCount} quotes)` : '';
+  return `₹${Math.round(minQuote)} - ₹${Math.round(maxQuote)}${avgText}`;
+}
+
+async function buildServiceInsights() {
+  const supportedServices = ['Plumber', 'Electrician', 'Carpenter', 'Painter'];
+  const serviceInsights = {};
+  const ratingBuckets = {};
+  const quoteBuckets = {};
+
+  supportedServices.forEach((service) => {
+    serviceInsights[service] = {
+      service,
+      availableWorkers: 0,
+      totalWorkers: 0,
+      averageRating: null,
+      minQuote: null,
+      maxQuote: null,
+      averageQuote: null,
+      quoteCount: 0,
+      topWorkers: [],
+    };
+    ratingBuckets[service] = [];
+    quoteBuckets[service] = [];
+  });
+
+  const [workersSnap, bookingsSnap] = await Promise.all([
+    db.collection('gig_workers').get(),
+    db.collection('bookings').get(),
+  ]);
+
+  workersSnap.forEach((workerDoc) => {
+    const worker = workerDoc.data() || {};
+    const service = canonicalServiceName(worker.gigType);
+    if (!serviceInsights[service]) return;
+
+    const approved = !worker.approvalStatus || worker.approvalStatus === 'approved';
+    const active = (worker.status || 'inactive') === 'active';
+    const notFraud = !worker.isFraud;
+    const available = worker.isAvailable !== false;
+    const rating = Number(worker.rating || 0);
+    const completedJobs = Number(worker.completedJobs || 0);
+
+    serviceInsights[service].totalWorkers += 1;
+
+    if (approved && active && notFraud && available) {
+      serviceInsights[service].availableWorkers += 1;
+    }
+
+    if (approved && active && notFraud) {
+      if (rating > 0) ratingBuckets[service].push(rating);
+      serviceInsights[service].topWorkers.push({
+        name: (worker.name || 'Worker').toString().trim(),
+        rating: rating > 0 ? Number(rating.toFixed(1)) : null,
+        completedJobs,
+        isAvailable: available,
+      });
+    }
+  });
+
+  bookingsSnap.forEach((bookingDoc) => {
+    const booking = bookingDoc.data() || {};
+    const service = canonicalServiceName(booking.serviceType);
+    if (!serviceInsights[service]) return;
+
+    const quoteList = Array.isArray(booking.quotes) && booking.quotes.length
+      ? booking.quotes
+      : (booking.acceptedQuote ? [booking.acceptedQuote] : []);
+
+    quoteList.forEach((quote) => {
+      const amount = Number(quote?.finalPrice || quote?.price || 0);
+      if (Number.isFinite(amount) && amount > 0) {
+        quoteBuckets[service].push(amount);
+      }
+    });
+  });
+
+  return supportedServices.map((service) => {
+    const insight = serviceInsights[service];
+    const ratings = ratingBuckets[service];
+    const quotes = quoteBuckets[service];
+
+    insight.topWorkers = insight.topWorkers
+      .sort((a, b) => {
+        const ratingGap = Number(b.rating || 0) - Number(a.rating || 0);
+        if (ratingGap !== 0) return ratingGap;
+        return Number(b.completedJobs || 0) - Number(a.completedJobs || 0);
+      })
+      .slice(0, 3);
+
+    if (ratings.length) {
+      const avgRating = ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length;
+      insight.averageRating = Number(avgRating.toFixed(1));
+    }
+
+    if (quotes.length) {
+      insight.minQuote = Math.round(Math.min(...quotes));
+      insight.maxQuote = Math.round(Math.max(...quotes));
+      insight.averageQuote = Math.round(quotes.reduce((sum, quote) => sum + quote, 0) / quotes.length);
+      insight.quoteCount = quotes.length;
+    }
+
+    return insight;
+  });
+}
+
+function buildFallbackAssistantReply({ message = '', selectedService = '', insights = [] }) {
+  const lowerMessage = (message || '').toLowerCase();
+  const requestedService = canonicalServiceName(selectedService) || detectServiceFromMessage(message);
+  const matchingInsight = insights.find((item) => item.service === requestedService);
+
+  if (matchingInsight && /(compare|cost|price|cheap|worker)/i.test(lowerMessage)) {
+    const workerSummary = matchingInsight.topWorkers.length
+      ? ` Top available workers include ${matchingInsight.topWorkers.map((worker) => `${worker.name}${worker.rating ? ` (⭐${worker.rating})` : ''}`).join(', ')}.`
+      : '';
+    return `${matchingInsight.service} has ${matchingInsight.availableWorkers} available workers right now. Recent customer quotes are typically ${formatMarketPrice(matchingInsight)}.${workerSummary} Book the service to receive exact competing quotes inside My Bookings.`;
+  }
+
+  if (/(available|availability|service)/i.test(lowerMessage)) {
+    const summary = insights
+      .map((item) => `${item.service}: ${item.availableWorkers} workers, ${formatMarketPrice(item)}`)
+      .join(' | ');
+    return `Gigto currently supports ${summary}. Tell me the issue at your home and I’ll point you to the best service to book.`;
+  }
+
+  if (/(book|booking|help|how)/i.test(lowerMessage)) {
+    const serviceLabel = requestedService || 'the right home service';
+    return `To book ${serviceLabel}, choose the service card on the home page, confirm your address and phone, and submit the request. Gigto will collect worker quotes so you can compare price and rating before accepting one.`;
+  }
+
+  return `Gigto can help with Plumber, Electrician, Carpenter, and Painter requests in Kavali. Ask me what problem you have, and I’ll guide you to the right service with current availability and expected price ranges.`;
+}
+
+function buildGeminiPrompt({ message = '', selectedService = '', insights = [] }) {
+  const serviceSummary = insights.map((item) => {
+    const topWorkers = item.topWorkers?.length
+      ? ` Top workers: ${item.topWorkers.map((worker) => `${worker.name}${worker.rating ? ` (⭐${worker.rating})` : ''}`).join(', ')}.`
+      : '';
+
+    return `- ${item.service}: ${item.availableWorkers} available workers, average rating ${item.averageRating || 'N/A'}, recent price range ${formatMarketPrice(item)}.${topWorkers}`;
+  }).join('\n');
+
+  return [
+    'You are Gito AI, the booking assistant for the Gigto home-services app in Kavali.',
+    'Reply in plain English using short paragraphs or bullets.',
+    'Help the consumer choose the right service, compare expected worker costs, and explain the next booking step.',
+    'Use only the data provided below. If data is missing, clearly say it is an estimate.',
+    'Keep the answer under 140 words and end with a practical call to action.',
+    '',
+    `Selected service: ${selectedService || 'Not selected'}`,
+    `User question: ${message}`,
+    '',
+    'Current Gigto service insights:',
+    serviceSummary || '- No live service insight data available.',
+  ].join('\n');
+}
+
+function callGeminiAssistant({ apiKey, prompt }) {
+  return new Promise((resolve, reject) => {
+    const requestBody = JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.4,
+        maxOutputTokens: 280,
+      },
+    });
+
+    const request = https.request({
+      hostname: 'generativelanguage.googleapis.com',
+      path: `/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${encodeURIComponent(apiKey)}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(requestBody),
+      },
+    }, (response) => {
+      let rawData = '';
+      response.on('data', (chunk) => {
+        rawData += chunk;
+      });
+      response.on('end', () => {
+        if (response.statusCode >= 400) {
+          reject(new Error(`Gemini API error ${response.statusCode}: ${rawData}`));
+          return;
+        }
+
+        try {
+          const payload = JSON.parse(rawData || '{}');
+          const text = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join(' ').trim();
+          resolve(text || '');
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+
+    request.on('error', reject);
+    request.write(requestBody);
+    request.end();
+  });
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -626,6 +862,68 @@ const verifyAuth = (context) => {
     throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
   }
 };
+
+/**
+ * Callable: getServiceInsights
+ * Returns aggregated service availability and quote ranges for the consumer home page.
+ */
+exports.getServiceInsights = functions.https.onCall(async () => {
+  const services = await buildServiceInsights();
+  return {
+    services,
+    generatedAt: new Date().toISOString(),
+  };
+});
+
+/**
+ * Callable: aiBookingAssistant
+ * Uses Gemini 1.5 Flash when configured, with a safe local fallback if the API key is missing.
+ */
+exports.aiBookingAssistant = functions.https.onCall(async (data) => {
+  const message = (data?.message || '').toString().trim();
+  const selectedService = (data?.selectedService || '').toString().trim();
+
+  if (!message) {
+    throw new functions.https.HttpsError('invalid-argument', 'A message is required.');
+  }
+
+  const insights = await buildServiceInsights();
+  const fallbackReply = buildFallbackAssistantReply({
+    message,
+    selectedService,
+    insights,
+  });
+
+  const apiKey = functions.config().gemini?.key || process.env.GEMINI_API_KEY || '';
+  if (!apiKey) {
+    return {
+      reply: fallbackReply,
+      insights,
+      usedFallback: true,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  try {
+    const prompt = buildGeminiPrompt({ message, selectedService, insights });
+    const reply = await callGeminiAssistant({ apiKey, prompt });
+
+    return {
+      reply: reply || fallbackReply,
+      insights,
+      usedFallback: !reply,
+      generatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error('aiBookingAssistant failed:', error);
+    return {
+      reply: fallbackReply,
+      insights,
+      usedFallback: true,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+});
 
 /**
  * Callable: submitQuote

@@ -270,47 +270,43 @@ function buildFallbackAssistantReply({ message = '', selectedService = '', insig
   const matchingInsight = insights.find((item) => item.service === requestedService);
 
   if (matchingInsight && /(compare|cost|price|cheap|worker)/i.test(lowerMessage)) {
-    const workerSummary = matchingInsight.topWorkers.length
-      ? ` Top available workers include ${matchingInsight.topWorkers.map((worker) => `${worker.name}${worker.rating ? ` (⭐${worker.rating})` : ''}`).join(', ')}.`
-      : '';
-    return `${matchingInsight.service} has ${matchingInsight.availableWorkers} available workers right now. Recent customer quotes are typically ${formatMarketPrice(matchingInsight)}.${workerSummary} Book the service to receive exact competing quotes inside My Bookings.`;
+    return `${matchingInsight.service} has ${matchingInsight.availableWorkers} workers. Typical quotes: ${formatMarketPrice(matchingInsight)}. Book now for exact bids.`;
   }
 
-  if (/(available|availability|service)/i.test(lowerMessage)) {
-    const summary = insights
-      .map((item) => `${item.service}: ${item.availableWorkers} workers, ${formatMarketPrice(item)}`)
-      .join(' | ');
-    return `Gigto currently supports ${summary}. Tell me the issue at your home and I’ll point you to the best service to book.`;
+  if (matchingInsight && /(available|availability|service)/i.test(lowerMessage)) {
+    return `${matchingInsight.service} is available now. Approx quote: ${formatMarketPrice(matchingInsight)}.`;
   }
 
   if (/(book|booking|help|how)/i.test(lowerMessage)) {
     const serviceLabel = requestedService || 'the right home service';
-    return `To book ${serviceLabel}, choose the service card on the home page, confirm your address and phone, and submit the request. Gigto will collect worker quotes so you can compare price and rating before accepting one.`;
+    return `Choose ${serviceLabel}, confirm your address and phone, and submit to receive quotes.`;
   }
 
-  return `Gigto can help with Plumber, Electrician, Carpenter, and Painter requests in Kavali. Ask me what problem you have, and I’ll guide you to the right service with current availability and expected price ranges.`;
+  return 'Ask about plumber, electrician, carpenter, or painter and I’ll guide you.';
 }
 
 function buildGeminiPrompt({ message = '', selectedService = '', insights = [] }) {
-  const serviceSummary = insights.map((item) => {
-    const topWorkers = item.topWorkers?.length
-      ? ` Top workers: ${item.topWorkers.map((worker) => `${worker.name}${worker.rating ? ` (⭐${worker.rating})` : ''}`).join(', ')}.`
-      : '';
+  const requestedService = canonicalServiceName(selectedService) || detectServiceFromMessage(message);
+  const scopedInsights = requestedService
+    ? insights.filter((item) => item.service === requestedService)
+    : insights;
 
-    return `- ${item.service}: ${item.availableWorkers} available workers, average rating ${item.averageRating || 'N/A'}, recent price range ${formatMarketPrice(item)}.${topWorkers}`;
+  const serviceSummary = scopedInsights.map((item) => {
+    return `- ${item.service}: ${item.availableWorkers} available workers, average rating ${item.averageRating || 'N/A'}, recent price range ${formatMarketPrice(item)}.`;
   }).join('\n');
 
   return [
     'You are Gito AI, the booking assistant for the Gigto home-services app in Kavali.',
-    'Reply in plain English using short paragraphs or bullets.',
-    'Help the consumer choose the right service, compare expected worker costs, and explain the next booking step.',
-    'Use only the data provided below. If data is missing, clearly say it is an estimate.',
-    'Keep the answer under 140 words and end with a practical call to action.',
+    'Reply in plain English using 1-2 short sentences only.',
+    'Be concise and useful.',
+    'Do not repeat UI text or list all services unless the user asks.',
+    'If pricing is uncertain, say it is an estimate.',
+    'End with a simple booking suggestion when relevant.',
     '',
     `Selected service: ${selectedService || 'Not selected'}`,
     `User question: ${message}`,
     '',
-    'Current Gigto service insights:',
+    'Relevant Gigto service insights:',
     serviceSummary || '- No live service insight data available.',
   ].join('\n');
 }

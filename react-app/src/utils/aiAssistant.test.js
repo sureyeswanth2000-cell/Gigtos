@@ -36,7 +36,7 @@ describe('ai assistant helpers', () => {
     });
 
     expect(reply).toContain('Electrician');
-    expect(reply).toContain('3 available workers');
+    expect(reply).toContain('3 workers');
     expect(reply).toContain('₹500 - ₹850');
   });
 

@@ -77,9 +77,8 @@ export function buildPromptSuggestions(selectedService) {
   const serviceLabel = selectedService || 'service';
   return [
     `Which ${serviceLabel} should I book?`,
-    `Compare worker prices for ${serviceLabel}`,
-    'Show available services in Kavali',
-    'Help me book step by step',
+    `Expected cost for ${serviceLabel}?`,
+    'Help me book',
   ];
 }
 
@@ -89,17 +88,17 @@ export function buildLocalAssistantFallback({ message = '', selectedService = ''
   const lowerMessage = message.toLowerCase();
 
   if (serviceInsight && /(compare|cost|price|cheap|cheapest|worker)/i.test(lowerMessage)) {
-    return `${relevantService} currently has ${serviceInsight.availableWorkers || 0} available workers. Recent quotes are usually ${formatPriceInsight(serviceInsight)}, and the average rating is ${serviceInsight.averageRating || 'N/A'}. For the best comparison, book the service and review the competing quotes in My Bookings.`;
+    return `${relevantService} has ${serviceInsight.availableWorkers || 0} workers. Typical quotes: ${formatPriceInsight(serviceInsight)}. Book now to get exact bids.`;
   }
 
   if (serviceInsight && /(available|availability|service)/i.test(lowerMessage)) {
-    return `${relevantService} is available in Gigto with ${serviceInsight.availableWorkers || 0} active workers right now. Typical pricing is ${formatPriceInsight(serviceInsight)}. You can tap Book Now to request quotes.`;
+    return `${relevantService} is available now. Approx quote: ${formatPriceInsight(serviceInsight)}.`;
   }
 
   if (/(book|booking|help|how)/i.test(lowerMessage)) {
     const matchedService = findRelevantService(message)?.name || relevantService;
-    return `To book ${matchedService}, choose the service card on the home page, confirm your address and phone, and submit the request. Gigto will collect quotes from workers so you can compare price and rating before accepting one.`;
+    return `Choose ${matchedService}, confirm your address and phone, and submit to receive quotes.`;
   }
 
-  return `Gigto can help with ${SERVICE_CATALOG.map((service) => service.name).join(', ')}. Tell me the issue you have at home, and I’ll suggest the right service, current availability, and expected quote range.`;
+  return `Ask about plumber, electrician, carpenter, or painter and I’ll guide you.`;
 }

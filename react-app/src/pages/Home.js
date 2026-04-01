@@ -1,19 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
+import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
+import { SERVICE_CATALOG } from '../utils/aiAssistant';
 
 export default function Home() {
   const navigate = useNavigate();
   const [selectedService, setSelectedService] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
-  // Define available services with their metadata (icon, price, description)
-  const services = [
-    { id: 1, name: 'Plumber', icon: '🧰', price: 'Quote Based', desc: 'Pipe repairs, leak fixing, installation' },
-    { id: 2, name: 'Electrician', icon: '⚡', price: 'Quote Based', desc: 'Wiring, repairs, switch installation' },
-    { id: 3, name: 'Carpenter', icon: '🪛', price: 'Quote Based', desc: 'Furniture, doors, shelves, fixtures' },
-    { id: 4, name: 'Painter', icon: '🎨', price: 'Quote Based', desc: 'Interior & exterior painting' }
-  ];
+  const services = SERVICE_CATALOG;
 
   // Handle service selection and login check
   const handleBookService = (service) => {
@@ -51,6 +47,8 @@ export default function Home() {
           ✨ Transparent Pricing | Pay only after approval
         </p>
       </div>
+
+      <ConsumerAiAssistant services={services} onBookService={handleBookService} />
 
       {/* Services Grid */}
       <div style={{

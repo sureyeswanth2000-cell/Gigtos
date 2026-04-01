@@ -65,6 +65,8 @@ Home services app (Plumbing, Electrical, etc.) for Kavali — with customer book
 ### ⚙️ Cloud Functions (`functions/index.js`)
 - ✅ `onBookingCreated` — triggers email + SMS notification on new booking
 - ✅ `onBookingStatusChange` — triggers email + SMS on status change
+- ✅ `getServiceInsights` — returns live worker availability + quote trends for the home page
+- ✅ `aiBookingAssistant` — Gemini 1.5 Flash powered consumer booking assistant with safe fallback mode
 - ✅ Twilio SMS integration (configured via env vars)
 - ✅ Nodemailer/Gmail email integration
 
@@ -79,6 +81,14 @@ firebase deploy --only functions
 ```bash
 firebase functions:config:set gmail.user="you@gmail.com" gmail.pass="app-password"
 firebase functions:config:set twilio.sid="ACxxx" twilio.token="yyy" twilio.phone="+123456789"
+firebase functions:config:set gemini.key="YOUR_GEMINI_1_5_FLASH_API_KEY"
+```
+
+### Gemini AI assistant setup:
+```bash
+cd functions
+npm install
+firebase deploy --only functions:getServiceInsights,functions:aiBookingAssistant
 ```
 
 > **Note:** Cloud Functions require the Firebase **Blaze** plan.

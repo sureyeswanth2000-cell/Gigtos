@@ -37,6 +37,7 @@ export default function Home() {
   const [selectedService, setSelectedService] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [assistantPrompt, setAssistantPrompt] = useState('');
+  const [serviceSearch, setServiceSearch] = useState('');
 
   const services = SERVICE_CATALOG;
   const trustPillars = [
@@ -90,21 +91,22 @@ export default function Home() {
     }
   };
 
-  const handleGetQuote = (service) => {
-    if (!auth.currentUser) {
-      navigate('/auth?mode=user');
-      return;
-    }
-
-    navigate(`/service?type=${service.name}`);
-  };
-
   const scrollToSection = (sectionId) => {
     const target = document.getElementById(sectionId);
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
+
+  const visibleServices = services.filter((service) => {
+    const query = serviceSearch.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      service.name.toLowerCase().includes(query)
+      || service.desc.toLowerCase().includes(query)
+      || service.keywords?.some((keyword) => keyword.toLowerCase().includes(query))
+    );
+  });
 
   return (
     <div className="home-page">
@@ -153,8 +155,18 @@ export default function Home() {
           <p className="section-caption">Verified pro availability updates daily</p>
         </div>
 
+        <div className="services-tools">
+          <input
+            type="text"
+            value={serviceSearch}
+            onChange={(event) => setServiceSearch(event.target.value)}
+            placeholder="Search services (plumber, electrician, painting...)"
+            aria-label="Search services"
+          />
+        </div>
+
         <div className="services-grid">
-          {services.map((service) => (
+          {visibleServices.map((service) => (
             <article key={service.id} className="service-card">
               <div className="service-top">
                 <ServiceIcon serviceName={service.name} />
@@ -163,12 +175,17 @@ export default function Home() {
               <h3>{service.name}</h3>
               <p>{service.desc}</p>
               <div className="service-card-actions">
-                <button className="primary-btn" onClick={() => handleBookService(service)}>Book Now</button>
-                <button className="ghost-btn" onClick={() => handleGetQuote(service)}>Get Quote</button>
+                <button className="primary-btn" onClick={() => handleBookService(service)}>Book Service</button>
               </div>
             </article>
           ))}
         </div>
+
+        {visibleServices.length === 0 && (
+          <div className="no-services-note">
+            No services found for "{serviceSearch}". Try another keyword or ask Gito AI.
+          </div>
+        )}
       </section>
 
       <section className="steps-section" id="how-it-works">
@@ -219,13 +236,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      <nav className="mobile-bottom-nav" aria-label="Quick actions">
-        <button onClick={() => scrollToSection('discover')}>Discover</button>
-        <button onClick={() => scrollToSection('services')}>Services</button>
-        <button onClick={() => scrollToSection('how-it-works')}>How It Works</button>
-        <button onClick={() => setAssistantPrompt('Need help choosing a service in Kavali')}>Ask AI</button>
-      </nav>
 
       <ConsumerAiAssistant
         services={services}

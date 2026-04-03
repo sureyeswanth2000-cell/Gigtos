@@ -1,7 +1,7 @@
 .home-page {
   max-width: 1120px;
   margin: 0 auto;
-  padding: var(--space-6) var(--space-5) 110px;
+  padding: var(--space-6) var(--space-5) var(--space-8);
   color: var(--color-text-900);
   background:
     radial-gradient(circle at 8% 8%, rgba(118, 75, 162, 0.12), transparent 42%),
@@ -185,6 +185,25 @@
   gap: var(--space-4);
 }
 
+.services-tools {
+  margin-bottom: var(--space-4);
+}
+
+.services-tools input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--color-border-200);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--color-text-900);
+  background: white;
+}
+
+.services-tools input:focus {
+  outline: 2px solid rgba(118, 75, 162, 0.28);
+  border-color: var(--color-brand-600);
+}
+
 .service-card {
   border: 1px solid var(--color-border-200);
   border-radius: 14px;
@@ -237,6 +256,16 @@
 
 .service-card-actions button {
   flex: 1;
+}
+
+.no-services-note {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-200);
+  border-radius: 10px;
+  background: #f8f7fb;
+  color: var(--color-text-700);
+  font-size: 14px;
 }
 
 .steps-grid,
@@ -349,10 +378,6 @@
   flex: 1;
 }
 
-.mobile-bottom-nav {
-  display: none;
-}
-
 @keyframes rise-in {
   from {
     transform: translateY(8px);
@@ -383,7 +408,7 @@
 
 @media (max-width: 700px) {
   .home-page {
-    padding: 14px 14px 98px;
+    padding: 14px 14px 24px;
   }
 
   .hero-intro,
@@ -418,32 +443,6 @@
   }
 
   .service-card-actions {
-    flex-direction: column;
-  }
-
-  .mobile-bottom-nav {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
-    position: fixed;
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
-    background: rgba(250, 252, 252, 0.96);
-    border: 1px solid #d4dbe0;
-    border-radius: 12px;
-    padding: var(--space-2);
-    z-index: 1250;
-    backdrop-filter: blur(6px);
-  }
-
-  .mobile-bottom-nav button {
-    border: none;
-    background: #eaf2f1;
-    border-radius: var(--radius-sm);
-    color: #19313a;
-    font-size: 11px;
-    padding: var(--space-2) var(--space-1);
-    font-weight: 700;
+    flex-direction: row;
   }
 }

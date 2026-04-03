@@ -1,94 +1,104 @@
-/**
- * SERVICE BOOKING PAGE - CONSUMER INTERFACE
- * 
- * Logic Overview:
- * - Fetches user profile to pre-fill booking details (Name, Address, Phone).
- * - Implements dual-booking modes: 
- *   1. Immediate (Status: 'pending') - for urgent needs.
- *   2. Scheduled (Status: 'scheduled') - for future appointments with specific time slots.
- * - Enforces ₹150 visiting charge policy across all service types.
- * - Validates profile completeness before allowing document creation in Firestore.
- */
-
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { collection, addDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc } from 'firebase/firestore';
+import { getDownloadURL, getStorage, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { auth, db } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import './Service.css';
 
 const serviceIcons = {
-  'Plumber': '🧰',
-  'Electrician': '⚡',
-  'Carpenter': '🪛',
-  'Painter': '🎨'
+  Plumber: '🧰',
+  Electrician: '⚡',
+  Carpenter: '🪛',
+  Painter: '🎨',
 };
 
+const professionalDirectory = {
+  Plumber: [
+    { id: 'pl-1', name: 'Rakesh Plumbing', rating: 4.8, jobs: 122, eta: '45 mins' },
+    { id: 'pl-2', name: 'AquaFix Team', rating: 4.7, jobs: 96, eta: '1 hour' },
+  ],
+  Electrician: [
+    { id: 'el-1', name: 'VoltCare Pro', rating: 4.8, jobs: 110, eta: '50 mins' },
+    { id: 'el-2', name: 'SafeWire Services', rating: 4.6, jobs: 82, eta: '1.5 hours' },
+  ],
+  Carpenter: [
+    { id: 'ca-1', name: 'WoodCraft Studio', rating: 4.7, jobs: 76, eta: '55 mins' },
+    { id: 'ca-2', name: 'FixFrame Carpentry', rating: 4.5, jobs: 64, eta: '1 hour' },
+  ],
+  Painter: [
+    { id: 'pa-1', name: 'FreshCoat Painters', rating: 4.8, jobs: 88, eta: '2 hours' },
+    { id: 'pa-2', name: 'ColorEdge Team', rating: 4.6, jobs: 73, eta: '2.5 hours' },
+  ],
+};
+
+const steps = [
+  { id: 1, label: 'Service Details' },
+  { id: 2, label: 'Schedule & Pro' },
+  { id: 3, label: 'Confirm & Next Steps' },
+];
+
 export default function Service() {
-  // React Router location hook to handle incoming state (e.g. from Rebook button)
   const location = useLocation();
-  // URL search params to get the service category (Plumber, etc.)
-  const params = new URLSearchParams(location.search);
-  // Default to URL type, then check location state if it's a rebooking
-  const type = location.state?.serviceType || params.get('type') || 'Service';
-  // Navigation hook for redirection
   const navigate = useNavigate();
+  const params = new URLSearchParams(location.search);
+  const type = location.state?.serviceType || params.get('type') || 'Service';
 
-  // State variables for user contact and location information
-  const [name, setName] = useState(''); // Customer's full name
-  const [address, setAddress] = useState(location.state?.prefillAddress || ''); // Pre-filled from rebook if available
-  const [userPhone, setUserPhone] = useState(location.state?.prefillPhone || ''); // Pre-filled from rebook if available
+  const [currentStep, setCurrentStep] = useState(1);
 
-  // State variables for future/scheduled booking functionality
-  const [isScheduled, setIsScheduled] = useState(false); // Toggle between immediate and future booking
-  const [scheduledDate, setScheduledDate] = useState(''); // User selected date (YYYY-MM-DD)
-  const [timeSlot, setTimeSlot] = useState(''); // User selected slot: 9-12, 12-3, 3-6
-  const [estimatedDays, setEstimatedDays] = useState(1); // Single day by default, multi-day supported
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState(location.state?.prefillAddress || '');
+  const [userPhone, setUserPhone] = useState(location.state?.prefillPhone || '');
 
-  // UI and feedback states
-  const [loading, setLoading] = useState(false); // Spinner state during Firestore write
-  const [error, setError] = useState(''); // Error message display
-  const [success, setSuccess] = useState(''); // Success message display
-  const [showConfirm, setShowConfirm] = useState(false); // State for the final confirmation modal
-  const [profileIncomplete, setProfileIncomplete] = useState(false); // Flag if name/address/phone is missing
-  const [requestedPhoto, setRequestedPhoto] = useState(null); // URL of uploaded work photo
-  const [uploadingPhoto, setUploadingPhoto] = useState(false); // Loading state for photo upload
+  const [issueTitle, setIssueTitle] = useState('');
+  const [jobDetails, setJobDetails] = useState('');
 
-  // Effect to load existing user profile data from Firestore on mount
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [timeSlot, setTimeSlot] = useState('');
+  const [estimatedDays, setEstimatedDays] = useState(1);
+  const [preferredProId, setPreferredProId] = useState('');
+
+  const [requestedPhoto, setRequestedPhoto] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [profileIncomplete, setProfileIncomplete] = useState(false);
+
+  const professionals = useMemo(() => professionalDirectory[type] || [], [type]);
+  const selectedProfessional = professionals.find((pro) => pro.id === preferredProId);
+
   useEffect(() => {
     const loadUserData = async () => {
       try {
         const user = auth.currentUser;
-        if (!user) return; // Exit if user session not found
+        if (!user) return;
 
-        // Fetch user document from 'users' collection using UID
         const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          // Only update name if not already set by rebook pre-fill
-          if (!name) setName(data.name || '');
-          // If NOT rebooking (no location state), pre-fill address/phone from profile
-          if (!location.state) {
-            setAddress(data.address || '');
-            setUserPhone(data.phone || '');
-          }
+        if (!userDoc.exists()) return;
 
-          // Trigger warning if profile fields are empty
-          if (!data.phone || !data.name || !data.address) {
-            setProfileIncomplete(true);
-          }
+        const data = userDoc.data();
+        setName((prev) => prev || data.name || '');
+        if (!location.state?.prefillAddress) setAddress((prev) => prev || data.address || '');
+        if (!location.state?.prefillPhone) setUserPhone((prev) => prev || data.phone || '');
+
+        if (!data.phone || !data.name || !data.address) {
+          setProfileIncomplete(true);
         }
       } catch (err) {
-        console.error('Error loading profile:', err); // Log fetch errors
+        console.error('Error loading profile:', err);
       }
     };
 
-    loadUserData(); // Execute profile fetch
-  }, [auth.currentUser, location.state]); // Re-run if auth or rebook state changes
+    loadUserData();
+  }, [location.state]);
 
   const handlePhotoUpload = async (file) => {
     if (!file) return;
     setUploadingPhoto(true);
+    setError('');
+
     try {
       const storage = getStorage();
       const path = `bookings/requested/${Date.now()}_${file.name}`;
@@ -103,418 +113,321 @@ export default function Service() {
     }
   };
 
-  // Main booking submission handler
-  const handleBooking = async () => {
-    // Validation: Ensure core profile details are present
-    if (!name || !address || !userPhone) {
-      setError('Please complete your profile first (name, address, phone)');
-      setProfileIncomplete(true);
-      return;
+  const validateStepOne = () => {
+    if (!name.trim() || !address.trim() || !userPhone.trim()) {
+      setError('Please provide your name, phone, and service address.');
+      return false;
     }
 
-    // Validation: Ensure scheduling details are selected if future booking is chosen
+    if (!issueTitle.trim()) {
+      setError('Please add a short service request title.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const validateStepTwo = () => {
     if (isScheduled && (!scheduledDate || !timeSlot)) {
-      setError('Please select both a date and a time slot for your scheduled booking.');
-      return;
+      setError('Select a scheduled date and time slot to continue.');
+      return false;
     }
 
     if (!estimatedDays || Number(estimatedDays) < 1) {
       setError('Estimated work days should be at least 1.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const goNext = () => {
+    setError('');
+    if (currentStep === 1 && !validateStepOne()) return;
+    if (currentStep === 2 && !validateStepTwo()) return;
+    setCurrentStep((prev) => Math.min(3, prev + 1));
+  };
+
+  const goBack = () => {
+    setError('');
+    setCurrentStep((prev) => Math.max(1, prev - 1));
+  };
+
+  const handleBooking = async () => {
+    setError('');
+
+    if (!validateStepOne() || !validateStepTwo()) {
       return;
     }
 
-    setLoading(true); // Start loading spinner
-    setError(''); // Clear previous errors
+    setLoading(true);
 
     try {
       const user = auth.currentUser;
-      if (!user) throw new Error('Not authenticated'); // Safety check for auth session
+      if (!user) throw new Error('Not authenticated');
 
-      // Construct booking document payload
       const bookingPayload = {
-        userId: user.uid, // Map booking to user ID
-        serviceType: type, // Category (Plumber, Electrician, etc.)
-        customerName: name, // Customer name at time of booking
-        address: address, // Service location
-        phone: userPhone, // Contact number
-        status: isScheduled ? 'scheduled' : 'pending', // Set status based on timing choice
+        userId: user.uid,
+        serviceType: type,
+        customerName: name.trim(),
+        address: address.trim(),
+        phone: userPhone.trim(),
+        issueTitle: issueTitle.trim(),
+        jobDetails: jobDetails.trim(),
+        status: isScheduled ? 'scheduled' : 'pending',
         statusUpdatedAt: new Date(),
-        scheduledDate: isScheduled ? scheduledDate : null, // Future date if applicable
-        timeSlot: isScheduled ? timeSlot : null, // Future slot if applicable
+        scheduledDate: isScheduled ? scheduledDate : null,
+        timeSlot: isScheduled ? timeSlot : null,
         estimatedDays: Number(estimatedDays),
         completedWorkDays: 0,
         remainingWorkDays: Number(estimatedDays),
         isMultiDay: Number(estimatedDays) > 1,
+        requestedProfessional: selectedProfessional
+          ? {
+              id: selectedProfessional.id,
+              name: selectedProfessional.name,
+              rating: selectedProfessional.rating,
+            }
+          : null,
         requestedPhotos: requestedPhoto ? [{ url: requestedPhoto, label: 'User Requested', uploadedAt: new Date() }] : [],
-        createdAt: new Date(), // Permanent record of submission
-        updatedAt: new Date() // Record of latest status change
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
-      // Write document to Firestore 'bookings' collection
       await addDoc(collection(db, 'bookings'), bookingPayload);
 
-      setSuccess(`Success! Your request has been sent. Our regional professionals will review it and provide price quotes shortly. You can track this in 'My Bookings'.`); // Show success UI
-      setShowConfirm(false); // Close confirmation modal
-
-      // Navigate to My Bookings after a short delay for visual confirmation
+      setSuccess('Booking confirmed. You will receive quotes and next-step updates in My Bookings.');
       setTimeout(() => {
         navigate('/my-bookings');
-      }, 1500);
+      }, 1400);
     } catch (err) {
-      setError('❌ ' + err.message); // Display error to user
+      setError(err.message || 'Failed to submit booking. Please try again.');
     } finally {
-      setLoading(false); // Stop loading spinner
+      setLoading(false);
     }
   };
 
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-        <div style={{ fontSize: '60px', marginBottom: '10px' }}>
-          {serviceIcons[type] || '🛠️'}
-        </div>
-        <h2 style={{ fontSize: '28px', margin: '10px 0', color: '#333' }}>
-          Book {type}
-        </h2>
-        <p style={{ color: '#666', margin: '10px 0' }}>
-          Professional & Verified Service
-        </p>
-        <div style={{ fontSize: '14px', color: '#10b981', fontWeight: '500' }}>
-          ✨ Transparent Bidding System
-        </div>
-      </div>
-
-      {/* Alert Messages (Error/Success/Profile Incomplete) */}
-      {profileIncomplete && (
-        <div style={{
-          padding: '12px',
-          marginBottom: '15px',
-          backgroundColor: '#fff3cd',
-          border: '1px solid #ffc107',
-          borderRadius: '4px',
-          color: '#856404',
-          fontSize: '14px'
-        }}>
-          ⚠️ Please complete your profile (name, address, phone) before booking.
-          <button
-            onClick={() => navigate('/profile')}
-            style={{
-              display: 'block',
-              marginTop: '10px',
-              padding: '8px 15px',
-              backgroundColor: '#ffc107',
-              color: '#000',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '14px'
-            }}
-          >
-            Go to Profile
-          </button>
-        </div>
-      )}
-
-      {error && (
-        <div style={{
-          padding: '12px',
-          marginBottom: '15px',
-          backgroundColor: '#fee',
-          border: '1px solid #fcc',
-          borderRadius: '4px',
-          color: '#c00',
-          fontSize: '14px'
-        }}>
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div style={{
-          padding: '12px',
-          marginBottom: '15px',
-          backgroundColor: '#efe',
-          border: '1px solid #cfc',
-          borderRadius: '4px',
-          color: '#060',
-          fontSize: '14px'
-        }}>
-          {success}
-        </div>
-      )}
-
-      {/* Booking Details and Scheduling Configuration Card */}
-      <div style={{
-        backgroundColor: '#f9f9f9',
-        padding: '20px',
-        borderRadius: '8px',
-        marginBottom: '20px',
-        border: '1px solid #eee'
-      }}>
-        <h4 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '16px', fontWeight: 'bold' }}>
-          📋 Your Booking Details
-        </h4>
-
-        {/* Profile Summary Section */}
-        <div style={{ marginBottom: '15px' }}>
-          <span style={{ fontWeight: 'bold', color: '#666', fontSize: '13px' }}>👤 Name:</span>
-          <p style={{ margin: '5px 0 0 0', fontSize: '15px', color: '#333' }}>{name || 'Not set'}</p>
-        </div>
-
-        <div style={{ marginBottom: '15px' }}>
-          <span style={{ fontWeight: 'bold', color: '#666', fontSize: '13px' }}>📞 Phone:</span>
-          <p style={{ margin: '5px 0 0 0', fontSize: '15px', color: '#333' }}>{userPhone || 'Not set'}</p>
-        </div>
-
-        <div style={{ marginBottom: '20px' }}>
-          <span style={{ fontWeight: 'bold', color: '#666', fontSize: '13px' }}>📍 Address:</span>
-          <p style={{ margin: '5px 0 0 0', fontSize: '15px', color: '#333', whiteSpace: 'pre-wrap' }}>
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: '#667eea', textDecoration: 'none' }}
-            >
-              {address || 'Not set'} ↗
-            </a>
+    <div className="service-page">
+      <section className="service-shell">
+        <header className="service-header">
+          <div className="service-badge">Editorial Concierge Booking</div>
+          <h1>
+            <span aria-hidden="true">{serviceIcons[type] || '🛠️'}</span> Book {type} in Kavali
+          </h1>
+          <p>
+            A guided 3-step journey with verified professionals, transparent quotes, and clear next steps.
           </p>
+          <div className="trust-signals">
+            <span>Verified Pros</span>
+            <span>Quote Approval</span>
+            <span>Track in Real-Time</span>
+          </div>
+        </header>
+
+        <div className="stepper" role="list" aria-label="Booking steps">
+          {steps.map((step) => (
+            <div
+              key={step.id}
+              role="listitem"
+              className={`step-item ${currentStep === step.id ? 'active' : ''} ${currentStep > step.id ? 'done' : ''}`}
+            >
+              <span>{step.id}</span>
+              <p>{step.label}</p>
+            </div>
+          ))}
         </div>
 
-        {/* Future/Scheduled Booking Toggle & Selection Section */}
-        <div style={{ borderTop: '1px solid #ddd', paddingTop: '20px' }}>
-          {/* Checkbox to enable/disable scheduled booking */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '15px' }}>
-            <input type="checkbox" checked={isScheduled} onChange={e => setIsScheduled(e.target.checked)} />
-            <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#333' }}>🗓️ Book for a future date/time?</span>
-          </label>
+        {profileIncomplete && (
+          <div className="alert warning">
+            Your profile appears incomplete. Update name, phone, and address for smoother booking.
+            <button onClick={() => navigate('/profile')}>Edit Profile</button>
+          </div>
+        )}
 
-          {/* Conditional rendering for date and time slot selectors */}
-          {isScheduled && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '15px', background: '#fff', borderRadius: '8px', border: '1px solid #ddd' }}>
-              {/* Date Input for Scheduling */}
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#666', display: 'block', marginBottom: '5px' }}>Select Date:</label>
-                <input
-                  type="date"
-                  value={scheduledDate}
-                  onChange={e => setScheduledDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]} // Prevent selecting past dates
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                />
+        {error && <div className="alert error">{error}</div>}
+        {success && <div className="alert success">{success}</div>}
+
+        <section className="step-content">
+          {currentStep === 1 && (
+            <div className="step-layout">
+              <h2>1. Service Selection & Details</h2>
+              <p className="step-note">Tell us what you need so professionals can quote accurately.</p>
+
+              <div className="form-grid two-col">
+                <label>
+                  Full Name
+                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your full name" />
+                </label>
+                <label>
+                  Phone Number
+                  <input value={userPhone} onChange={(e) => setUserPhone(e.target.value)} placeholder="10-digit mobile number" />
+                </label>
               </div>
-              {/* Time Slot Selection for Scheduling */}
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#666', display: 'block', marginBottom: '5px' }}>Select Time Slot:</label>
-                <select
-                  value={timeSlot}
-                  onChange={e => setTimeSlot(e.target.value)}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+
+              <label>
+                Service Address
+                <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} placeholder="House number, street, landmark" />
+              </label>
+
+              <div className="form-grid two-col">
+                <label>
+                  Request Title
+                  <input
+                    value={issueTitle}
+                    onChange={(e) => setIssueTitle(e.target.value)}
+                    placeholder={`Example: ${type === 'Plumber' ? 'Leaky kitchen tap' : 'Service request details'}`}
+                  />
+                </label>
+                <label>
+                  Photo (Optional)
+                  <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e.target.files[0])} disabled={uploadingPhoto} />
+                  <small>{uploadingPhoto ? 'Uploading image...' : requestedPhoto ? 'Photo attached successfully.' : 'A photo improves quote quality.'}</small>
+                </label>
+              </div>
+
+              <label>
+                Additional Instructions (Optional)
+                <textarea
+                  rows={3}
+                  value={jobDetails}
+                  onChange={(e) => setJobDetails(e.target.value)}
+                  placeholder="Share issue details, apartment floor, preferred call time, or access notes"
+                />
+              </label>
+            </div>
+          )}
+
+          {currentStep === 2 && (
+            <div className="step-layout">
+              <h2>2. Scheduling & Professional Selection</h2>
+              <p className="step-note">Choose when you need service and optionally nominate a preferred verified professional.</p>
+
+              <div className="mode-toggle">
+                <button
+                  className={!isScheduled ? 'active' : ''}
+                  onClick={() => {
+                    setIsScheduled(false);
+                    setScheduledDate('');
+                    setTimeSlot('');
+                  }}
                 >
-                  <option value="">-- Choose a slot --</option>
-                  <option value="9 AM - 12 PM">Morning (9 AM - 12 PM)</option>
-                  <option value="12 PM - 3 PM">Afternoon (12 PM - 3 PM)</option>
-                  <option value="3 PM - 6 PM">Evening (3 PM - 6 PM)</option>
+                  Immediate Service
+                </button>
+                <button className={isScheduled ? 'active' : ''} onClick={() => setIsScheduled(true)}>
+                  Schedule for Later
+                </button>
+              </div>
+
+              {isScheduled && (
+                <div className="form-grid two-col">
+                  <label>
+                    Preferred Date
+                    <input
+                      type="date"
+                      value={scheduledDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setScheduledDate(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Time Slot
+                    <select value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)}>
+                      <option value="">Choose a slot</option>
+                      <option value="9 AM - 12 PM">Morning (9 AM - 12 PM)</option>
+                      <option value="12 PM - 3 PM">Afternoon (12 PM - 3 PM)</option>
+                      <option value="3 PM - 6 PM">Evening (3 PM - 6 PM)</option>
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              <label>
+                Estimated Work Days
+                <select value={estimatedDays} onChange={(e) => setEstimatedDays(Number(e.target.value))}>
+                  <option value={1}>1 day</option>
+                  <option value={2}>2 days</option>
+                  <option value={3}>3 days</option>
+                  <option value={4}>4 days</option>
+                  <option value={5}>5+ days</option>
                 </select>
+              </label>
+
+              <div>
+                <h3 className="subhead">Preferred Verified Professional (Optional)</h3>
+                <div className="pro-grid">
+                  {professionals.map((pro) => (
+                    <button
+                      key={pro.id}
+                      className={`pro-card ${preferredProId === pro.id ? 'selected' : ''}`}
+                      onClick={() => setPreferredProId(preferredProId === pro.id ? '' : pro.id)}
+                    >
+                      <strong>{pro.name}</strong>
+                      <span>★ {pro.rating} | {pro.jobs} jobs</span>
+                      <span>Avg response: {pro.eta}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
 
-          <div style={{ marginTop: '12px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#666', display: 'block', marginBottom: '5px' }}>
-              Estimated Work Days:
-            </label>
-            <select
-              value={estimatedDays}
-              onChange={e => setEstimatedDays(Number(e.target.value))}
-              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-            >
-              <option value={1}>1 Day</option>
-              <option value={2}>2 Days</option>
-              <option value={3}>3 Days</option>
-              <option value={4}>4 Days</option>
-              <option value={5}>5+ Days</option>
-            </select>
-            {Number(estimatedDays) > 1 && (
-              <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px' }}>
-                Multi-day jobs will stay in progress until each day is marked complete.
+          {currentStep === 3 && (
+            <div className="step-layout">
+              <h2>3. Confirmation & Next Steps</h2>
+              <p className="step-note">Review details before final submission.</p>
+
+              <div className="summary-card">
+                <div><strong>Service:</strong> {type}</div>
+                <div><strong>Request:</strong> {issueTitle || 'Not provided'}</div>
+                <div><strong>Customer:</strong> {name || 'Not provided'}</div>
+                <div><strong>Phone:</strong> {userPhone || 'Not provided'}</div>
+                <div><strong>Address:</strong> {address || 'Not provided'}</div>
+                <div><strong>Booking Mode:</strong> {isScheduled ? 'Scheduled' : 'Immediate'}</div>
+                {isScheduled && (
+                  <>
+                    <div><strong>Date:</strong> {scheduledDate}</div>
+                    <div><strong>Time Slot:</strong> {timeSlot}</div>
+                  </>
+                )}
+                <div><strong>Estimated Days:</strong> {estimatedDays}</div>
+                <div><strong>Preferred Pro:</strong> {selectedProfessional ? selectedProfessional.name : 'No preference'}</div>
               </div>
-            )}
-          </div>
 
-          <div style={{ marginTop: '20px', borderTop: '1px solid #ddd', paddingTop: '20px' }}>
-            <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#333', display: 'block', marginBottom: '10px' }}>
-              📸 Upload Photo of Work (Optional)
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => handlePhotoUpload(e.target.files[0])}
-              disabled={uploadingPhoto}
-              style={{ fontSize: '13px', marginBottom: '10px' }}
-            />
-            {uploadingPhoto && <div style={{ fontSize: '12px', color: '#667eea' }}>⏳ Uploading photo...</div>}
-            {requestedPhoto && (
-              <div style={{ marginTop: '10px' }}>
-                <img src={requestedPhoto} alt="Requested work" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd' }} />
-                <div style={{ fontSize: '11px', color: '#10b981' }}>✅ Photo attached</div>
+              <div className="next-steps">
+                <h3>What happens next</h3>
+                <ul>
+                  <li>Your request is shared with local verified professionals.</li>
+                  <li>You receive one or more quotes in My Bookings.</li>
+                  <li>You approve your preferred quote and track progress live.</li>
+                </ul>
               </div>
-            )}
-            <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
-              Note: Uploading a clear photo helps professionals provide more accurate quotes.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Edit Profile Link */}
-      {profileIncomplete && (
-        <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-          <button
-            onClick={() => navigate('/profile')}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            ✏️ Edit Profile First
-          </button>
-        </div>
-      )}
-
-      {/* Action Buttons */}
-      <div style={{ display: 'flex', gap: '10px' }}>
-        <button
-          onClick={() => navigate('/')}
-          style={{
-            flex: 1,
-            padding: '12px',
-            backgroundColor: '#e0e0e0',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            fontSize: '15px'
-          }}
-        >
-          ← Back
-        </button>
-        <button
-          onClick={() => setShowConfirm(true)}
-          disabled={loading || !name || !address || !userPhone || profileIncomplete}
-          style={{
-            flex: 1,
-            padding: '12px',
-            backgroundColor: loading || !name || !address || !userPhone || profileIncomplete ? '#ccc' : '#667eea',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: loading || !name || !address || !userPhone || profileIncomplete ? 'not-allowed' : 'pointer',
-            fontWeight: 'bold',
-            fontSize: '15px',
-            transition: 'background 0.2s'
-          }}
-        >
-          {loading ? '⏳ Processing...' : '✓ Confirm Booking'}
-        </button>
-      </div>
-
-      {/* Confirmation Modal */}
-      {showConfirm && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: 'white',
-            padding: '30px',
-            borderRadius: '12px',
-            maxWidth: '420px',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '50px', marginBottom: '15px' }}>
-              {serviceIcons[type] || '🛠️'}
             </div>
-            <h3 style={{ fontSize: '20px', margin: '0 0 10px 0', color: '#333' }}>
-              Confirm Booking?
-            </h3>
-            <p style={{ color: '#666', margin: '10px 0', fontSize: '14px' }}>
-              You are about to book <strong>{type}</strong> service for:
-            </p>
-            {/* Confirmation Data Summary */}
-            <div style={{
-              backgroundColor: '#f0f4ff',
-              padding: '15px',
-              borderRadius: '8px',
-              marginBottom: '20px',
-              textAlign: 'left',
-              fontSize: '14px'
-            }}>
-              <div><strong>Name:</strong> {name}</div>
-              <div><strong>Phone:</strong> {userPhone}</div>
-              <div><strong>Address:</strong> {address}</div>
-              {/* Conditional display for Scheduled info */}
-              {isScheduled && (
-                <>
-                  <div style={{ marginTop: '8px' }}><strong>🗓️ Date:</strong> {scheduledDate}</div>
-                  <div><strong>🕒 Time Slot:</strong> {timeSlot}</div>
-                </>
-              )}
-              <div style={{ marginTop: '8px' }}><strong>⏳ Estimated Days:</strong> {estimatedDays}</div>
-            </div>
+          )}
+        </section>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => setShowConfirm(false)}
-                disabled={loading}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  backgroundColor: '#e0e0e0',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontWeight: 'bold',
-                  opacity: loading ? 0.6 : 1
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleBooking}
-                disabled={loading}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  backgroundColor: loading ? '#999' : '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontWeight: 'bold'
-                }}
-              >
-                {loading ? '⏳ Booking...' : '✓ Confirm & Book'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        <footer className="service-actions">
+          {currentStep > 1 ? (
+            <button className="btn ghost" onClick={goBack}>
+              Back
+            </button>
+          ) : (
+            <button className="btn ghost" onClick={() => navigate('/')}>
+              Cancel
+            </button>
+          )}
+
+          {currentStep < 3 ? (
+            <button className="btn primary" onClick={goNext}>
+              Continue
+            </button>
+          ) : (
+            <button className="btn primary" onClick={handleBooking} disabled={loading}>
+              {loading ? 'Submitting...' : 'Confirm Booking'}
+            </button>
+          )}
+        </footer>
+      </section>
     </div>
   );
 }

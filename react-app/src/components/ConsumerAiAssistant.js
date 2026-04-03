@@ -7,12 +7,17 @@ import {
   findRelevantService,
 } from '../utils/aiAssistant';
 
-export default function ConsumerAiAssistant({ services = [], onBookService }) {
+export default function ConsumerAiAssistant({
+  services = [],
+  onBookService,
+  externalPrompt = '',
+  onPromptConsumed,
+}) {
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      text: 'Hi, I’m Gito AI. Ask me which service to book or the expected cost.',
+      text: 'Hi, I’m Gito AI. Ask about service choice, price, schedule, or booking steps.',
     },
   ]);
   const [loading, setLoading] = useState(false);
@@ -61,7 +66,7 @@ export default function ConsumerAiAssistant({ services = [], onBookService }) {
   }, [messages, loading, isOpen]);
 
   const promptSuggestions = useMemo(
-    () => buildPromptSuggestions(selectedService || 'service').slice(0, 2),
+    () => buildPromptSuggestions(selectedService || 'service').slice(0, 3),
     [selectedService]
   );
 
@@ -111,12 +116,21 @@ export default function ConsumerAiAssistant({ services = [], onBookService }) {
   const matchedService = services.find((service) => service.name === selectedService)
     || findRelevantService(messages[messages.length - 1]?.text || '');
 
+  useEffect(() => {
+    if (!externalPrompt || !externalPrompt.trim()) return;
+
+    sendQuestion(externalPrompt.trim());
+    if (onPromptConsumed) {
+      onPromptConsumed();
+    }
+  }, [externalPrompt]);
+
   return (
     <div
       style={{
         position: 'fixed',
         right: '16px',
-        bottom: '16px',
+        bottom: '20px',
         zIndex: 1200,
       }}
     >
@@ -126,15 +140,15 @@ export default function ConsumerAiAssistant({ services = [], onBookService }) {
           style={{
             border: 'none',
             borderRadius: '999px',
-            background: 'linear-gradient(135deg, #1d4ed8 0%, #111827 100%)',
+            background: 'linear-gradient(135deg, #0f766e 0%, #11353e 100%)',
             color: 'white',
             fontWeight: 'bold',
             padding: '12px 16px',
             cursor: 'pointer',
-            boxShadow: '0 12px 24px rgba(15, 23, 42, 0.2)',
+            boxShadow: '0 12px 24px rgba(15, 23, 42, 0.24)',
           }}
         >
-          🤖 Ask Gito AI
+          Ask Gito AI
         </button>
       )}
 
@@ -145,7 +159,7 @@ export default function ConsumerAiAssistant({ services = [], onBookService }) {
             height: 'min(520px, 72vh)',
             display: 'flex',
             flexDirection: 'column',
-            background: 'linear-gradient(135deg, #111827 0%, #1d4ed8 100%)',
+            background: 'linear-gradient(135deg, #0d2c33 0%, #0f766e 100%)',
             borderRadius: '16px',
             color: 'white',
             overflow: 'hidden',
@@ -165,8 +179,8 @@ export default function ConsumerAiAssistant({ services = [], onBookService }) {
                     padding: '7px 10px',
                     borderRadius: '8px',
                     border: 'none',
-                    background: '#f59e0b',
-                    color: '#111827',
+                    background: '#f97316',
+                    color: '#1f2937',
                     fontWeight: 'bold',
                     cursor: 'pointer',
                     fontSize: '12px',
@@ -208,7 +222,7 @@ export default function ConsumerAiAssistant({ services = [], onBookService }) {
                 key={`${message.role}-${index}`}
                 style={{
                   alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
-                  background: message.role === 'user' ? '#f59e0b' : 'rgba(255,255,255,0.12)',
+                  background: message.role === 'user' ? '#f97316' : 'rgba(255,255,255,0.12)',
                   color: message.role === 'user' ? '#111827' : 'white',
                   borderRadius: '10px',
                   padding: '8px 10px',
@@ -271,8 +285,8 @@ export default function ConsumerAiAssistant({ services = [], onBookService }) {
                   padding: '10px 14px',
                   borderRadius: '8px',
                   border: 'none',
-                  background: loading ? '#93c5fd' : '#22c55e',
-                  color: '#052e16',
+                  background: loading ? '#9ca3af' : '#f97316',
+                  color: '#1f2937',
                   fontWeight: 'bold',
                   cursor: loading ? 'not-allowed' : 'pointer',
                 }}

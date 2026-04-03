@@ -1,10 +1,13 @@
 {
   "files": {
-    "main.js": "/Gigtos/static/js/main.d8c51f25.js",
+    "main.css": "/Gigtos/static/css/main.081e1132.css",
+    "main.js": "/Gigtos/static/js/main.2332fa15.js",
     "index.html": "/Gigtos/index.html",
-    "main.d8c51f25.js.map": "/Gigtos/static/js/main.d8c51f25.js.map"
+    "main.081e1132.css.map": "/Gigtos/static/css/main.081e1132.css.map",
+    "main.2332fa15.js.map": "/Gigtos/static/js/main.2332fa15.js.map"
   },
   "entrypoints": [
-    "static/js/main.d8c51f25.js"
+    "static/css/main.081e1132.css",
+    "static/js/main.2332fa15.js"
   ]
 }

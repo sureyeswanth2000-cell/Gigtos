@@ -433,3 +433,216 @@ Long content handling:
 
 Owner: Product Design + Frontend
 Use this as the source of truth for ongoing UI implementation and reviews.
+
+## 12. Strict Page-Level UI Blueprint (Pixel Values)
+
+Use this section as non-negotiable implementation guidance for frontend delivery.
+
+### 12.1 Global Layout Grid
+
+Desktop (>=1200px):
+- Max content width: 1120px
+- Side gutter: 24px min
+- 12-column grid, 24px gutters
+- Section vertical spacing: 32px default, 48px major transitions
+
+Tablet (701px-1199px):
+- Max content width: 960px
+- Side gutter: 20px
+- 8-column grid, 20px gutters
+- Section vertical spacing: 24px to 32px
+
+Mobile (<=700px):
+- Side gutter: 14px
+- Single-column flow
+- Section vertical spacing: 20px to 24px
+- Sticky bottom-safe area padding: 90px min when bottom nav is present
+
+### 12.2 Home Page Exact Specs
+
+Header:
+- Height desktop: 72px
+- Height mobile: 60px
+- Logo size: 22px bold
+- Primary auth button height: 40px desktop, 38px mobile
+- Nav link text: 14px weight 500
+
+Hero:
+- Hero card radius: 20px
+- Hero internal padding desktop: 28px
+- Hero internal padding mobile: 20px
+- H1 size desktop: clamp(44px, 5vw, 56px)
+- H1 size mobile: 32px
+- Subtext size: 17px desktop, 15px mobile
+- Primary CTA height: 44px desktop, 42px mobile
+- CTA horizontal padding: 14px to 18px
+- Trust chip height: 30px
+- Trust chip text: 12px weight 500
+
+AI prompt panel:
+- Panel min width desktop: 320px
+- Prompt chip min height: 36px
+- Prompt chip padding: 9px 11px
+- Prompt chip radius: 10px
+
+Services section:
+- Section card padding: 24px desktop, 16px mobile
+- Services grid desktop: 2 columns in current implementation (upgrade path: 4 columns for wide desktop)
+- Services grid mobile: 2 columns
+- Service card min height: 220px desktop, auto mobile
+- Service icon box: 38px
+- Service title: 22px desktop, 18px mobile
+- Service description: 14px
+- Badge text: 11px weight 700
+- Card action button height: 42px
+
+How-it-works section:
+- Step card padding: 16px
+- Step number text: 16px weight 800
+- Step title: 20px
+- Step body: 14px
+
+Testimonials and Why section:
+- Testimonial card padding: 16px
+- Quote text: 15px
+- Name footer text: 14px weight 700
+
+Footer / mobile quick nav:
+- Desktop footer vertical padding: 20px
+- Mobile quick nav height: 58px container minimum
+- Mobile quick nav button text: 11px weight 700
+- Mobile quick nav button radius: 8px
+
+### 12.3 Booking Flow Page Exact Specs
+
+Page shell:
+- Max width: 980px
+- Outer padding desktop: 22px to 24px
+- Outer padding mobile: 12px to 14px
+- Shell radius: 20px desktop, 14px mobile
+- Shell border: 1px solid var(--color-border-200)
+
+Booking hero/header:
+- Badge size: 12px uppercase
+- H1: clamp(26px, 3.4vw, 44px)
+- Intro text: 16px desktop, 14px mobile
+- Trust chips: 30px height, 12px text
+
+Stepper:
+- Step card height: 72px min
+- Step circle: 28x28
+- Step title text: 13px weight 700
+- Horizontal gap: 8px to 10px
+- Mobile behavior: stack to single column
+
+Form controls:
+- Label text: 13px weight 700
+- Input/select/textarea height: 44px (textarea auto with min 88px)
+- Input horizontal padding: 12px
+- Input radius: 9px
+- Input border: #C9D2DE
+- Focus ring: 2px rgba(118, 75, 162, 0.25)
+- Field group spacing: 12px
+
+Mode toggle (Immediate vs Scheduled):
+- Container radius: 11px
+- Toggle option height: 40px
+- Option text: 14px weight 700
+
+Pro cards:
+- Card radius: 10px
+- Card padding: 12px
+- Card min height: 96px
+- Title text: 15px weight 700
+- Meta text: 12px
+
+Confirmation:
+- Summary card padding: 12px
+- Summary row text: 14px
+- Next-steps list text: 14px
+- Action row button height: 44px
+- Mobile sticky action bar bottom offset: 8px
+
+### 12.4 My Bookings Page Exact Specs
+
+Top controls:
+- Search input height: 42px
+- Filter select height: 42px
+- Gap between controls: 10px
+
+Booking cards:
+- Card padding: 16px
+- Card radius: 12px
+- Card border: 1px solid var(--color-border-200)
+- Service title: 20px
+- Metadata text: 13px
+- Status chip height: 28px
+- Status chip text: 12px weight 600
+- Primary action button height: 40px
+
+Quotes block:
+- Quote card padding: 12px
+- Quote row gap: 8px
+- Price text: 18px weight 700
+
+### 12.5 Auth + Profile Exact Specs
+
+Auth card:
+- Max width: 420px
+- Padding: 24px
+- Radius: 16px
+
+Inputs:
+- Height: 44px
+- Label spacing from field: 6px
+- Error text: 12px
+
+Primary submit:
+- Height: 44px
+- Full width
+- Text: 15px weight 700
+
+Profile completeness module:
+- Progress bar height: 8px
+- Section card padding: 16px
+- Section heading: 18px weight 700
+
+### 12.6 Admin + Dashboard Exact Specs
+
+KPI cards:
+- Min width: 220px
+- Padding: 16px
+- Radius: 12px
+- KPI value text: 28px weight 800
+- KPI label text: 12px uppercase optional
+
+Tables and lists:
+- Row height: 52px min
+- Header text: 12px weight 700 uppercase optional
+- Cell text: 14px
+- Action buttons: 36px to 40px height
+
+### 12.7 Mandatory Remove/Add/Change Checklist
+
+Remove immediately:
+- Emoji-only iconography in core card/UI actions
+- Inconsistent button colors for same action type
+- Over-tight card text blocks with less than 12px vertical rhythm
+
+Add immediately:
+- Verified badge treatment across service and professional cards
+- Clear secondary CTA where users are not ready to book
+- Empty/loading/error states for each key page
+
+Change immediately:
+- Use emerald for all primary submit/convert buttons
+- Keep indigo for brand context and navigational emphasis
+- Standardize all inputs/buttons to shared heights and radii
+
+### 12.8 Acceptance Criteria (UI Sign-Off)
+
+- Every page conforms to token palette and typography rules
+- Spacing rhythm follows the 8pt system with no ad-hoc values
+- All interactive elements include hover, focus, active, disabled states
+- Mobile layout has no clipped controls and maintains 44x44 touch targets
+- Home-to-booking flow has clear visual hierarchy and conversion-first CTAs

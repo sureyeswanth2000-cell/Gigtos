@@ -400,11 +400,11 @@ function Auth() {
   };
   if (phase === 'typeSelect') {
     return (
-      <div style={{ maxWidth: '500px', margin: '60px auto', padding: '40px', textAlign: 'center' }}>
-        <h1 style={{ fontSize: '32px', marginBottom: '10px', color: '#333' }}>
-          🏠 Welcome to Gigto
+      <div style={{ maxWidth: '560px', margin: '50px auto', padding: '30px 20px 70px', textAlign: 'center', color: '#1f2937' }}>
+        <h1 style={{ fontSize: '40px', marginBottom: '8px', color: '#1f2937', fontFamily: 'Manrope, Inter, sans-serif' }}>
+          Welcome to Gigto
         </h1>
-        <p style={{ color: '#666', marginBottom: '40px', fontSize: '16px' }}>
+        <p style={{ color: '#4b5563', marginBottom: '30px', fontSize: '16px' }}>
           Choose how you'd like to access the platform
         </p>
 
@@ -417,9 +417,9 @@ function Auth() {
             }}
             style={{
               padding: '40px',
-              border: '2px solid #667eea',
+              border: '2px solid #764ba2',
               borderRadius: '12px',
-              backgroundColor: '#f0f4ff',
+              backgroundColor: '#f8f7fb',
               cursor: 'pointer',
               fontSize: '16px',
               fontWeight: 'bold',
@@ -435,7 +435,7 @@ function Auth() {
               e.target.style.boxShadow = 'none';
             }}
           >
-            <div style={{ fontSize: '40px', marginBottom: '10px' }}>👤</div>
+            <div style={{ fontSize: '34px', marginBottom: '10px' }}>User</div>
             Book Services as a User
             <div style={{ fontSize: '13px', color: '#666', marginTop: '10px', fontWeight: 'normal' }}>
               Login with phone number & OTP
@@ -468,7 +468,7 @@ function Auth() {
               e.target.style.boxShadow = 'none';
             }}
           >
-            <div style={{ fontSize: '40px', marginBottom: '10px' }}>👨‍💼</div>
+            <div style={{ fontSize: '34px', marginBottom: '10px' }}>Admin</div>
             Manage Services as Admin
             <div style={{ fontSize: '13px', color: '#666', marginTop: '10px', fontWeight: 'normal' }}>
               Login with email & password
@@ -501,7 +501,7 @@ function Auth() {
               e.target.style.boxShadow = 'none';
             }}
           >
-            <div style={{ fontSize: '40px', marginBottom: '10px' }}>👷</div>
+            <div style={{ fontSize: '34px', marginBottom: '10px' }}>Worker</div>
             Register as Worker
             <div style={{ fontSize: '13px', color: '#666', marginTop: '10px', fontWeight: 'normal' }}>
               Get approved by region lead
@@ -514,8 +514,8 @@ function Auth() {
 
   if (userType === 'worker' && phase === 'workerSelect') {
     return (
-      <div style={{ maxWidth: '500px', margin: '60px auto', padding: '30px', textAlign: 'center' }}>
-        <h2 style={{ marginBottom: '8px' }}>👷 Worker Access</h2>
+      <div style={{ maxWidth: '540px', margin: '50px auto', padding: '24px 16px 70px', textAlign: 'center', color: '#1f2937' }}>
+        <h2 style={{ marginBottom: '8px', fontSize: '32px', fontFamily: 'Manrope, Inter, sans-serif' }}>Worker Access</h2>
         <p style={{ color: '#666', marginBottom: '24px' }}>Choose how you want to continue</p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -533,7 +533,7 @@ function Auth() {
               cursor: 'pointer'
             }}
           >
-            🔓 Login (Phone + Password)
+            Login (Phone + Password)
           </button>
 
           <button
@@ -550,7 +550,7 @@ function Auth() {
               cursor: 'pointer'
             }}
           >
-            📱 Activate Existing Worker (Already Added By Mason)
+            Activate Existing Worker (Already Added By Mason)
           </button>
 
           <button
@@ -567,7 +567,7 @@ function Auth() {
               cursor: 'pointer'
             }}
           >
-            ✍️ Register New Worker
+            Register New Worker
           </button>
         </div>
 
@@ -598,15 +598,16 @@ function Auth() {
       maxWidth: '420px',
       margin: '40px auto',
       padding: '30px',
-      border: '1px solid #e0e0e0',
-      borderRadius: '12px',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-      fontFamily: 'Arial, sans-serif'
+      border: '1px solid #d6d8de',
+      borderRadius: '16px',
+      boxShadow: '0 10px 24px rgba(17,24,39,0.08)',
+      fontFamily: 'Inter, sans-serif',
+      background: '#fff'
     }}>
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-        <h2 style={{ margin: '0 0 5px 0', fontSize: '24px', color: '#333' }}>
-          {userType === 'user' ? '👤 User' : userType === 'admin' ? '👨‍💼 Admin' : '👷 Worker'} {phase === 'login' ? 'Login' : 'Register/Sign Up'}
+        <h2 style={{ margin: '0 0 5px 0', fontSize: '28px', color: '#1f2937', fontFamily: 'Manrope, Inter, sans-serif' }}>
+          {userType === 'user' ? 'User' : userType === 'admin' ? 'Admin' : 'Worker'} {phase === 'login' ? 'Login' : 'Register/Sign Up'}
         </h2>
         <p style={{ color: '#666', margin: '5px 0', fontSize: '13px' }}>
           {userType === 'user' ? 'Book services with phone & OTP' : userType === 'admin' ? 'Manage your service business' : 'Register and get approved by region lead'}
@@ -734,10 +735,10 @@ function Auth() {
             style={{
               width: '100%',
               padding: '11px',
-              backgroundColor: loading ? '#ccc' : '#667eea',
+              backgroundColor: loading ? '#ccc' : '#057A31',
               color: 'white',
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: '10px',
               fontSize: '15px',
               fontWeight: 'bold',
               cursor: loading ? 'not-allowed' : 'pointer',

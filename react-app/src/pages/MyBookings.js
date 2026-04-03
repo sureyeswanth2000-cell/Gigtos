@@ -34,15 +34,15 @@ const statusColors = {
 
 // UI CONFIG: Human-readable labels for the user interface
 const statusLabels = {
-  'pending': '⏳ Pending',
-  'assigned': '👷 Assigned',
-  'in_progress': '🔧 In Progress',
-  'awaiting_confirmation': '✅ Awaiting Confirmation',
-  'completed': '✓ Completed',
-  'cancelled': '✕ Cancelled',
-  'quoted': '💰 Quote Received',
-  'accepted': '🤝 Price Accepted',
-  'scheduled': '📅 Scheduled',
+  'pending': 'Pending',
+  'assigned': 'Assigned',
+  'in_progress': 'In Progress',
+  'awaiting_confirmation': 'Awaiting Confirmation',
+  'completed': 'Completed',
+  'cancelled': 'Cancelled',
+  'quoted': 'Quote Received',
+  'accepted': 'Price Accepted',
+  'scheduled': 'Scheduled',
 };
 
 // UI CONFIG: Category-specific iconography
@@ -726,17 +726,39 @@ export default function MyBookings() {
 
   /* ── Render ── */
   return (
-    <div style={{ maxWidth: '650px', margin: '0 auto', padding: '20px' }}>
-      <h2 style={{ fontSize: '24px', marginBottom: '20px', color: '#333' }}>📦 My Bookings</h2>
+    <div style={{ maxWidth: '860px', margin: '0 auto', padding: '24px 18px 90px', color: '#1f2937' }}>
+      <h2 style={{ fontSize: '34px', marginBottom: '8px', color: '#1f2937', fontFamily: 'Manrope, Inter, sans-serif' }}>
+        My Bookings
+      </h2>
+      <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#4b5563' }}>
+        Track requests, compare quotes, and manage service progress in one place.
+      </p>
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '18px' }}>
         <input
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Search by service, status, location, booking id"
-          style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px' }}
+          style={{
+            flex: 1,
+            padding: '11px 12px',
+            border: '1px solid #d1d5db',
+            borderRadius: '10px',
+            fontSize: '14px',
+            background: 'white'
+          }}
         />
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px' }}>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          style={{
+            padding: '11px 12px',
+            border: '1px solid #d1d5db',
+            borderRadius: '10px',
+            fontSize: '14px',
+            background: 'white'
+          }}
+        >
           <option value="all">All</option>
           <option value="pending">Pending</option>
           <option value="scheduled">Scheduled</option>
@@ -774,22 +796,22 @@ export default function MyBookings() {
 
           {/* SECTION: ACTIVE BOOKINGS (Jobs in progress or awaiting assignment) */}
           <div style={{ marginBottom: '30px' }}>
-            <h3 style={{ fontSize: '17px', color: '#333', marginBottom: '12px' }}>
-              🟡 Active Bookings ({active.length})
+            <h3 style={{ fontSize: '20px', color: '#1f2937', marginBottom: '12px', fontFamily: 'Manrope, Inter, sans-serif' }}>
+              Active Bookings ({active.length})
             </h3>
             {active.length === 0
-              ? <div style={{ padding: '20px', textAlign: 'center', background: '#f5f5f5', borderRadius: '8px', color: '#999' }}>No active bookings</div>
+              ? <div style={{ padding: '20px', textAlign: 'center', background: '#f8f7fb', borderRadius: '10px', color: '#6b7280', border: '1px solid #d6d8de' }}>No active bookings</div>
               : active.map(b => <BookingCard key={b.id} booking={b} isActive={true} />)
             }
           </div>
 
           {/* SECTION: COMPLETED HISTORY (Successful past jobs) */}
           <div style={{ marginBottom: '30px' }}>
-            <h3 style={{ fontSize: '17px', color: '#333', marginBottom: '12px' }}>
-              ✓ Completed ({completed.length})
+            <h3 style={{ fontSize: '20px', color: '#1f2937', marginBottom: '12px', fontFamily: 'Manrope, Inter, sans-serif' }}>
+              Completed ({completed.length})
             </h3>
             {completed.length === 0
-              ? <div style={{ padding: '20px', textAlign: 'center', background: '#f5f5f5', borderRadius: '8px', color: '#999' }}>No completed bookings</div>
+              ? <div style={{ padding: '20px', textAlign: 'center', background: '#f8f7fb', borderRadius: '10px', color: '#6b7280', border: '1px solid #d6d8de' }}>No completed bookings</div>
               : completed.map(b => <BookingCard key={b.id} booking={b} isActive={false} />)
             }
           </div>
@@ -797,8 +819,8 @@ export default function MyBookings() {
           {/* SECTION: CANCELLED ARCHIVE (Discarded transactions) */}
           {cancelled.length > 0 && (
             <div>
-              <h3 style={{ fontSize: '17px', color: '#333', marginBottom: '12px' }}>
-                ✕ Cancelled ({cancelled.length})
+              <h3 style={{ fontSize: '20px', color: '#1f2937', marginBottom: '12px', fontFamily: 'Manrope, Inter, sans-serif' }}>
+                Cancelled ({cancelled.length})
               </h3>
               {cancelled.map(b => <BookingCard key={b.id} booking={b} isActive={false} />)}
             </div>

@@ -103,12 +103,13 @@ export default function Profile() {
   };
 
   if (loading) {
-    return <div style={{ padding: "20px", textAlign: "center" }}>Loading profile...</div>;
+    return <div style={{ padding: "24px", textAlign: "center", color: "#4b5563" }}>Loading profile...</div>;
   }
 
   return (
-    <div style={{ maxWidth: "500px", margin: "20px auto", padding: "20px" }}>
-      <h2 style={{ marginBottom: "20px" }}>👤 My Profile</h2>
+    <div style={{ maxWidth: "620px", margin: "20px auto", padding: "24px 18px 90px", color: '#1f2937' }}>
+      <h2 style={{ marginBottom: "8px", fontSize: '34px', fontFamily: 'Manrope, Inter, sans-serif' }}>My Profile</h2>
+      <p style={{ margin: '0 0 16px 0', color: '#4b5563', fontSize: '14px' }}>Keep your contact details up to date for faster booking confirmations.</p>
 
       {error && (
         <div style={{
@@ -140,9 +141,10 @@ export default function Profile() {
 
       <div style={{
         padding: "20px",
-        border: "1px solid #ddd",
-        borderRadius: "8px",
-        backgroundColor: "#fafafa"
+        border: "1px solid #d6d8de",
+        borderRadius: "12px",
+        backgroundColor: "#fff",
+        boxShadow: '0 10px 24px rgba(17,24,39,0.08)'
       }}>
         {isAdmin && (
           <div style={{
@@ -154,7 +156,7 @@ export default function Profile() {
             color: "#01579b",
             fontSize: "13px"
           }}>
-            👨‍💼 Admin Account
+            Admin Account
           </div>
         )}
 
@@ -250,10 +252,10 @@ export default function Profile() {
                 style={{
                   flex: 1,
                   padding: "10px",
-                  backgroundColor: saving ? "#ccc" : "#28a745",
+                  backgroundColor: saving ? "#ccc" : "#057A31",
                   color: "white",
                   border: "none",
-                  borderRadius: "4px",
+                  borderRadius: "8px",
                   cursor: saving ? "not-allowed" : "pointer",
                   fontWeight: "bold"
                 }}
@@ -265,10 +267,10 @@ export default function Profile() {
                 style={{
                   flex: 1,
                   padding: "10px",
-                  backgroundColor: "#6c757d",
+                  backgroundColor: "#4B5563",
                   color: "white",
                   border: "none",
-                  borderRadius: "4px",
+                  borderRadius: "8px",
                   cursor: "pointer",
                   fontWeight: "bold"
                 }}
@@ -306,10 +308,10 @@ export default function Profile() {
               style={{
                 width: "100%",
                 padding: "10px",
-                backgroundColor: "#007bff",
+                backgroundColor: "#057A31",
                 color: "white",
                 border: "none",
-                borderRadius: "4px",
+                borderRadius: "8px",
                 cursor: "pointer",
                 fontWeight: "bold",
                 marginTop: "10px"
@@ -324,10 +326,10 @@ export default function Profile() {
       {/* ═══ Cashback Wallet ═══ */}
       {!isAdmin && (
         <div style={{
-          marginTop: '20px', padding: '20px', border: '1px solid #ddd',
-          borderRadius: '8px', backgroundColor: '#fafafa'
+          marginTop: '20px', padding: '20px', border: '1px solid #d6d8de',
+          borderRadius: '12px', backgroundColor: '#fff', boxShadow: '0 10px 24px rgba(17,24,39,0.08)'
         }}>
-          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#333' }}>🎁 Cashback Wallet</h3>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '20px', color: '#1f2937', fontFamily: 'Manrope, Inter, sans-serif' }}>Cashback Wallet</h3>
 
           {(() => {
             const activeCashbacks = cashbacks.filter(c => c.cashbackStatus === 'active');

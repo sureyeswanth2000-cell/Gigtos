@@ -116,13 +116,25 @@ export default function Admin() {
   ];
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px 18px 90px', color: '#1f2937' }}>
+    <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '20px' }}>
       {/* Header */}
       <div style={{ marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '34px', margin: '0 0 8px 0', color: '#1f2937', fontFamily: 'Manrope, Inter, sans-serif' }}>
-          Admin Dashboard
+        <h1 style={{ fontSize: '28px', margin: '0 0 10px 0', color: '#333' }}>
+          👨‍💼 Admin Dashboard
         </h1>
-        <p style={{ color: '#4b5563', margin: 0, fontSize: '14px' }}>Manage workers, bookings, and region performance from one workspace.</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <p style={{ color: '#666', margin: 0 }}>Manage your service business and workers</p>
+          <button 
+            onClick={() => navigate('/admin/ai-instructions')}
+            style={{
+              padding: '8px 16px', background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+              border: 'none', color: 'white', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold',
+              cursor: 'pointer', boxShadow: '0 4px 10px rgba(99, 102, 241, 0.3)', display: 'flex', alignItems: 'center', gap: '6px'
+            }}
+          >
+            🧠 AI Brain Config
+          </button>
+        </div>
       </div>
 
       {/* ═══ Probation Alert Banner ═══ */}
@@ -168,11 +180,11 @@ export default function Admin() {
       {/* ═══ Region Performance Score Card ═══ */}
       <div style={{
         background: 'white', borderRadius: '16px', padding: '24px',
-        marginBottom: '30px', border: '1px solid #d6d8de',
-        boxShadow: '0 10px 24px rgba(17,24,39,0.08)',
+        marginBottom: '30px', border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
       }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '20px', color: '#1f2937', fontFamily: 'Manrope, Inter, sans-serif' }}>
-          Region Performance Score
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#475569' }}>
+          📊 Region Performance Score
         </h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '30px', flexWrap: 'wrap' }}>
           {/* Score Gauge */}
@@ -226,11 +238,11 @@ export default function Admin() {
               padding: '20px',
               backgroundColor: 'white',
               border: `2px solid ${card.color}`,
-              borderRadius: '14px',
+              borderRadius: '12px',
               cursor: card.path !== '#' ? 'pointer' : 'default',
               textAlign: 'center',
               transition: 'all 0.2s',
-              boxShadow: '0 8px 18px rgba(17,24,39,0.08)'
+              boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
             }}
             onMouseEnter={(e) => {
               if (card.path !== '#') {
@@ -257,7 +269,7 @@ export default function Admin() {
       {/* Account Status */}
       <div style={{
         backgroundColor: '#fff', padding: '20px', borderRadius: '12px',
-        border: '1px solid #d6d8de', marginBottom: '30px',
+        border: '1px solid #eee', marginBottom: '30px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -307,16 +319,16 @@ export default function Admin() {
 
       {/* Quick Actions */}
       <div style={{
-        backgroundColor: '#f8f7fb', padding: '30px', borderRadius: '12px',
-        border: '1px solid #d6d8de', marginBottom: '30px'
+        backgroundColor: '#f0f4ff', padding: '30px', borderRadius: '12px',
+        border: '1px solid #dde1ff', marginBottom: '30px'
       }}>
-        <h3 style={{ margin: '0 0 20px 0', fontSize: '20px', color: '#1f2937', fontFamily: 'Manrope, Inter, sans-serif' }}>
-          Quick Actions
+        <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', color: '#333' }}>
+          ⚡ Quick Actions
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
           <button onClick={() => navigate('/admin/workers')}
-            style={{ padding: '12px 20px', backgroundColor: '#057A31', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-            Manage Workers
+            style={{ padding: '12px 20px', backgroundColor: '#667eea', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            👨‍🔧 Manage Workers
           </button>
           <button onClick={() => navigate('/admin/bookings')}
             style={{ padding: '12px 20px', backgroundColor: '#f59e0b', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
@@ -325,6 +337,10 @@ export default function Admin() {
           <button onClick={() => navigate('/admin/workers')}
             style={{ padding: '12px 20px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
             ➕ Add New Worker
+          </button>
+          <button onClick={() => navigate('/admin/ai-instructions')}
+            style={{ padding: '12px 20px', background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            🧠 Configure AI Brain
           </button>
         </div>
       </div>

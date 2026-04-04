@@ -14,10 +14,11 @@ import Profile from './pages/Profile';
 import Admin from './pages/Admin';
 import Workers from './pages/Workers';
 import AdminBookings from './pages/AdminBookings';
-import Chat from './pages/Chat';
+import WorkerDashboard from './pages/WorkerDashboard';
+import AIInstructions from './pages/AIInstructions';
 import SuperAdmin from './pages/SuperAdmin';
 import RegionLeadDashboard from './pages/RegionLeadDashboard';
-import WorkerDashboard from './pages/WorkerDashboard';
+import AIAssistantChatbot from './components/AIAssistantChatbot';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -102,7 +103,7 @@ function App() {
           <Route path="/service" element={<ProtectedRoute><Service /></ProtectedRoute>} />
           <Route path="/my-bookings" element={<ProtectedRoute><MyBookings /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+          <Route path="/chat" element={<ProtectedRoute><AIAssistantChatbot /></ProtectedRoute>} />
           <Route path="/complete-profile-phone" element={<ProtectedRoute><CompleteProfilePhone /></ProtectedRoute>} />
 
           {/* Protected Admin Routes */}
@@ -110,6 +111,7 @@ function App() {
           <Route path="/admin/workers" element={<ProtectedRoute requireAdmin><Workers /></ProtectedRoute>} />
           <Route path="/admin/bookings" element={<ProtectedRoute requireAdmin><AdminBookings /></ProtectedRoute>} />
           <Route path="/admin/region-lead" element={<ProtectedRoute requireAdmin><RegionLeadDashboard /></ProtectedRoute>} />
+          <Route path="/admin/ai-instructions" element={<ProtectedRoute requireAdmin><AIInstructions /></ProtectedRoute>} />
 
           {/* Protected Worker Route */}
           <Route path="/worker/dashboard" element={<ProtectedRoute><WorkerDashboard /></ProtectedRoute>} />

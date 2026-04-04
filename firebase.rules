@@ -277,5 +277,13 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
+    /* ============================
+       CONFIG COLLECTION (AI Instructions)
+    ============================ */
+    match /config/{configId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
   }
 }

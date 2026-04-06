@@ -1,0 +1,6 @@
+connectorId: "gigtos-connector"
+authMode: "PUBLIC"
+generate:
+  javascriptSdk:
+    outputDir: "../../react-app/src/dataconnect"
+    package: "@gigtos/dataconnect"

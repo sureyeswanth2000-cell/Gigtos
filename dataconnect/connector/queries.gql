@@ -1,0 +1,394 @@
+# Firebase Data Connect — GraphQL Queries
+# All read operations for Gigtos @ 1 Lakh Users
+# See: DATA_CONNECT_MIGRATION_PLAN.md
+
+# ─── User Queries ─────────────────────────────────────────────────────────────
+
+# Fetch user profile by Firebase UID (used on login)
+query GetUserByFirebaseUid($firebaseUid: String!) @auth(level: USER_EMAIL_VERIFIED) {
+  users(where: { firebaseUid: { eq: $firebaseUid } }) {
+    userId
+    name
+    email
+    phone
+    address
+    createdAt
+  }
+}
+
+# Get all bookings for a specific user (user's booking history)
+query GetUserBookings($userId: UUID!, $limit: Int, $offset: Int) @auth(level: USER_EMAIL_VERIFIED) {
+  bookings(
+    where: { userId: { eq: $userId } }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    bookingId
+    issueTitle
+    status
+    scheduledDate
+    createdAt
+    serviceType { name }
+    assignedWorker { name phone }
+    admin { name areaName }
+    escrowStatus
+    rating
+  }
+}
+
+# Get single booking detail (full view — replaces v_booking_full)
+query GetBookingDetail($bookingId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
+  booking(id: $bookingId) {
+    bookingId
+    issueTitle
+    jobDetails
+    status
+    scheduledDate
+    estimatedDays
+    completedWorkDays
+    isMultiDay
+    startedAt
+    finishedAt
+    escrowStatus
+    rating
+    createdAt
+    updatedAt
+    user { name phone email address }
+    serviceType { name }
+    timeSlot { label }
+    assignedWorker { name phone area rating completedJobs }
+    admin { name areaName }
+    quotes { quoteId price isAccepted admin { name } createdAt }
+    photos { photoId label url photoType uploadedAt }
+    dailyNotes { noteDate note admin { name } }
+    dispute {
+      disputeId status reason raisedAt escalationStatus
+      escalatedAt decision resolutionTime
+    }
+    sla { breached breachedAt statusAtBreach }
+    commission { totalVisitingCharge workerShare localAdminShare gigtoShare }
+    cashback { amount status expiresAt }
+  }
+}
+
+# Get chat messages for a booking (paginated)
+query GetBookingChat($bookingId: UUID!, $limit: Int, $offset: Int) @auth(level: USER_EMAIL_VERIFIED) {
+  bookingChats(
+    where: { bookingId: { eq: $bookingId } }
+    orderBy: [{ createdAt: ASC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    messageId
+    senderId
+    senderRole
+    message
+    createdAt
+  }
+}
+
+# ─── Admin / Mason Queries ─────────────────────────────────────────────────────
+
+# Get admin profile by Firebase UID
+query GetAdminByFirebaseUid($firebaseUid: String!) @auth(level: USER_EMAIL_VERIFIED) {
+  admins(where: { firebaseUid: { eq: $firebaseUid } }) {
+    adminId
+    name
+    email
+    areaName
+    regionScore
+    probationStatus
+    fraudCount
+    totalDisputes
+    avgResolutionTime
+    approvalStatus
+    status
+    role { roleName }
+    parent { adminId name }
+  }
+}
+
+# Get active bookings assigned to a specific admin (dashboard)
+query GetAdminActiveBookings($adminId: UUID!, $limit: Int, $offset: Int) @auth(level: USER_EMAIL_VERIFIED) {
+  bookings(
+    where: {
+      adminId: { eq: $adminId }
+      status: { in: ["pending","scheduled","quoted","accepted","assigned","in_progress","awaiting_confirmation"] }
+    }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    bookingId
+    issueTitle
+    status
+    scheduledDate
+    createdAt
+    user { name phone }
+    serviceType { name }
+    assignedWorker { name phone }
+    escrowStatus
+  }
+}
+
+# Get all unread alerts for an admin
+query GetAdminAlerts($adminId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
+  adminAlerts(
+    where: { adminId: { eq: $adminId }, status: { eq: "open" } }
+    orderBy: [{ createdAt: DESC }]
+    limit: 50
+  ) {
+    alertId
+    type
+    title
+    message
+    createdAt
+    booking { bookingId issueTitle status }
+  }
+}
+
+# Get quotes for a booking (admin submits quote, user sees options)
+query GetBookingQuotes($bookingId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
+  bookingQuotes(
+    where: { bookingId: { eq: $bookingId } }
+    orderBy: [{ createdAt: ASC }]
+  ) {
+    quoteId
+    price
+    isAccepted
+    createdAt
+    admin { adminId name areaName }
+  }
+}
+
+# ─── Worker Queries ───────────────────────────────────────────────────────────
+
+# Get worker profile by phone (used in worker login lookup)
+query GetWorkerByPhone($phone: String!) @auth(level: USER_EMAIL_VERIFIED) {
+  workers(where: { phone: { eq: $phone } }) {
+    workerId
+    name
+    phone
+    email
+    area
+    approvalStatus
+    status
+    isAvailable
+    rating
+    completedJobs
+    isTopListed
+    totalEarnings
+    serviceType { name }
+    admin { name areaName }
+  }
+}
+
+# Get available workers in an area for a service type (auto-assignment)
+query GetAvailableWorkers($area: String!, $serviceTypeId: Int!) @auth(level: USER_EMAIL_VERIFIED) {
+  workers(
+    where: {
+      area: { eq: $area }
+      serviceTypeId: { eq: $serviceTypeId }
+      isAvailable: { eq: true }
+      status: { eq: "active" }
+      approvalStatus: { eq: "approved" }
+      isFraud: { eq: false }
+    }
+    orderBy: [{ isTopListed: DESC }, { rating: DESC }]
+    limit: 10
+  ) {
+    workerId
+    name
+    phone
+    rating
+    completedJobs
+    isTopListed
+    adminId
+  }
+}
+
+# Get all workers managed by an admin
+query GetWorkersByAdmin($adminId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
+  workers(
+    where: { adminId: { eq: $adminId } }
+    orderBy: [{ createdAt: DESC }]
+  ) {
+    workerId
+    name
+    phone
+    area
+    approvalStatus
+    status
+    isAvailable
+    isFraud
+    rating
+    completedJobs
+    isTopListed
+    totalEarnings
+    serviceType { name }
+  }
+}
+
+# Get bookings assigned to a specific worker
+query GetWorkerBookings($workerId: UUID!, $limit: Int, $offset: Int) @auth(level: USER_EMAIL_VERIFIED) {
+  bookings(
+    where: { assignedWorkerId: { eq: $workerId } }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    bookingId
+    issueTitle
+    status
+    scheduledDate
+    createdAt
+    user { name phone address }
+    serviceType { name }
+    admin { name }
+  }
+}
+
+# ─── RegionLead Queries ───────────────────────────────────────────────────────
+
+# Get all open disputes in a region lead's area
+query GetRegionDisputes($regionLeadId: UUID!, $statusFilter: String) @auth(level: USER_EMAIL_VERIFIED) {
+  disputes(
+    where: {
+      booking: { adminId: { eq: $regionLeadId } }
+      status: { eq: $statusFilter }
+    }
+    orderBy: [{ raisedAt: DESC }]
+    limit: 100
+  ) {
+    disputeId
+    status
+    reason
+    raisedAt
+    escalationStatus
+    escalatedAt
+    decision
+    booking { bookingId issueTitle user { name phone } }
+    raisedByUser { name phone }
+  }
+}
+
+# Get workers pending approval for a region
+query GetPendingWorkerApprovals($adminId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
+  workers(
+    where: { adminId: { eq: $adminId }, approvalStatus: { eq: "pending" } }
+    orderBy: [{ createdAt: ASC }]
+  ) {
+    workerId
+    name
+    phone
+    area
+    certifications
+    createdAt
+    serviceType { name }
+  }
+}
+
+# Get child admins (masons) under a region lead
+query GetChildAdmins($parentAdminId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
+  admins(
+    where: { parentAdminId: { eq: $parentAdminId } }
+    orderBy: [{ createdAt: DESC }]
+  ) {
+    adminId
+    name
+    email
+    areaName
+    regionScore
+    probationStatus
+    status
+    role { roleName }
+    createdAt
+  }
+}
+
+# ─── SuperAdmin Queries ───────────────────────────────────────────────────────
+
+# List all region leads (SuperAdmin overview)
+query ListRegionLeads @auth(level: USER_EMAIL_VERIFIED) {
+  admins(
+    where: { role: { roleName: { eq: "regionLead" } } }
+    orderBy: [{ createdAt: DESC }]
+  ) {
+    adminId
+    name
+    email
+    areaName
+    regionScore
+    probationStatus
+    fraudCount
+    totalDisputes
+    status
+    createdAt
+  }
+}
+
+# Get all disputes platform-wide (SuperAdmin)
+query ListAllDisputes($status: String, $limit: Int, $offset: Int) @auth(level: USER_EMAIL_VERIFIED) {
+  disputes(
+    where: { status: { eq: $status } }
+    orderBy: [{ raisedAt: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    disputeId
+    status
+    reason
+    raisedAt
+    escalationStatus
+    decision
+    booking {
+      bookingId
+      issueTitle
+      admin { name areaName }
+      user { name phone }
+    }
+  }
+}
+
+# Platform-wide booking stats (SuperAdmin dashboard)
+query GetPlatformStats @auth(level: USER_EMAIL_VERIFIED) {
+  userCount: users_aggregate { count }
+  workerCount: workers_aggregate { count }
+  adminCount: admins_aggregate { count }
+  totalBookings: bookings_aggregate { count }
+  openDisputes: disputes_aggregate(where: { status: { eq: "open" } }) { count }
+}
+
+# Get activity log for a booking (audit trail)
+query GetBookingActivityLog($bookingId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
+  activityLogs(
+    where: { bookingId: { eq: $bookingId } }
+    orderBy: [{ createdAt: ASC }]
+  ) {
+    logId
+    actorRole
+    action
+    fromStatus
+    toStatus
+    reason
+    amount
+    decision
+    createdAt
+  }
+}
+
+# Get cashback balance for user
+query GetUserCashbacks($userId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
+  cashbacks(
+    where: { userId: { eq: $userId }, status: { eq: "active" } }
+    orderBy: [{ expiresAt: ASC }]
+  ) {
+    cashbackId
+    amount
+    status
+    issuedAt
+    expiresAt
+    booking { bookingId issueTitle }
+  }
+}

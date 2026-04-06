@@ -309,14 +309,20 @@ CREATE TABLE activity_logs (
   PRIMARY KEY (log_id, created_at)
 ) PARTITION BY RANGE (created_at);
 
--- Create monthly partitions (example: first 3 months)
-CREATE TABLE activity_logs_2026_01 PARTITION OF activity_logs
-  FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
-CREATE TABLE activity_logs_2026_02 PARTITION OF activity_logs
-  FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
-CREATE TABLE activity_logs_2026_03 PARTITION OF activity_logs
-  FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
--- Add new partitions monthly before they are needed
+-- Full 2026 monthly partitions (pre-created at schema setup)
+CREATE TABLE activity_logs_2026_01 PARTITION OF activity_logs FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
+CREATE TABLE activity_logs_2026_02 PARTITION OF activity_logs FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
+CREATE TABLE activity_logs_2026_03 PARTITION OF activity_logs FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
+CREATE TABLE activity_logs_2026_04 PARTITION OF activity_logs FOR VALUES FROM ('2026-04-01') TO ('2026-05-01');
+CREATE TABLE activity_logs_2026_05 PARTITION OF activity_logs FOR VALUES FROM ('2026-05-01') TO ('2026-06-01');
+CREATE TABLE activity_logs_2026_06 PARTITION OF activity_logs FOR VALUES FROM ('2026-06-01') TO ('2026-07-01');
+CREATE TABLE activity_logs_2026_07 PARTITION OF activity_logs FOR VALUES FROM ('2026-07-01') TO ('2026-08-01');
+CREATE TABLE activity_logs_2026_08 PARTITION OF activity_logs FOR VALUES FROM ('2026-08-01') TO ('2026-09-01');
+CREATE TABLE activity_logs_2026_09 PARTITION OF activity_logs FOR VALUES FROM ('2026-09-01') TO ('2026-10-01');
+CREATE TABLE activity_logs_2026_10 PARTITION OF activity_logs FOR VALUES FROM ('2026-10-01') TO ('2026-11-01');
+CREATE TABLE activity_logs_2026_11 PARTITION OF activity_logs FOR VALUES FROM ('2026-11-01') TO ('2026-12-01');
+CREATE TABLE activity_logs_2026_12 PARTITION OF activity_logs FOR VALUES FROM ('2026-12-01') TO ('2027-01-01');
+-- pg_cron job auto-creates future partitions on the 25th of each month (see Section 7 of 001_initial_schema.sql)
 ```
 
 #### Table 17: `admin_alerts`
@@ -982,19 +988,20 @@ With the indexes and monthly partitioning on `activity_logs`, all queries stay u
 
 ```
 Gigtos/
+├── firebase.json                 # Updated: Data Connect emulator + source config added
 ├── dataconnect/
 │   ├── dataconnect.yaml          # Firebase Data Connect project config
 │   ├── schema/
-│   │   └── schema.gql            # GraphQL SDL type definitions (maps to PG tables)
+│   │   └── schema.gql            # GraphQL SDL — 17 types mapped to PG tables
 │   └── connector/
 │       ├── connector.yaml        # Connector config + JS SDK generation
-│       ├── queries.gql           # All GraphQL read queries
-│       └── mutations.gql         # All GraphQL write mutations
+│       ├── queries.gql           # All GraphQL read queries (users, bookings, workers, admin)
+│       └── mutations.gql         # All GraphQL write mutations (CRUD for all entities)
 ├── migrations/
-│   ├── 001_initial_schema.sql    # All 17 tables + all indexes
-│   ├── 002_views.sql             # 5 SQL views
-│   ├── 003_stored_procedures.sql # 6 stored procedures
-│   └── 004_seed_data.sql         # Lookup table seed rows
+│   ├── 001_initial_schema.sql    # 17 tables + partitions + indexes + pg_cron scheduler
+│   ├── 002_views.sql             # 5 operational SQL views
+│   ├── 003_stored_procedures.sql # 6 stored procedures + 5 materialized views + pg_cron schedules
+│   └── 004_seed_data.sql         # Lookup table seed rows (service_types, time_slots, admin_roles)
 └── scripts/
     └── migrate_from_firestore.js # One-time Firestore → PostgreSQL migration script
 ```

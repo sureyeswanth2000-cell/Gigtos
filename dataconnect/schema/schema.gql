@@ -1,0 +1,279 @@
+# Firebase Data Connect — GraphQL SDL Schema
+# Maps all 17 PostgreSQL tables for Gigtos @ 1 Lakh Users
+# See: DATA_CONNECT_MIGRATION_PLAN.md for full table rationale
+
+# ─── Lookup / Dimension Tables ───────────────────────────────────────────────
+
+type ServiceType @table(name: "service_types") {
+  id: Int!                           @col(name: "id")
+  name: String!                      @unique
+  description: String
+}
+
+type TimeSlot @table(name: "time_slots") {
+  id: Int!                           @col(name: "id")
+  label: String!                     @unique
+  startHour: Int!                    @col(name: "start_hour")
+  endHour: Int!                      @col(name: "end_hour")
+}
+
+type AdminRole @table(name: "admin_roles") {
+  id: Int!                           @col(name: "id")
+  roleName: String!                  @col(name: "role_name") @unique
+}
+
+# ─── Core Entity Tables ───────────────────────────────────────────────────────
+
+type User @table(name: "users") {
+  userId: UUID!                      @col(name: "user_id")    @default(expr: "uuidV4()")
+  firebaseUid: String!               @col(name: "firebase_uid") @unique
+  name: String!
+  email: String
+  phone: String!                     @unique
+  address: String
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  updatedAt: Timestamp!              @col(name: "updated_at") @default(expr: "request.time")
+  # Relationships
+  bookings: [Booking!]!              @hasMany(foreignKey: "user_id")
+  cashbacks: [Cashback!]!            @hasMany(foreignKey: "user_id")
+  disputes: [Dispute!]!              @hasMany(foreignKey: "raised_by")
+}
+
+type Admin @table(name: "admins") {
+  adminId: UUID!                     @col(name: "admin_id")   @default(expr: "uuidV4()")
+  firebaseUid: String!               @col(name: "firebase_uid") @unique
+  name: String!
+  email: String!                     @unique
+  roleId: Int!                       @col(name: "role_id")
+  parentAdminId: UUID                @col(name: "parent_admin_id")
+  areaName: String                   @col(name: "area_name")
+  regionScore: Float!                @col(name: "region_score")   @default(value: 100)
+  regionStatus: String!              @col(name: "region_status")  @default(value: "active")
+  probationStatus: Boolean!          @col(name: "probation_status") @default(value: false)
+  fraudCount: Int!                   @col(name: "fraud_count")    @default(value: 0)
+  totalDisputes: Int!                @col(name: "total_disputes") @default(value: 0)
+  avgResolutionTime: Float!          @col(name: "avg_resolution_time") @default(value: 0)
+  approvalStatus: String!            @col(name: "approval_status") @default(value: "pending")
+  status: String!                    @default(value: "active")
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  updatedAt: Timestamp!              @col(name: "updated_at") @default(expr: "request.time")
+  # Relationships
+  role: AdminRole!                   @hasOne(foreignKey: "role_id")
+  parent: Admin                      @hasOne(foreignKey: "parent_admin_id")
+  children: [Admin!]!                @hasMany(foreignKey: "parent_admin_id")
+  workers: [Worker!]!                @hasMany(foreignKey: "admin_id")
+  bookings: [Booking!]!              @hasMany(foreignKey: "admin_id")
+  alerts: [AdminAlert!]!             @hasMany(foreignKey: "admin_id")
+}
+
+type Worker @table(name: "workers") {
+  workerId: UUID!                    @col(name: "worker_id")  @default(expr: "uuidV4()")
+  name: String!
+  phone: String!                     @unique
+  email: String
+  area: String!
+  serviceTypeId: Int!                @col(name: "service_type_id")
+  certifications: String
+  bankDetails: String                @col(name: "bank_details")
+  totalEarnings: Float!              @col(name: "total_earnings") @default(value: 0)
+  status: String!                    @default(value: "active")
+  approvalStatus: String!            @col(name: "approval_status") @default(value: "pending")
+  isAvailable: Boolean!              @col(name: "is_available")   @default(value: true)
+  isFraud: Boolean!                  @col(name: "is_fraud")       @default(value: false)
+  rating: Float!                     @default(value: 0)
+  completedJobs: Int!                @col(name: "completed_jobs") @default(value: 0)
+  isTopListed: Boolean!              @col(name: "is_top_listed")  @default(value: false)
+  adminId: UUID!                     @col(name: "admin_id")
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  updatedAt: Timestamp!              @col(name: "updated_at") @default(expr: "request.time")
+  # Relationships
+  serviceType: ServiceType!          @hasOne(foreignKey: "service_type_id")
+  admin: Admin!                      @hasOne(foreignKey: "admin_id")
+  bookings: [Booking!]!              @hasMany(foreignKey: "assigned_worker_id")
+}
+
+# ─── Booking Tables ───────────────────────────────────────────────────────────
+
+type Booking @table(name: "bookings") {
+  bookingId: UUID!                   @col(name: "booking_id")   @default(expr: "uuidV4()")
+  userId: UUID!                      @col(name: "user_id")
+  serviceTypeId: Int!                @col(name: "service_type_id")
+  issueTitle: String!                @col(name: "issue_title")
+  jobDetails: String                 @col(name: "job_details")
+  status: String!                    @default(value: "pending")
+  scheduledDate: Date                @col(name: "scheduled_date")
+  timeSlotId: Int                    @col(name: "time_slot_id")
+  estimatedDays: Int!                @col(name: "estimated_days")   @default(value: 1)
+  completedWorkDays: Int!            @col(name: "completed_work_days") @default(value: 0)
+  isMultiDay: Boolean!               @col(name: "is_multi_day")    @default(value: false)
+  startedAt: Timestamp               @col(name: "started_at")
+  finishedAt: Timestamp              @col(name: "finished_at")
+  adminId: UUID                      @col(name: "admin_id")
+  assignedWorkerId: UUID             @col(name: "assigned_worker_id")
+  escrowStatus: String!              @col(name: "escrow_status")   @default(value: "pending")
+  isCommissionProcessed: Boolean!    @col(name: "is_commission_processed") @default(value: false)
+  rating: Int
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  updatedAt: Timestamp!              @col(name: "updated_at") @default(expr: "request.time")
+  # Relationships
+  user: User!                        @hasOne(foreignKey: "user_id")
+  serviceType: ServiceType!          @hasOne(foreignKey: "service_type_id")
+  timeSlot: TimeSlot                 @hasOne(foreignKey: "time_slot_id")
+  admin: Admin                       @hasOne(foreignKey: "admin_id")
+  assignedWorker: Worker             @hasOne(foreignKey: "assigned_worker_id")
+  quotes: [BookingQuote!]!           @hasMany(foreignKey: "booking_id")
+  photos: [BookingPhoto!]!           @hasMany(foreignKey: "booking_id")
+  dailyNotes: [BookingDailyNote!]!   @hasMany(foreignKey: "booking_id")
+  chat: [BookingChat!]!              @hasMany(foreignKey: "booking_id")
+  dispute: Dispute                   @hasOne(foreignKey: "booking_id")
+  sla: BookingSla                    @hasOne(foreignKey: "booking_id")
+  commission: Commission             @hasOne(foreignKey: "booking_id")
+  cashback: Cashback                 @hasOne(foreignKey: "booking_id")
+  activityLogs: [ActivityLog!]!      @hasMany(foreignKey: "booking_id")
+}
+
+type BookingQuote @table(name: "booking_quotes") {
+  quoteId: UUID!                     @col(name: "quote_id")    @default(expr: "uuidV4()")
+  bookingId: UUID!                   @col(name: "booking_id")
+  adminId: UUID!                     @col(name: "admin_id")
+  price: Float!
+  isAccepted: Boolean!               @col(name: "is_accepted") @default(value: false)
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  # Relationships
+  booking: Booking!                  @hasOne(foreignKey: "booking_id")
+  admin: Admin!                      @hasOne(foreignKey: "admin_id")
+}
+
+type BookingPhoto @table(name: "booking_photos") {
+  photoId: UUID!                     @col(name: "photo_id")   @default(expr: "uuidV4()")
+  bookingId: UUID!                   @col(name: "booking_id")
+  label: String
+  url: String!
+  photoType: String!                 @col(name: "photo_type")
+  uploadedBy: UUID                   @col(name: "uploaded_by")
+  uploadedAt: Timestamp!             @col(name: "uploaded_at") @default(expr: "request.time")
+  # Relationships
+  booking: Booking!                  @hasOne(foreignKey: "booking_id")
+}
+
+type BookingDailyNote @table(name: "booking_daily_notes") {
+  noteId: UUID!                      @col(name: "note_id")    @default(expr: "uuidV4()")
+  bookingId: UUID!                   @col(name: "booking_id")
+  noteDate: Date!                    @col(name: "note_date")
+  note: String!
+  addedBy: UUID!                     @col(name: "added_by")
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  # Relationships
+  booking: Booking!                  @hasOne(foreignKey: "booking_id")
+  admin: Admin!                      @hasOne(foreignKey: "added_by")
+}
+
+type BookingChat @table(name: "booking_chat") {
+  messageId: UUID!                   @col(name: "message_id") @default(expr: "uuidV4()")
+  bookingId: UUID!                   @col(name: "booking_id")
+  senderId: UUID!                    @col(name: "sender_id")
+  senderRole: String!                @col(name: "sender_role")
+  message: String!
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  # Relationships
+  booking: Booking!                  @hasOne(foreignKey: "booking_id")
+}
+
+# ─── Financial Tables ─────────────────────────────────────────────────────────
+
+type Commission @table(name: "commissions") {
+  commissionId: UUID!                @col(name: "commission_id") @default(expr: "uuidV4()")
+  bookingId: UUID!                   @col(name: "booking_id") @unique
+  totalVisitingCharge: Float!        @col(name: "total_visiting_charge") @default(value: 150)
+  workerShare: Float!                @col(name: "worker_share")       @default(value: 80)
+  localAdminShare: Float!            @col(name: "local_admin_share")  @default(value: 20)
+  gigtoShare: Float!                 @col(name: "gigto_share")        @default(value: 50)
+  calculatedAt: Timestamp!           @col(name: "calculated_at") @default(expr: "request.time")
+  # Relationships
+  booking: Booking!                  @hasOne(foreignKey: "booking_id")
+}
+
+type Cashback @table(name: "cashbacks") {
+  cashbackId: UUID!                  @col(name: "cashback_id") @default(expr: "uuidV4()")
+  userId: UUID!                      @col(name: "user_id")
+  bookingId: UUID!                   @col(name: "booking_id") @unique
+  amount: Float!                     @default(value: 9)
+  status: String!                    @default(value: "active")
+  issuedAt: Timestamp!               @col(name: "issued_at")  @default(expr: "request.time")
+  expiresAt: Timestamp!              @col(name: "expires_at")
+  # Relationships
+  user: User!                        @hasOne(foreignKey: "user_id")
+  booking: Booking!                  @hasOne(foreignKey: "booking_id")
+}
+
+# ─── Operational Tables ───────────────────────────────────────────────────────
+
+type Dispute @table(name: "disputes") {
+  disputeId: UUID!                   @col(name: "dispute_id")  @default(expr: "uuidV4()")
+  bookingId: UUID!                   @col(name: "booking_id")  @unique
+  status: String!                    @default(value: "open")
+  reason: String
+  raisedAt: Timestamp!               @col(name: "raised_at")   @default(expr: "request.time")
+  raisedBy: UUID!                    @col(name: "raised_by")
+  autoTriggered: Boolean!            @col(name: "auto_triggered")   @default(value: false)
+  escalationStatus: Boolean!         @col(name: "escalation_status") @default(value: false)
+  escalatedAt: Timestamp             @col(name: "escalated_at")
+  decision: String
+  resolutionTime: Timestamp          @col(name: "resolution_time")
+  resolvedBy: UUID                   @col(name: "resolved_by")
+  superadminOverride: Boolean!       @col(name: "superadmin_override") @default(value: false)
+  regionCallTime: Timestamp          @col(name: "region_call_time")
+  callNotes: String                  @col(name: "call_notes")
+  visitTime: Timestamp               @col(name: "visit_time")
+  # Relationships
+  booking: Booking!                  @hasOne(foreignKey: "booking_id")
+  raisedByUser: User!                @hasOne(foreignKey: "raised_by")
+  resolvedByAdmin: Admin             @hasOne(foreignKey: "resolved_by")
+}
+
+type BookingSla @table(name: "booking_sla") {
+  slaId: UUID!                       @col(name: "sla_id")      @default(expr: "uuidV4()")
+  bookingId: UUID!                   @col(name: "booking_id")  @unique
+  breached: Boolean!                 @default(value: false)
+  notified: Boolean!                 @default(value: false)
+  breachedAt: Timestamp              @col(name: "breached_at")
+  statusAtBreach: String             @col(name: "status_at_breach")
+  regionLeadId: UUID                 @col(name: "region_lead_id")
+  # Relationships
+  booking: Booking!                  @hasOne(foreignKey: "booking_id")
+  regionLead: Admin                  @hasOne(foreignKey: "region_lead_id")
+}
+
+type ActivityLog @table(name: "activity_logs") {
+  logId: UUID!                       @col(name: "log_id")      @default(expr: "uuidV4()")
+  bookingId: UUID!                   @col(name: "booking_id")
+  actorId: UUID                      @col(name: "actor_id")
+  actorRole: String                  @col(name: "actor_role")
+  action: String!
+  fromStatus: String                 @col(name: "from_status")
+  toStatus: String                   @col(name: "to_status")
+  reason: String
+  rating: Int
+  amount: Float
+  workerId: UUID                     @col(name: "worker_id")
+  adminId: UUID                      @col(name: "admin_id")
+  price: Float
+  decision: String
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  # Relationships
+  booking: Booking!                  @hasOne(foreignKey: "booking_id")
+}
+
+type AdminAlert @table(name: "admin_alerts") {
+  alertId: UUID!                     @col(name: "alert_id")   @default(expr: "uuidV4()")
+  adminId: UUID!                     @col(name: "admin_id")
+  bookingId: UUID                    @col(name: "booking_id")
+  type: String!
+  status: String!                    @default(value: "open")
+  title: String
+  message: String
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  # Relationships
+  admin: Admin!                      @hasOne(foreignKey: "admin_id")
+  booking: Booking                   @hasOne(foreignKey: "booking_id")
+}

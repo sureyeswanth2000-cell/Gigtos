@@ -8,6 +8,10 @@
       "host": "localhost",
       "port": 9099
     },
+    "dataconnect": {
+      "host": "localhost",
+      "port": 9399
+    },
     "ui": {
       "enabled": true,
       "host": "localhost",
@@ -16,8 +20,11 @@
   },
   "firestore": {
     "rules": "firebase.rules"
-  }
-  ,"functions":{
-    "source":"functions"
+  },
+  "functions": {
+    "source": "functions"
+  },
+  "dataconnect": {
+    "source": "dataconnect"
   }
 }

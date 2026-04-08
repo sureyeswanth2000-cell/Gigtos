@@ -21,6 +21,27 @@ describe('ai assistant helpers', () => {
     expect(findRelevantService('I need a security guard for my event')?.name).toBe('Security Guard');
   });
 
+  it('matches new expanded services from user text', () => {
+    expect(findRelevantService('need a lorry to move goods')?.name).toBe('Heavy Vehicle Driver');
+    expect(findRelevantService('need a scooty quickly')?.name).toBe('Two Wheeler Driver');
+    expect(findRelevantService('need masonry work done')?.name).toBe('Mason');
+    expect(findRelevantService('looking for a welder for gate repair')?.name).toBe('Welding');
+    expect(findRelevantService('need land survey for my plot')?.name).toBe('Land Surveyor');
+    expect(findRelevantService('need denting work on my bike')?.name).toBe('Mechanic');
+    expect(findRelevantService('elevator maintenance needed')?.name).toBe('Elevator Installer');
+    expect(findRelevantService('need a chef for hotel catering')?.name).toBe('Hotel Cook');
+    expect(findRelevantService('need food service staff for buffet')?.name).toBe('Food Service Staff');
+    expect(findRelevantService('godown packing needed')?.name).toBe('Warehouse Helper');
+    expect(findRelevantService('need a driving instructor for lessons')?.name).toBe('Driving Instructor');
+    expect(findRelevantService('purifier service needed')?.name).toBe('Water Purifier Service');
+    expect(findRelevantService('need gardener for lawn mowing')?.name).toBe('Gardener');
+    expect(findRelevantService('need agriculture help for fields')?.name).toBe('Farm Helper');
+    expect(findRelevantService('need sanitization for office')?.name).toBe('Sanitizer');
+    expect(findRelevantService('need rebar tying work')?.name).toBe('Steel Worker');
+    expect(findRelevantService('need construction quality check')?.name).toBe('Construction Quality Tester');
+    expect(findRelevantService('need front desk reception staff')?.name).toBe('Hotel Welcome Staff');
+  });
+
   it('formats quote insight ranges clearly', () => {
     expect(formatPriceInsight({ minQuote: 450, maxQuote: 900, averageQuote: 675, quoteCount: 5 })).toBe(
       '₹450 - ₹900 (avg ₹675 from 5 quotes)'
@@ -65,7 +86,13 @@ describe('ai assistant helpers', () => {
     expect(upcoming).toContain('Driver with Vehicle');
     expect(upcoming).toContain('Driver without Vehicle');
     expect(upcoming).toContain('Home Helper');
-    expect(upcoming.length).toBeGreaterThanOrEqual(8);
+    expect(upcoming).toContain('Mason');
+    expect(upcoming).toContain('Mechanic');
+    expect(upcoming).toContain('Hotel Cook');
+    expect(upcoming).toContain('Driving Instructor');
+    expect(upcoming).toContain('Gardener');
+    expect(upcoming).toContain('Maid');
+    expect(upcoming.length).toBeGreaterThanOrEqual(35);
   });
 
   it('groups services by category', () => {
@@ -73,5 +100,12 @@ describe('ai assistant helpers', () => {
     expect(categories).toContain('Home Repair');
     expect(categories).toContain('Transport');
     expect(categories).toContain('Household Help');
+    expect(categories).toContain('Construction');
+    expect(categories).toContain('Automotive');
+    expect(categories).toContain('Hotel & Hospitality');
+    expect(categories).toContain('Industrial');
+    expect(categories).toContain('Event & Warehouse');
+    expect(categories).toContain('Education');
+    expect(categories).toContain('Outdoor & Garden');
   });
 });

@@ -37,30 +37,89 @@ ALTER TABLE service_types
 -- ────────────────────────────────────────────────────────────
 
 INSERT INTO service_categories (name, description, icon, sort_order) VALUES
-  ('Home Repair',     'Plumbing, electrical, carpentry, painting',                      '🔧', 1),
-  ('Transport',       'Driver services — with or without own vehicle',                  '🚗', 2),
-  ('Household Help',  'Cooking, cleaning, laundry, daily household tasks',              '🏠', 3),
-  ('Appliance & AC',  'AC servicing, appliance repair, installation',                   '❄️', 4),
-  ('Cleaning',        'Deep cleaning, pest control, sanitization',                      '🧹', 5),
-  ('Security',        'Security guards, event security, night patrol',                  '🛡️', 6)
+  ('Home Repair',           'Plumbing, electrical, carpentry, painting',                      '🔧', 1),
+  ('Transport',             'Driver services — with or without own vehicle',                  '🚗', 2),
+  ('Household Help',        'Cooking, cleaning, laundry, daily household tasks',              '🏠', 3),
+  ('Appliance & AC',        'AC servicing, appliance repair, installation',                   '❄️', 4),
+  ('Cleaning',              'Deep cleaning, pest control, sanitization',                      '🧹', 5),
+  ('Security',              'Security guards, event security, night patrol',                  '🛡️', 6),
+  ('Construction',          'Masonry, steel work, surveying, quality testing',                '🏗️', 7),
+  ('Automotive',            'Vehicle mechanics, servicing, denting, and repairs',             '🔧', 8),
+  ('Hotel & Hospitality',   'Cooks, waiters, cleaners, and front-desk staff for hotels',     '🏨', 9),
+  ('Industrial',            'Elevators, escalators, welding, electric equipment repair',      '⚙️', 10),
+  ('Event & Warehouse',     'Event helpers, warehouse labour, farm workers',                  '📦', 11),
+  ('Education',             'Driving instructors and skill-based teaching',                   '📚', 12),
+  ('Outdoor & Garden',      'Gardening, landscaping, roof coating',                           '🌿', 13)
 ON CONFLICT (name) DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- SECTION 3 — Map existing services to categories
 -- ────────────────────────────────────────────────────────────
 
+-- Home Repair
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Home Repair'),     icon = '🧰', sort_order = 1 WHERE name = 'Plumber';
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Home Repair'),     icon = '⚡', sort_order = 2 WHERE name = 'Electrician';
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Home Repair'),     icon = '🪛', sort_order = 3 WHERE name = 'Carpenter';
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Home Repair'),     icon = '🎨', sort_order = 4 WHERE name = 'Painter';
+
+-- Transport
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Transport'),       icon = '🚗', sort_order = 1, requires_asset = TRUE  WHERE name = 'Driver with Vehicle';
-UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Transport'),       icon = '🧑‍✈️', sort_order = 2, requires_asset = FALSE WHERE name = 'Driver without Vehicle';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Transport'),       icon = '🧑‍✈️', sort_order = 2                       WHERE name = 'Driver without Vehicle';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Transport'),       icon = '🚛', sort_order = 3                       WHERE name = 'Heavy Vehicle Driver';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Transport'),       icon = '🏍️', sort_order = 4, requires_asset = TRUE  WHERE name = 'Two Wheeler Driver';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Transport'),       icon = '🎩', sort_order = 5                       WHERE name = 'Executive Driver';
+
+-- Construction
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '🧱', sort_order = 1 WHERE name = 'Mason';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '👷', sort_order = 2 WHERE name = 'Construction Helper';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '🔩', sort_order = 3 WHERE name = 'Steel Worker';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '📐', sort_order = 4 WHERE name = 'Land Surveyor';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '🔬', sort_order = 5 WHERE name = 'Construction Quality Tester';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '🏠', sort_order = 6 WHERE name = 'Roof Coating Specialist';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '🔥', sort_order = 7 WHERE name = 'Welding';
+
+-- Household Help
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Household Help'),  icon = '🏠', sort_order = 1 WHERE name = 'Home Helper';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Household Help'),  icon = '🧹', sort_order = 2 WHERE name = 'Maid';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Outdoor & Garden'), icon = '🌿', sort_order = 1 WHERE name = 'Gardener';
+
+-- Cleaning
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Cleaning'),        icon = '🧹', sort_order = 1 WHERE name = 'Deep Cleaning';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Cleaning'),        icon = '🐛', sort_order = 2 WHERE name = 'Pest Control';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Cleaning'),        icon = '🧴', sort_order = 3 WHERE name = 'Sanitizer';
+
+-- Appliance & AC
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Appliance & AC'),  icon = '❄️', sort_order = 1 WHERE name = 'AC Technician';
-UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Cleaning'),        icon = '🐛', sort_order = 1 WHERE name = 'Pest Control';
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Appliance & AC'),  icon = '🔌', sort_order = 2 WHERE name = 'Appliance Repair';
-UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Cleaning'),        icon = '🧹', sort_order = 2 WHERE name = 'Deep Cleaning';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Appliance & AC'),  icon = '🌀', sort_order = 3 WHERE name = 'AC & Washing Machine Service';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Appliance & AC'),  icon = '🔧', sort_order = 4 WHERE name = 'Electric Equipment Repair';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Appliance & AC'),  icon = '💧', sort_order = 5 WHERE name = 'Water Purifier Service';
+
+-- Security
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Security'),        icon = '🛡️', sort_order = 1 WHERE name = 'Security Guard';
+
+-- Automotive
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Automotive'),      icon = '🔧', sort_order = 1 WHERE name = 'Mechanic';
+
+-- Industrial
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Industrial'),      icon = '🛗', sort_order = 1 WHERE name = 'Elevator Installer';
+
+-- Hotel & Hospitality
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Hotel & Hospitality'), icon = '👨‍🍳', sort_order = 1 WHERE name = 'Hotel Cook';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Hotel & Hospitality'), icon = '🍽️', sort_order = 2 WHERE name = 'Food Service Staff';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Hotel & Hospitality'), icon = '🧹', sort_order = 3 WHERE name = 'Hotel Sanitizer';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Hotel & Hospitality'), icon = '🙏', sort_order = 4 WHERE name = 'Hotel Welcome Staff';
+
+-- Event & Warehouse
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Event & Warehouse'), icon = '🎪', sort_order = 1 WHERE name = 'Event Helper';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Event & Warehouse'), icon = '📦', sort_order = 2 WHERE name = 'Warehouse Helper';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Event & Warehouse'), icon = '🌾', sort_order = 3 WHERE name = 'Farm Helper';
+
+-- Education
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Education'),       icon = '📚', sort_order = 1 WHERE name = 'Driving Instructor';
+
+-- Outdoor & Garden
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Outdoor & Garden'), icon = '☀️', sort_order = 2 WHERE name = 'Roof Sun Protection Painter';
 
 -- ────────────────────────────────────────────────────────────
 -- SECTION 4 — Indexes

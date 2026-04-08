@@ -18,6 +18,12 @@ import Chat from './pages/Chat';
 import SuperAdmin from './pages/SuperAdmin';
 import RegionLeadDashboard from './pages/RegionLeadDashboard';
 import WorkerDashboard from './pages/WorkerDashboard';
+import WorkerMap from './pages/worker/WorkerMap';
+import OpenWork from './pages/worker/OpenWork';
+import WorkHistory from './pages/worker/WorkHistory';
+import WorkerProfile from './pages/worker/WorkerProfile';
+import FutureWork from './pages/worker/FutureWork';
+import WorkerSupport from './pages/worker/WorkerSupport';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -111,8 +117,14 @@ function App() {
           <Route path="/admin/bookings" element={<ProtectedRoute requireAdmin><AdminBookings /></ProtectedRoute>} />
           <Route path="/admin/region-lead" element={<ProtectedRoute requireAdmin><RegionLeadDashboard /></ProtectedRoute>} />
 
-          {/* Protected Worker Route */}
+          {/* Protected Worker Routes */}
           <Route path="/worker/dashboard" element={<ProtectedRoute><WorkerDashboard /></ProtectedRoute>} />
+          <Route path="/worker/map" element={<ProtectedRoute><WorkerMap /></ProtectedRoute>} />
+          <Route path="/worker/open-work" element={<ProtectedRoute><OpenWork /></ProtectedRoute>} />
+          <Route path="/worker/history" element={<ProtectedRoute><WorkHistory /></ProtectedRoute>} />
+          <Route path="/worker/profile" element={<ProtectedRoute><WorkerProfile /></ProtectedRoute>} />
+          <Route path="/worker/future-work" element={<ProtectedRoute><FutureWork /></ProtectedRoute>} />
+          <Route path="/worker/support" element={<ProtectedRoute><WorkerSupport /></ProtectedRoute>} />
 
           {/* Protected SuperAdmin Route */}
           <Route path="/admin/super" element={<ProtectedRoute requireSuperAdmin><SuperAdmin /></ProtectedRoute>} />

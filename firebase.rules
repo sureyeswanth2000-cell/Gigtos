@@ -190,16 +190,12 @@ service cloud.firestore {
       // Hierarchical provisioning:
       // - Superadmin can create any admin
       // - RegionLead can create child admins (mason role) under themselves
-      // - TEMPORARY: Allow authenticated user to create their own admin doc (for initial superadmin setup)
+      // First superadmin must be created via the server-side script: scripts/createSuperAdmin.js
       allow create: if isSuperAdmin() || (
         isAdmin()
         && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "regionLead"
         && request.resource.data.role == "mason"
         && request.resource.data.parentAdminId == request.auth.uid
-      ) || (
-        isLoggedIn() 
-        && request.auth.uid == adminId
-        && !exists(/databases/$(database)/documents/admins/$(adminId))
       );
       allow delete: if isSuperAdmin();
       // Admins can update their own profile, superadmin can update any admin

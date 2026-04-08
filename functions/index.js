@@ -296,7 +296,7 @@ function buildGeminiPrompt({ message = '', selectedService = '', insights = [] }
   }).join('\n');
 
   return [
-    'You are Gito AI, the booking assistant for the Gigto home-services app across India.',
+    'You are Gito AI, the booking assistant for the Gigtos home-services app across India.',
     'Reply in plain English using 1-2 short sentences only.',
     'Be concise and useful.',
     'Do not repeat UI text or list all services unless the user asks.',

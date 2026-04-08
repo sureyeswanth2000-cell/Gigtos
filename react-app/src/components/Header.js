@@ -50,12 +50,12 @@ export default function Header() {
   return (
     <header style={{
       padding: '12px 20px',
-      background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+      background: '#A259FF',
       color: '#fff',
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      boxShadow: '0 2px 8px rgba(162,89,255,0.3)',
       position: 'relative'
     }}>
       {/* Logo */}

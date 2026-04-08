@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, createUserWithEmailAndPassword } from 'firebase/auth';
 import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, getDoc, setDoc, getDocs } from 'firebase/firestore';
+import MasonDashboard from '../components/MasonDashboard';
 
 export default function Workers() {
   const [user, setUser] = useState(null);
@@ -385,6 +386,27 @@ export default function Workers() {
   return (
     <div style={{ padding: 20 }}>
       <h2>Workers</h2>
+
+      {/* Mason Dashboard — full job browser for mason/admin roles */}
+      {(adminRole === 'mason' || adminRole === 'admin' || adminRole === 'superadmin' || adminRole === 'regionLead') && (
+        <details style={{ marginBottom: 20 }}>
+          <summary style={{
+            cursor: 'pointer',
+            padding: '10px 14px',
+            background: 'var(--bg-light)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 10,
+            fontWeight: 700,
+            fontSize: 14,
+            color: 'var(--primary-purple)',
+          }}>
+            🧱 Mason Dashboard — Browse All Job Types &amp; Manage Workers
+          </summary>
+          <div style={{ marginTop: 12 }}>
+            <MasonDashboard />
+          </div>
+        </details>
+      )}
       
       {/* DEBUG: Show current role */}
       <div style={{ 

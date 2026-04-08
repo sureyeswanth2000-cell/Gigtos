@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
+import JobList from '../components/JobList';
 import './Home.css';
 
 function ServiceIcon({ serviceName }) {
@@ -37,7 +38,6 @@ export default function Home() {
   const [selectedService, setSelectedService] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [assistantPrompt, setAssistantPrompt] = useState('');
-  const [serviceSearch, setServiceSearch] = useState('');
 
   const services = SERVICE_CATALOG;
   const trustPillars = [
@@ -98,16 +98,6 @@ export default function Home() {
     }
   };
 
-  const visibleServices = services.filter((service) => {
-    const query = serviceSearch.trim().toLowerCase();
-    if (!query) return true;
-    return (
-      service.name.toLowerCase().includes(query)
-      || service.desc.toLowerCase().includes(query)
-      || service.keywords?.some((keyword) => keyword.toLowerCase().includes(query))
-    );
-  });
-
   return (
     <div className="home-page">
       <section className="hero-shell" id="discover">
@@ -152,40 +142,12 @@ export default function Home() {
             <p className="eyebrow">Popular in Kavali</p>
             <h2>Popular Services in Kavali</h2>
           </div>
-          <p className="section-caption">Verified pro availability updates daily</p>
+          <p className="section-caption">Worker availability filtered to your area</p>
         </div>
 
-        <div className="services-tools">
-          <input
-            type="text"
-            value={serviceSearch}
-            onChange={(event) => setServiceSearch(event.target.value)}
-            placeholder="Search services (plumber, electrician, painting...)"
-            aria-label="Search services"
-          />
-        </div>
+        <JobList onBook={handleBookService} />
 
-        <div className="services-grid">
-          {visibleServices.map((service) => (
-            <article key={service.id} className="service-card">
-              <div className="service-top">
-                <ServiceIcon serviceName={service.name} />
-                <span className="verified-chip">Verified Pro</span>
-              </div>
-              <h3>{service.name}</h3>
-              <p>{service.desc}</p>
-              <div className="service-card-actions">
-                <button className="primary-btn" onClick={() => handleBookService(service)}>Book Service</button>
-              </div>
-            </article>
-          ))}
-        </div>
-
-        {visibleServices.length === 0 && (
-          <div className="no-services-note">
-            No services found for "{serviceSearch}". Try another keyword or ask Gito AI.
-          </div>
-        )}
+        {/* Booking Confirmation Modal — kept here for legacy single-service flow */}
       </section>
 
       <section className="steps-section" id="how-it-works">

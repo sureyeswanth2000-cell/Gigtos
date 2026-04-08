@@ -18,6 +18,8 @@ import Chat from './pages/Chat';
 import SuperAdmin from './pages/SuperAdmin';
 import RegionLeadDashboard from './pages/RegionLeadDashboard';
 import WorkerDashboard from './pages/WorkerDashboard';
+import JobDetail from './pages/JobDetail';
+import { LocationProvider } from './context/LocationContext';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -91,34 +93,39 @@ function App() {
 
   return (
     <BrowserRouter basename="/Gigtos">
-      <Header />
-      <main style={{ minHeight: '70vh' }}>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={user ? (isAdmin || isWorker ? <Navigate to={getPostLoginRedirect()} /> : <Home />) : <Home />} />
-          <Route path="/auth" element={user ? <Navigate to={getPostLoginRedirect()} /> : <Auth />} />
+      <LocationProvider>
+        <Header />
+        <main style={{ minHeight: '70vh' }}>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={user ? (isAdmin || isWorker ? <Navigate to={getPostLoginRedirect()} /> : <Home />) : <Home />} />
+            <Route path="/auth" element={user ? <Navigate to={getPostLoginRedirect()} /> : <Auth />} />
 
-          {/* Protected User Routes */}
-          <Route path="/service" element={<ProtectedRoute><Service /></ProtectedRoute>} />
-          <Route path="/my-bookings" element={<ProtectedRoute><MyBookings /></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-          <Route path="/complete-profile-phone" element={<ProtectedRoute><CompleteProfilePhone /></ProtectedRoute>} />
+            {/* Special Job Detail Pages (public) */}
+            <Route path="/jobs/:jobId" element={<JobDetail />} />
 
-          {/* Protected Admin Routes */}
-          <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
-          <Route path="/admin/workers" element={<ProtectedRoute requireAdmin><Workers /></ProtectedRoute>} />
-          <Route path="/admin/bookings" element={<ProtectedRoute requireAdmin><AdminBookings /></ProtectedRoute>} />
-          <Route path="/admin/region-lead" element={<ProtectedRoute requireAdmin><RegionLeadDashboard /></ProtectedRoute>} />
+            {/* Protected User Routes */}
+            <Route path="/service" element={<ProtectedRoute><Service /></ProtectedRoute>} />
+            <Route path="/my-bookings" element={<ProtectedRoute><MyBookings /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+            <Route path="/complete-profile-phone" element={<ProtectedRoute><CompleteProfilePhone /></ProtectedRoute>} />
 
-          {/* Protected Worker Route */}
-          <Route path="/worker/dashboard" element={<ProtectedRoute><WorkerDashboard /></ProtectedRoute>} />
+            {/* Protected Admin Routes */}
+            <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
+            <Route path="/admin/workers" element={<ProtectedRoute requireAdmin><Workers /></ProtectedRoute>} />
+            <Route path="/admin/bookings" element={<ProtectedRoute requireAdmin><AdminBookings /></ProtectedRoute>} />
+            <Route path="/admin/region-lead" element={<ProtectedRoute requireAdmin><RegionLeadDashboard /></ProtectedRoute>} />
 
-          {/* Protected SuperAdmin Route */}
-          <Route path="/admin/super" element={<ProtectedRoute requireSuperAdmin><SuperAdmin /></ProtectedRoute>} />
-        </Routes>
-      </main>
-      <Footer />
+            {/* Protected Worker Route */}
+            <Route path="/worker/dashboard" element={<ProtectedRoute><WorkerDashboard /></ProtectedRoute>} />
+
+            {/* Protected SuperAdmin Route */}
+            <Route path="/admin/super" element={<ProtectedRoute requireSuperAdmin><SuperAdmin /></ProtectedRoute>} />
+          </Routes>
+        </main>
+        <Footer />
+      </LocationProvider>
     </BrowserRouter>
   );
 }

@@ -1,6 +1,20 @@
 :root {
-  --color-brand-600: #764ba2;
-  --color-brand-700: #5f3a86;
+  /* ── New purple theme variables ──────────────────────────────────── */
+  --primary-purple: #A259FF;
+  --primary-purple-dark: #7C3AED;
+  --primary-purple-light: #E9D5FF;
+  --bg-light: #F9F6FF;
+  --text-dark: #2D1836;
+  --text-muted: #6B7280;
+  --card-bg: #FFFFFF;
+  --border-color: #E5D8FF;
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --error: #EF4444;
+
+  /* ── Existing brand tokens ───────────────────────────────────────── */
+  --color-brand-600: #A259FF;
+  --color-brand-700: #7C3AED;
   --color-action-600: #057a31;
   --color-action-700: #046127;
   --color-accent-500: #f97316;

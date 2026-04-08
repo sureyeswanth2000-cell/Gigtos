@@ -62,7 +62,14 @@ export function LocationProvider({ children }) {
           source: 'gps',
         };
         setLocation(loc);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(loc));
+        // Only persist the city/display name, not coordinates
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          city: loc.city,
+          state: loc.state,
+          display: loc.display,
+          radius: loc.radius,
+          source: loc.source,
+        }));
         setDetecting(false);
       },
       (err) => {
@@ -84,7 +91,14 @@ export function LocationProvider({ children }) {
       source: 'manual',
     };
     setLocation(loc);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(loc));
+    // Only persist the city/display name, not coordinates
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      city: loc.city,
+      state: loc.state,
+      display: loc.display,
+      radius: loc.radius,
+      source: loc.source,
+    }));
   }, []);
 
   const clearLocation = useCallback(() => {

@@ -1,0 +1,112 @@
+.job-detail-page {
+  min-height: 100%;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(162, 89, 255, 0.12), transparent 40%),
+    linear-gradient(180deg, #fff, var(--bg-light));
+}
+
+.job-detail-shell {
+  max-width: 860px;
+  margin: 0 auto;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-6);
+}
+
+.job-detail-back {
+  font-size: 14px;
+  margin-bottom: var(--space-4);
+  display: inline-block;
+}
+
+.job-detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.job-detail-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.job-detail-title {
+  margin: 0 0 var(--space-1);
+  font-size: clamp(24px, 3vw, 36px);
+  color: var(--text-dark);
+}
+
+.job-detail-desc {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+.job-detail-location {
+  margin-bottom: var(--space-4);
+}
+
+.job-detail-status {
+  text-align: center;
+  padding: var(--space-8);
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+.job-detail-subtypes-title {
+  font-size: 18px;
+  margin: 0 0 var(--space-4);
+  color: var(--text-dark);
+}
+
+.job-detail-selected {
+  margin-top: var(--space-6);
+  padding: var(--space-4);
+  background: var(--primary-purple-light);
+  border: 2px solid var(--primary-purple);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.job-detail-selected-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.job-detail-selected-icon {
+  font-size: 32px;
+}
+
+.job-detail-selected-info strong {
+  display: block;
+  font-size: 16px;
+  color: var(--text-dark);
+}
+
+.job-detail-selected-info p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.job-detail-error {
+  margin-top: var(--space-4);
+  color: var(--error);
+  font-size: 13px;
+}
+
+.job-detail-not-found {
+  max-width: 480px;
+  margin: 60px auto;
+  text-align: center;
+  padding: var(--space-6);
+}

@@ -1,0 +1,338 @@
+.mason-dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5);
+}
+
+.mason-dashboard-header {
+  margin-bottom: var(--space-6);
+}
+
+.mason-dashboard-header h1 {
+  margin: 0 0 var(--space-1);
+  font-size: clamp(22px, 3vw, 32px);
+  color: var(--text-dark);
+}
+
+.mason-dashboard-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+.mason-dashboard-body {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+
+@media (max-width: 768px) {
+  .mason-dashboard-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Jobs panel */
+.mason-jobs-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.mason-panel-header {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mason-panel-header h2 {
+  margin: 0 0 var(--space-2);
+  font-size: 16px;
+  color: var(--text-dark);
+}
+
+.mason-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.mason-search:focus {
+  border-color: var(--primary-purple);
+}
+
+.mason-jobs-list {
+  overflow-y: auto;
+  max-height: 640px;
+}
+
+.mason-job-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  background: #fff;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.12s;
+  font-family: inherit;
+}
+
+.mason-job-item:hover {
+  background: var(--primary-purple-light);
+}
+
+.mason-job-item--active {
+  background: var(--primary-purple-light);
+  border-left: 3px solid var(--primary-purple);
+}
+
+.mason-job-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.mason-job-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.mason-job-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.mason-job-cat {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.mason-job-count {
+  font-size: 12px;
+  color: var(--primary-purple);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* Detail panel */
+.mason-detail-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+  min-height: 400px;
+}
+
+.mason-detail-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+.mason-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.mason-detail-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.mason-detail-icon {
+  font-size: 36px;
+}
+
+.mason-detail-title h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--text-dark);
+}
+
+.mason-detail-cat {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.mason-form-success {
+  background: #f0fdf4;
+  border: 1px solid var(--success);
+  color: #15803d;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-4);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mason-form-error {
+  background: #fef2f2;
+  border: 1px solid var(--error);
+  color: var(--error);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mason-add-worker-form {
+  background: var(--bg-light);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.mason-add-worker-form h3 {
+  margin: 0 0 var(--space-3);
+  font-size: 16px;
+  color: var(--text-dark);
+}
+
+.mason-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 640px) {
+  .mason-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mason-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mason-form-field--full {
+  grid-column: 1 / -1;
+}
+
+.mason-form-field label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mason-form-field input,
+.mason-form-field textarea {
+  padding: 8px 12px;
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.mason-form-field input:focus,
+.mason-form-field textarea:focus {
+  border-color: var(--primary-purple);
+}
+
+.mason-form-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Workers section */
+.mason-workers-section h3 {
+  font-size: 15px;
+  margin: 0 0 var(--space-3);
+  color: var(--text-dark);
+}
+
+.mason-no-workers {
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: var(--space-4);
+  background: var(--bg-light);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.mason-workers-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.mason-worker-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.mason-worker-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mason-worker-info strong {
+  font-size: 14px;
+  color: var(--text-dark);
+}
+
+.mason-worker-info span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.mason-worker-area {
+  font-size: 12px;
+  color: var(--primary-purple) !important;
+}
+
+.mason-worker-status {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mason-worker-status--active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.mason-worker-status--inactive,
+.mason-worker-status--pending {
+  background: #fef3c7;
+  color: #92400e;
+}

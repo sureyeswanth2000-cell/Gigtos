@@ -74,9 +74,11 @@ export default function JobList({ onBook }) {
         const ids = Array.isArray(data) ? data : data.jobs || data.jobIds || [];
         setAvailableJobIds(new Set(ids.map(String)));
       })
-      .catch(() => {
+      .catch((err) => {
+        console.warn('Available jobs API unavailable, showing all jobs:', err.message);
         // If API is unavailable, show all jobs (graceful degradation)
         setAvailableJobIds(new Set(ALL_JOBS.map((j) => j.id)));
+        setFetchError('Could not load location-based availability. Showing all jobs.');
       });
   }, [location]);
 

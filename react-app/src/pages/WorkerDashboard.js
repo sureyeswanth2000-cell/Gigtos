@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
@@ -86,8 +87,15 @@ export default function WorkerDashboard() {
         </div>
       </div>
 
-      <div style={{ marginTop: 16, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, fontSize: 13, color: '#334155' }}>
-        Job assignment UI can be connected next. This dashboard is now enabled for worker login and account visibility.
+      <div style={{ marginTop: 16, background: '#f3e8ff', border: '1px solid #e9d5ff', borderRadius: 10, padding: 14, fontSize: 13, color: '#7c3aed' }}>
+        <strong>📋 Manage your job types:</strong>{' '}
+        <Link to="/worker/job-selection" style={{ color: '#a259ff', fontWeight: 700, textDecoration: 'underline' }}>
+          Select or update your job preferences →
+        </Link>
+      </div>
+
+      <div style={{ marginTop: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, fontSize: 13, color: '#334155' }}>
+        💼 <Link to="/jobs" style={{ color: '#a259ff', fontWeight: 700, textDecoration: 'underline' }}>Browse all available Gigtos jobs</Link> to discover new work opportunities in your area.
       </div>
     </div>
   );

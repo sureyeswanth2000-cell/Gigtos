@@ -11,7 +11,7 @@ describe('ai assistant helpers', () => {
     expect(findRelevantService('Need fan wiring repair urgently')?.name).toBe('Electrician');
   });
 
-  it('matches future services from user text', () => {
+  it('matches upcoming services from user text', () => {
     expect(findRelevantService('I need a driver with a car')?.name).toBe('Driver with Vehicle');
     expect(findRelevantService('cockroach infestation in kitchen')?.name).toBe('Pest Control');
     expect(findRelevantService('my AC is not cooling')?.name).toBe('AC Technician');
@@ -60,7 +60,7 @@ describe('ai assistant helpers', () => {
     ]);
   });
 
-  it('includes future services marked as upcoming', () => {
+  it('includes services marked as upcoming', () => {
     const upcoming = SERVICE_CATALOG.filter((s) => s.isUpcoming).map((s) => s.name);
     expect(upcoming).toContain('Driver with Vehicle');
     expect(upcoming).toContain('Driver without Vehicle');

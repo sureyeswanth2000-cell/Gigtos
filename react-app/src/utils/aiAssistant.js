@@ -35,7 +35,7 @@ export const SERVICE_CATALOG = [
     desc: 'Interior, exterior, touch-up, and fresh painting jobs',
     keywords: ['painter', 'paint', 'wall', 'color', 'coating', 'putty'],
   },
-  // ─── Future Services ──────────────────────────────────────────────────
+  // ─── Upcoming Services ─────────────────────────────────────────────────
   {
     id: 5,
     name: 'Driver with Vehicle',

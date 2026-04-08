@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { LocationProvider } from './context/LocationContext';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import Auth from './pages/Auth';
@@ -18,6 +19,9 @@ import Chat from './pages/Chat';
 import SuperAdmin from './pages/SuperAdmin';
 import RegionLeadDashboard from './pages/RegionLeadDashboard';
 import WorkerDashboard from './pages/WorkerDashboard';
+import JobDetail from './pages/JobDetail';
+import WorkerRegistration from './pages/WorkerRegistration';
+import MasonDashboard from './pages/MasonDashboard';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -90,6 +94,7 @@ function App() {
   };
 
   return (
+    <LocationProvider>
     <BrowserRouter basename="/Gigtos">
       <Header />
       <main style={{ minHeight: '70vh' }}>
@@ -97,6 +102,12 @@ function App() {
           {/* Public Routes */}
           <Route path="/" element={user ? (isAdmin || isWorker ? <Navigate to={getPostLoginRedirect()} /> : <Home />) : <Home />} />
           <Route path="/auth" element={user ? <Navigate to={getPostLoginRedirect()} /> : <Auth />} />
+
+          {/* Special Job Detail Pages (public, geo-filtered) */}
+          <Route path="/jobs/:jobId" element={<JobDetail />} />
+
+          {/* Worker Registration (public) */}
+          <Route path="/worker/register" element={<WorkerRegistration />} />
 
           {/* Protected User Routes */}
           <Route path="/service" element={<ProtectedRoute><Service /></ProtectedRoute>} />
@@ -110,6 +121,7 @@ function App() {
           <Route path="/admin/workers" element={<ProtectedRoute requireAdmin><Workers /></ProtectedRoute>} />
           <Route path="/admin/bookings" element={<ProtectedRoute requireAdmin><AdminBookings /></ProtectedRoute>} />
           <Route path="/admin/region-lead" element={<ProtectedRoute requireAdmin><RegionLeadDashboard /></ProtectedRoute>} />
+          <Route path="/mason" element={<ProtectedRoute requireAdmin><MasonDashboard /></ProtectedRoute>} />
 
           {/* Protected Worker Route */}
           <Route path="/worker/dashboard" element={<ProtectedRoute><WorkerDashboard /></ProtectedRoute>} />
@@ -120,6 +132,7 @@ function App() {
       </main>
       <Footer />
     </BrowserRouter>
+    </LocationProvider>
   );
 }
 

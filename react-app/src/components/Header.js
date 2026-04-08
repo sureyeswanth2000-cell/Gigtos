@@ -50,21 +50,22 @@ export default function Header() {
   return (
     <header style={{
       padding: '12px 20px',
-      background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+      background: '#A259FF',
       color: '#fff',
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      boxShadow: '0 2px 8px rgba(162,89,255,0.3)',
       position: 'relative'
     }}>
       {/* Logo */}
       <Link to="/" style={{ textDecoration: 'none' }}>
         <div style={{
-          fontWeight: 'bold',
+          fontWeight: '800',
           fontSize: '22px',
           color: '#fff',
-          cursor: 'pointer'
+          cursor: 'pointer',
+          letterSpacing: '-0.3px'
         }}>
           🏠 Gigto
         </div>
@@ -88,9 +89,14 @@ export default function Header() {
                   📍 Region Lead Dash
                 </Link>
               ) : isAdmin ? (
-                <Link to="/admin" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '4px' }}>
-                  👨‍💼 Admin Dash
-                </Link>
+                <>
+                  <Link to="/admin" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '4px' }}>
+                    👨‍💼 Admin Dash
+                  </Link>
+                  <Link to="/mason" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.15)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.4)' }}>
+                    🧱 Mason
+                  </Link>
+                </>
               ) : isWorker ? (
                 <Link to="/worker/dashboard" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(16,185,129,0.35)', padding: '6px 12px', borderRadius: '4px' }}>
                   👷 Worker Dash
@@ -139,6 +145,11 @@ export default function Header() {
                         <Link to={isSuperAdmin ? "/admin/super" : isRegionLead ? "/admin/region-lead" : "/admin"} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
                           {isSuperAdmin ? "🛡️ SuperAdmin Dash" : isRegionLead ? "📍 Region Lead Dash" : "👨‍💼 Admin Dash"}
                         </Link>
+                        {isAdmin && !isSuperAdmin && !isRegionLead && (
+                          <Link to="/mason" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
+                            🧱 Mason Dashboard
+                          </Link>
+                        )}
                       </>
                     ) : (
                       <>

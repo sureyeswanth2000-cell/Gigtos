@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
+import { getHeroCTAText } from '../utils/abTest';
 import './Home.css';
 
 function ServiceIcon({ serviceName }) {
@@ -52,7 +53,7 @@ export default function Home() {
     },
     {
       title: 'Compare quotes',
-      description: 'Receive quotes from local, verified workers in Kavali.',
+      description: 'Receive quotes from local, verified workers near you.',
     },
     {
       title: 'Book with confidence',
@@ -112,13 +113,13 @@ export default function Home() {
     <div className="home-page">
       <section className="hero-shell" id="discover">
         <div className="hero-intro">
-          <p className="eyebrow">Kavali local network</p>
+          <p className="eyebrow">Your local network</p>
           <h1>Trusted home services, booked in minutes.</h1>
           <p className="hero-subtext">
             From urgent repairs to planned upgrades, Gigtos helps you find verified professionals with transparent quotes.
           </p>
           <div className="hero-actions">
-            <button className="primary-btn" onClick={() => scrollToSection('services')}>Book a Service</button>
+            <button className="primary-btn" onClick={() => scrollToSection('services')} aria-label="Get started with Gigtos">{getHeroCTAText()}</button>
             <button className="secondary-btn" onClick={() => scrollToSection('how-it-works')}>How It Works</button>
           </div>
           <div className="trust-row">
@@ -149,8 +150,8 @@ export default function Home() {
       <section className="services-section" id="services">
         <div className="section-header-row">
           <div>
-            <p className="eyebrow">Popular in Kavali</p>
-            <h2>Popular Services in Kavali</h2>
+            <p className="eyebrow">Popular near you</p>
+            <h2>Popular Services Near You</h2>
           </div>
           <p className="section-caption">Verified pro availability updates daily</p>
         </div>
@@ -224,7 +225,7 @@ export default function Home() {
         <div className="why-grid">
           <div>
             <h3>Local-first matching</h3>
-            <p>We prioritize professionals who actively service your neighborhood in Kavali.</p>
+            <p>We prioritize professionals who actively service your neighborhood.</p>
           </div>
           <div>
             <h3>Transparent quotes</h3>

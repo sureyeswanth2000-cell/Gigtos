@@ -18,6 +18,18 @@ import Chat from './pages/Chat';
 import SuperAdmin from './pages/SuperAdmin';
 import RegionLeadDashboard from './pages/RegionLeadDashboard';
 import WorkerDashboard from './pages/WorkerDashboard';
+import Jobs from './pages/Jobs';
+import JobDetail from './pages/JobDetail';
+import UserProfile from './pages/UserProfile';
+import UserDashboard from './pages/UserDashboard';
+import WorkerMap from './pages/WorkerMap';
+import WorkerOpenWork from './pages/WorkerOpenWork';
+import WorkerHistory from './pages/WorkerHistory';
+import WorkerProfile from './pages/WorkerProfile';
+import WorkerFutureWork from './pages/WorkerFutureWork';
+import WorkerSupport from './pages/WorkerSupport';
+import MasonDashboard from './pages/MasonDashboard';
+import NotFound from './pages/NotFound';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -113,6 +125,31 @@ function App() {
 
           {/* Protected Worker Route */}
           <Route path="/worker/dashboard" element={<ProtectedRoute><WorkerDashboard /></ProtectedRoute>} />
+          <Route path="/worker/map" element={<ProtectedRoute><WorkerMap /></ProtectedRoute>} />
+          <Route path="/worker/open-work" element={<ProtectedRoute><WorkerOpenWork /></ProtectedRoute>} />
+          <Route path="/worker/history" element={<ProtectedRoute><WorkerHistory /></ProtectedRoute>} />
+          <Route path="/worker/profile" element={<ProtectedRoute><WorkerProfile /></ProtectedRoute>} />
+          <Route path="/worker/future-work" element={<ProtectedRoute><WorkerFutureWork /></ProtectedRoute>} />
+          <Route path="/worker/support" element={<ProtectedRoute><WorkerSupport /></ProtectedRoute>} />
+
+          {/* Public Job Routes */}
+          <Route path="/jobs" element={<Jobs />} />
+          <Route path="/jobs/:jobId" element={<JobDetail />} />
+
+          {/* Protected User Routes (new) */}
+          <Route path="/user/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+          <Route path="/user/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
+
+          {/* Protected Mason Route */}
+          <Route path="/mason/dashboard" element={<ProtectedRoute requireAdmin><MasonDashboard /></ProtectedRoute>} />
+
+          {/* Redirect legacy paths */}
+          <Route path="/login" element={<Navigate to="/auth" />} />
+          <Route path="/register" element={<Navigate to="/auth?mode=user" />} />
+          <Route path="/worker/register" element={<Navigate to="/auth?mode=worker" />} />
+
+          {/* 404 */}
+          <Route path="*" element={<NotFound />} />
 
           {/* Protected SuperAdmin Route */}
           <Route path="/admin/super" element={<ProtectedRoute requireSuperAdmin><SuperAdmin /></ProtectedRoute>} />

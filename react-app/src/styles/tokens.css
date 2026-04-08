@@ -1,6 +1,9 @@
 :root {
   --color-brand-600: #764ba2;
   --color-brand-700: #5f3a86;
+  --primary-purple: #A259FF;
+  --primary-purple-dark: #7C3AED;
+  --primary-purple-light: #E9D5FF;
   --color-action-600: #057a31;
   --color-action-700: #046127;
   --color-accent-500: #f97316;

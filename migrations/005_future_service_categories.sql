@@ -44,7 +44,7 @@ INSERT INTO service_categories (name, description, icon, sort_order) VALUES
   ('Cleaning',              'Deep cleaning, pest control, sanitization',                      '🧹', 5),
   ('Security',              'Security guards, event security, night patrol',                  '🛡️', 6),
   ('Construction',          'Masonry, steel work, surveying, quality testing',                '🏗️', 7),
-  ('Automotive',            'Vehicle mechanics, servicing, denting, and repairs',             '🔧', 8),
+  ('Automotive',            'Vehicle mechanics, servicing, denting, and repairs',             '🚙', 8),
   ('Hotel & Hospitality',   'Cooks, waiters, cleaners, and front-desk staff for hotels',     '🏨', 9),
   ('Industrial',            'Elevators, escalators, welding, electric equipment repair',      '⚙️', 10),
   ('Event & Warehouse',     'Event helpers, warehouse labour, farm workers',                  '📦', 11),
@@ -75,7 +75,7 @@ UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE 
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '🔩', sort_order = 3 WHERE name = 'Steel Worker';
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '📐', sort_order = 4 WHERE name = 'Land Surveyor';
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '🔬', sort_order = 5 WHERE name = 'Construction Quality Tester';
-UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '🏠', sort_order = 6 WHERE name = 'Roof Coating Specialist';
+UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '🏗️', sort_order = 6 WHERE name = 'Roof Coating Specialist';
 UPDATE service_types SET category_id = (SELECT id FROM service_categories WHERE name = 'Construction'),    icon = '🔥', sort_order = 7 WHERE name = 'Welding';
 
 -- Household Help

@@ -213,7 +213,7 @@ export const SERVICE_CATALOG = [
   {
     id: 22,
     name: 'Roof Coating Specialist',
-    icon: '🏠',
+    icon: '🏗️',
     price: 'Quote Based',
     category: 'Construction',
     desc: 'White roof painting / cool-roof coating for sun and heat protection',
@@ -409,7 +409,7 @@ export const SERVICE_CATEGORIES = [
   { name: 'Cleaning',            icon: '🧹', sortOrder: 5 },
   { name: 'Security',            icon: '🛡️', sortOrder: 6 },
   { name: 'Construction',        icon: '🏗️', sortOrder: 7 },
-  { name: 'Automotive',          icon: '🔧', sortOrder: 8 },
+  { name: 'Automotive',          icon: '🚙', sortOrder: 8 },
   { name: 'Hotel & Hospitality', icon: '🏨', sortOrder: 9 },
   { name: 'Industrial',          icon: '⚙️', sortOrder: 10 },
   { name: 'Event & Warehouse',   icon: '📦', sortOrder: 11 },

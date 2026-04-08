@@ -92,7 +92,7 @@ describe('ai assistant helpers', () => {
     expect(upcoming).toContain('Driving Instructor');
     expect(upcoming).toContain('Gardener');
     expect(upcoming).toContain('Maid');
-    expect(upcoming.length).toBeGreaterThanOrEqual(35);
+    expect(upcoming.length).toBe(35);
   });
 
   it('groups services by category', () => {

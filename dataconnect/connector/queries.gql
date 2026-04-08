@@ -392,3 +392,168 @@ query GetUserCashbacks($userId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
     booking { bookingId issueTitle }
   }
 }
+
+# ─── Service Category Queries (Future) ────────────────────────────────────────
+
+# List all active service categories with their services (home page navigation)
+query ListServiceCategories @auth(level: USER_EMAIL_VERIFIED) {
+  serviceCategories(
+    where: { isActive: { eq: true } }
+    orderBy: [{ sortOrder: ASC }]
+  ) {
+    id
+    name
+    description
+    icon
+    serviceTypes(where: { isActive: { eq: true } }, orderBy: [{ sortOrder: ASC }]) {
+      id
+      name
+      description
+      icon
+      requiresAsset
+    }
+  }
+}
+
+# Get services by category
+query GetServicesByCategory($categoryId: Int!) @auth(level: USER_EMAIL_VERIFIED) {
+  serviceTypes(
+    where: { categoryId: { eq: $categoryId }, isActive: { eq: true } }
+    orderBy: [{ sortOrder: ASC }]
+  ) {
+    id
+    name
+    description
+    icon
+    requiresAsset
+  }
+}
+
+# ─── AI / User Behavior Queries (Future) ─────────────────────────────────────
+
+# Get user's search history (for AI autocomplete and suggestions)
+query GetUserSearchHistory($userId: UUID!, $limit: Int) @auth(level: USER_EMAIL_VERIFIED) {
+  userSearchHistories(
+    where: { userId: { eq: $userId } }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+  ) {
+    id
+    queryText
+    clicked
+    source
+    createdAt
+    matchedServiceType { name }
+  }
+}
+
+# Get user's behavior events (for AI model training data)
+query GetUserBehaviorEvents($userId: UUID!, $eventType: String, $limit: Int, $offset: Int) @auth(level: USER_EMAIL_VERIFIED) {
+  userBehaviorEvents(
+    where: { userId: { eq: $userId }, eventType: { eq: $eventType } }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    eventType
+    eventData
+    screenName
+    deviceType
+    createdAt
+    serviceType { name }
+  }
+}
+
+# Get AI recommendations made to a user (with action feedback)
+query GetUserRecommendations($userId: UUID!, $limit: Int) @auth(level: USER_EMAIL_VERIFIED) {
+  aiRecommendationLogs(
+    where: { userId: { eq: $userId } }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+  ) {
+    id
+    recommendationType
+    recommendedItems
+    score
+    userAction
+    actedAt
+    createdAt
+  }
+}
+
+# Get user preferences (used by AI to personalize)
+query GetUserPreferences($userId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
+  userPreferences(where: { userId: { eq: $userId } }) {
+    preferredServices
+    preferredTimeSlots
+    preferredAreas
+    priceSensitivity
+    avgBookingFrequencyDays
+    lastActiveAt
+  }
+}
+
+# ─── Worker Asset Queries (Future) ────────────────────────────────────────────
+
+# Get assets owned by a worker (admin verification page)
+query GetWorkerAssets($workerId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
+  workerAssets(
+    where: { workerId: { eq: $workerId }, status: { eq: "active" } }
+    orderBy: [{ createdAt: DESC }]
+  ) {
+    id
+    assetType
+    assetName
+    registrationNo
+    isVerified
+    documentUrl
+    expiryDate
+    status
+    verifiedByAdmin { name }
+  }
+}
+
+# Get service areas a worker covers (multi-area support)
+query GetWorkerServiceAreas($workerId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
+  workerServiceAreas(
+    where: { workerId: { eq: $workerId }, status: { eq: "active" } }
+  ) {
+    id
+    area
+    isPrimary
+    serviceType { name }
+  }
+}
+
+# Find workers with verified assets for asset-required services (e.g. Driver with Vehicle)
+query GetWorkersWithAsset($area: String!, $serviceTypeId: Int!, $assetType: String!) @auth(level: USER_EMAIL_VERIFIED) {
+  workerAssets(
+    where: {
+      assetType: { eq: $assetType }
+      isVerified: { eq: true }
+      status: { eq: "active" }
+      worker: {
+        area: { eq: $area }
+        serviceTypeId: { eq: $serviceTypeId }
+        isAvailable: { eq: true }
+        status: { eq: "active" }
+        approvalStatus: { eq: "approved" }
+        isFraud: { eq: false }
+      }
+    }
+  ) {
+    id
+    assetType
+    assetName
+    registrationNo
+    worker {
+      workerId
+      name
+      phone
+      rating
+      completedJobs
+      isTopListed
+    }
+  }
+}

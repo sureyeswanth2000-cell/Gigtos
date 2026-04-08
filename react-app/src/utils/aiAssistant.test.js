@@ -11,6 +11,16 @@ describe('ai assistant helpers', () => {
     expect(findRelevantService('Need fan wiring repair urgently')?.name).toBe('Electrician');
   });
 
+  it('matches future services from user text', () => {
+    expect(findRelevantService('I need a driver with a car')?.name).toBe('Driver with Vehicle');
+    expect(findRelevantService('cockroach infestation in kitchen')?.name).toBe('Pest Control');
+    expect(findRelevantService('my AC is not cooling')?.name).toBe('AC Technician');
+    expect(findRelevantService('need a maid for house cleaning')?.name).toBe('Home Helper');
+    expect(findRelevantService('washing machine not working')?.name).toBe('Appliance Repair');
+    expect(findRelevantService('need deep cleaning of my flat')?.name).toBe('Deep Cleaning');
+    expect(findRelevantService('I need a security guard for my event')?.name).toBe('Security Guard');
+  });
+
   it('formats quote insight ranges clearly', () => {
     expect(formatPriceInsight({ minQuote: 450, maxQuote: 900, averageQuote: 675, quoteCount: 5 })).toBe(
       '₹450 - ₹900 (avg ₹675 from 5 quotes)'
@@ -41,11 +51,27 @@ describe('ai assistant helpers', () => {
   });
 
   it('keeps the core service catalog available for the assistant', () => {
-    expect(SERVICE_CATALOG.map((service) => service.name)).toEqual([
+    const coreServices = SERVICE_CATALOG.filter((s) => !s.isUpcoming).map((s) => s.name);
+    expect(coreServices).toEqual([
       'Plumber',
       'Electrician',
       'Carpenter',
       'Painter',
     ]);
+  });
+
+  it('includes future services marked as upcoming', () => {
+    const upcoming = SERVICE_CATALOG.filter((s) => s.isUpcoming).map((s) => s.name);
+    expect(upcoming).toContain('Driver with Vehicle');
+    expect(upcoming).toContain('Driver without Vehicle');
+    expect(upcoming).toContain('Home Helper');
+    expect(upcoming.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('groups services by category', () => {
+    const categories = [...new Set(SERVICE_CATALOG.map((s) => s.category))];
+    expect(categories).toContain('Home Repair');
+    expect(categories).toContain('Transport');
+    expect(categories).toContain('Household Help');
   });
 });

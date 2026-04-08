@@ -409,3 +409,202 @@ mutation LogActivity(
     decision: $decision
   })
 }
+
+# ─── Service Category Mutations (Future) ──────────────────────────────────────
+
+# SuperAdmin creates a new service category
+mutation CreateServiceCategory(
+  $name: String!
+  $description: String
+  $icon: String
+  $sortOrder: Int!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  serviceCategory_insert(data: {
+    name: $name
+    description: $description
+    icon: $icon
+    sortOrder: $sortOrder
+    isActive: true
+  })
+}
+
+# SuperAdmin adds a new service type under a category
+mutation CreateServiceType(
+  $name: String!
+  $description: String
+  $categoryId: Int
+  $icon: String
+  $requiresAsset: Boolean
+  $sortOrder: Int!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  serviceType_insert(data: {
+    name: $name
+    description: $description
+    categoryId: $categoryId
+    icon: $icon
+    requiresAsset: $requiresAsset
+    sortOrder: $sortOrder
+    isActive: true
+  })
+}
+
+# Toggle service type active/inactive
+mutation ToggleServiceType(
+  $id: Int!
+  $isActive: Boolean!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  serviceType_update(
+    id: $id
+    data: { isActive: $isActive }
+  )
+}
+
+# ─── AI / User Behavior Mutations (Future) ───────────────────────────────────
+
+# Track a user's search query
+mutation TrackUserSearch(
+  $userId: UUID!
+  $queryText: String!
+  $matchedServiceTypeId: Int
+  $resultCount: Int
+  $clicked: Boolean!
+  $source: String!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  userSearchHistory_insert(data: {
+    userId: $userId
+    queryText: $queryText
+    matchedServiceTypeId: $matchedServiceTypeId
+    resultCount: $resultCount
+    clicked: $clicked
+    source: $source
+  })
+}
+
+# Track a user behavior event (page view, click, booking action, etc.)
+mutation TrackUserBehavior(
+  $userId: UUID!
+  $eventType: String!
+  $eventData: String
+  $serviceTypeId: Int
+  $bookingId: UUID
+  $sessionId: String
+  $deviceType: String
+  $appVersion: String
+  $screenName: String
+) @auth(level: USER_EMAIL_VERIFIED) {
+  userBehaviorEvent_insert(data: {
+    userId: $userId
+    eventType: $eventType
+    eventData: $eventData
+    serviceTypeId: $serviceTypeId
+    bookingId: $bookingId
+    sessionId: $sessionId
+    deviceType: $deviceType
+    appVersion: $appVersion
+    screenName: $screenName
+  })
+}
+
+# Log an AI recommendation made to a user
+mutation LogAiRecommendation(
+  $userId: UUID!
+  $recommendationType: String!
+  $recommendedItems: String!
+  $context: String
+  $modelVersion: String
+  $score: Float
+) @auth(level: USER_EMAIL_VERIFIED) {
+  aiRecommendationLog_insert(data: {
+    userId: $userId
+    recommendationType: $recommendationType
+    recommendedItems: $recommendedItems
+    context: $context
+    modelVersion: $modelVersion
+    score: $score
+    userAction: "pending"
+  })
+}
+
+# User acts on a recommendation (accepted/ignored/dismissed)
+mutation UpdateRecommendationAction(
+  $id: UUID!
+  $userAction: String!
+  $actedAt: Timestamp!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  aiRecommendationLog_update(
+    id: $id
+    data: { userAction: $userAction, actedAt: $actedAt }
+  )
+}
+
+# Create or update user preferences (upsert-like via insert, conflict on user_id)
+mutation UpsertUserPreferences(
+  $userId: UUID!
+  $preferredServices: String
+  $preferredTimeSlots: String
+  $preferredAreas: String
+  $priceSensitivity: String
+  $avgBookingFrequencyDays: Int
+  $lastActiveAt: Timestamp
+) @auth(level: USER_EMAIL_VERIFIED) {
+  userPreference_insert(data: {
+    userId: $userId
+    preferredServices: $preferredServices
+    preferredTimeSlots: $preferredTimeSlots
+    preferredAreas: $preferredAreas
+    priceSensitivity: $priceSensitivity
+    avgBookingFrequencyDays: $avgBookingFrequencyDays
+    lastActiveAt: $lastActiveAt
+  })
+}
+
+# ─── Worker Asset Mutations (Future) ─────────────────────────────────────────
+
+# Worker registers an asset (vehicle, tool, etc.)
+mutation RegisterWorkerAsset(
+  $workerId: UUID!
+  $assetType: String!
+  $assetName: String
+  $registrationNo: String
+  $documentUrl: String
+  $expiryDate: Date
+) @auth(level: USER_EMAIL_VERIFIED) {
+  workerAsset_insert(data: {
+    workerId: $workerId
+    assetType: $assetType
+    assetName: $assetName
+    registrationNo: $registrationNo
+    documentUrl: $documentUrl
+    expiryDate: $expiryDate
+    isVerified: false
+    status: "active"
+  })
+}
+
+# Admin verifies a worker's asset
+mutation VerifyWorkerAsset(
+  $id: UUID!
+  $verifiedBy: UUID!
+  $verifiedAt: Timestamp!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  workerAsset_update(
+    id: $id
+    data: { isVerified: true, verifiedBy: $verifiedBy, verifiedAt: $verifiedAt }
+  )
+}
+
+# Worker adds a service area
+mutation AddWorkerServiceArea(
+  $workerId: UUID!
+  $serviceTypeId: Int!
+  $area: String!
+  $isPrimary: Boolean!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  workerServiceArea_insert(data: {
+    workerId: $workerId
+    serviceTypeId: $serviceTypeId
+    area: $area
+    isPrimary: $isPrimary
+    status: "active"
+  })
+}

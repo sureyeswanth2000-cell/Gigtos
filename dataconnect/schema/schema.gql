@@ -1,13 +1,32 @@
 # Firebase Data Connect — GraphQL SDL Schema
-# Maps all 17 PostgreSQL tables for Gigtos @ 1 Lakh Users
+# Maps PostgreSQL tables for Gigtos @ 1 Lakh Users
 # See: DATA_CONNECT_MIGRATION_PLAN.md for full table rationale
 
 # ─── Lookup / Dimension Tables ───────────────────────────────────────────────
+
+type ServiceCategory @table(name: "service_categories") {
+  id: Int!                           @col(name: "id")
+  name: String!                      @unique
+  description: String
+  icon: String
+  sortOrder: Int!                    @col(name: "sort_order") @default(value: 0)
+  isActive: Boolean!                 @col(name: "is_active")  @default(value: true)
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  # Relationships
+  serviceTypes: [ServiceType!]!      @hasMany(foreignKey: "category_id")
+}
 
 type ServiceType @table(name: "service_types") {
   id: Int!                           @col(name: "id")
   name: String!                      @unique
   description: String
+  categoryId: Int                    @col(name: "category_id")
+  icon: String
+  isActive: Boolean!                 @col(name: "is_active")       @default(value: true)
+  requiresAsset: Boolean!            @col(name: "requires_asset")  @default(value: false)
+  sortOrder: Int!                    @col(name: "sort_order")      @default(value: 0)
+  # Relationships
+  category: ServiceCategory          @hasOne(foreignKey: "category_id")
 }
 
 type TimeSlot @table(name: "time_slots") {
@@ -276,4 +295,102 @@ type AdminAlert @table(name: "admin_alerts") {
   # Relationships
   admin: Admin!                      @hasOne(foreignKey: "admin_id")
   booking: Booking                   @hasOne(foreignKey: "booking_id")
+}
+
+# ─── AI / User Behavior Tables (Future) ──────────────────────────────────────
+
+type UserSearchHistory @table(name: "user_search_history") {
+  id: UUID!                          @default(expr: "uuidV4()")
+  userId: UUID!                      @col(name: "user_id")
+  queryText: String!                 @col(name: "query_text")
+  matchedServiceTypeId: Int          @col(name: "matched_service_type_id")
+  resultCount: Int                   @col(name: "result_count") @default(value: 0)
+  clicked: Boolean!                  @default(value: false)
+  source: String!                    @default(value: "search_bar")
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  # Relationships
+  user: User!                        @hasOne(foreignKey: "user_id")
+  matchedServiceType: ServiceType    @hasOne(foreignKey: "matched_service_type_id")
+}
+
+type UserBehaviorEvent @table(name: "user_behavior_events") {
+  id: UUID!                          @default(expr: "uuidV4()")
+  userId: UUID!                      @col(name: "user_id")
+  eventType: String!                 @col(name: "event_type")
+  eventData: String                  @col(name: "event_data")
+  serviceTypeId: Int                 @col(name: "service_type_id")
+  bookingId: UUID                    @col(name: "booking_id")
+  sessionId: String                  @col(name: "session_id")
+  deviceType: String                 @col(name: "device_type")
+  appVersion: String                 @col(name: "app_version")
+  screenName: String                 @col(name: "screen_name")
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  # Relationships
+  user: User!                        @hasOne(foreignKey: "user_id")
+  serviceType: ServiceType           @hasOne(foreignKey: "service_type_id")
+  booking: Booking                   @hasOne(foreignKey: "booking_id")
+}
+
+type AiRecommendationLog @table(name: "ai_recommendations_log") {
+  id: UUID!                          @default(expr: "uuidV4()")
+  userId: UUID!                      @col(name: "user_id")
+  recommendationType: String!        @col(name: "recommendation_type")
+  recommendedItems: String!          @col(name: "recommended_items")
+  context: String                    @col(name: "context")
+  modelVersion: String               @col(name: "model_version")
+  score: Float
+  userAction: String!                @col(name: "user_action") @default(value: "pending")
+  actedAt: Timestamp                 @col(name: "acted_at")
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  # Relationships
+  user: User!                        @hasOne(foreignKey: "user_id")
+}
+
+type UserPreference @table(name: "user_preferences") {
+  id: UUID!                          @default(expr: "uuidV4()")
+  userId: UUID!                      @col(name: "user_id") @unique
+  preferredServices: String          @col(name: "preferred_services")
+  preferredTimeSlots: String         @col(name: "preferred_time_slots")
+  preferredAreas: String             @col(name: "preferred_areas")
+  priceSensitivity: String           @col(name: "price_sensitivity") @default(value: "medium")
+  avgBookingFrequencyDays: Int       @col(name: "avg_booking_frequency_days")
+  lastActiveAt: Timestamp            @col(name: "last_active_at")
+  updatedAt: Timestamp!              @col(name: "updated_at") @default(expr: "request.time")
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  # Relationships
+  user: User!                        @hasOne(foreignKey: "user_id")
+}
+
+# ─── Worker Asset Tables (Future — Driver with Vehicle etc.) ─────────────────
+
+type WorkerAsset @table(name: "worker_assets") {
+  id: UUID!                          @default(expr: "uuidV4()")
+  workerId: UUID!                    @col(name: "worker_id")
+  assetType: String!                 @col(name: "asset_type")
+  assetName: String                  @col(name: "asset_name")
+  registrationNo: String             @col(name: "registration_no")
+  isVerified: Boolean!               @col(name: "is_verified") @default(value: false)
+  verifiedBy: UUID                   @col(name: "verified_by")
+  verifiedAt: Timestamp              @col(name: "verified_at")
+  documentUrl: String                @col(name: "document_url")
+  expiryDate: Date                   @col(name: "expiry_date")
+  status: String!                    @default(value: "active")
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  updatedAt: Timestamp!              @col(name: "updated_at") @default(expr: "request.time")
+  # Relationships
+  worker: Worker!                    @hasOne(foreignKey: "worker_id")
+  verifiedByAdmin: Admin             @hasOne(foreignKey: "verified_by")
+}
+
+type WorkerServiceArea @table(name: "worker_service_areas") {
+  id: UUID!                          @default(expr: "uuidV4()")
+  workerId: UUID!                    @col(name: "worker_id")
+  serviceTypeId: Int!                @col(name: "service_type_id")
+  area: String!
+  isPrimary: Boolean!                @col(name: "is_primary") @default(value: false)
+  status: String!                    @default(value: "active")
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  # Relationships
+  worker: Worker!                    @hasOne(foreignKey: "worker_id")
+  serviceType: ServiceType!          @hasOne(foreignKey: "service_type_id")
 }

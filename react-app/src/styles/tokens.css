@@ -1,4 +1,18 @@
 :root {
+  /* ── New unified purple palette ────────────────────────────────────────── */
+  --primary-purple: #A259FF;
+  --primary-purple-dark: #7C3AED;
+  --primary-purple-light: #E9D5FF;
+  --bg-light: #F9F6FF;
+  --text-dark: #2D1836;
+  --text-muted: #6B7280;
+  --card-bg: #FFFFFF;
+  --border-color: #E5D8FF;
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --error: #EF4444;
+
+  /* ── Existing brand tokens (kept for backward compatibility) ────────────── */
   --color-brand-600: #764ba2;
   --color-brand-700: #5f3a86;
   --color-action-600: #057a31;

@@ -1,6 +1,6 @@
-# Gigto
+# Gigtos
 
-Home services app (Plumbing, Electrical, etc.) for Kavali — with customer booking, admin management, and a React front-end.
+Home services app (Plumbing, Electrical, and more) across all of India — with customer booking, geo-filtering by city/town/village, worker dashboard, admin management, and a React front-end.
 
 ---
 

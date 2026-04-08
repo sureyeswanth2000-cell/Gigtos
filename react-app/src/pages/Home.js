@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
+import { useLocation } from '../context/LocationContext';
 import './Home.css';
 
 function ServiceIcon({ serviceName }) {
@@ -38,6 +39,8 @@ export default function Home() {
   const [showModal, setShowModal] = useState(false);
   const [assistantPrompt, setAssistantPrompt] = useState('');
   const [serviceSearch, setServiceSearch] = useState('');
+  const { location } = useLocation() || {};
+  const cityName = location?.city || 'your area';
 
   const services = SERVICE_CATALOG;
   const trustPillars = [
@@ -52,7 +55,7 @@ export default function Home() {
     },
     {
       title: 'Compare quotes',
-      description: 'Receive quotes from local, verified workers in Kavali.',
+      description: `Receive quotes from local, verified workers near you.`,
     },
     {
       title: 'Book with confidence',
@@ -112,7 +115,7 @@ export default function Home() {
     <div className="home-page">
       <section className="hero-shell" id="discover">
         <div className="hero-intro">
-          <p className="eyebrow">Kavali local network</p>
+          <p className="eyebrow">{cityName} local network</p>
           <h1>Trusted home services, booked in minutes.</h1>
           <p className="hero-subtext">
             From urgent repairs to planned upgrades, Gigtos helps you find verified professionals with transparent quotes.
@@ -149,8 +152,8 @@ export default function Home() {
       <section className="services-section" id="services">
         <div className="section-header-row">
           <div>
-            <p className="eyebrow">Popular in Kavali</p>
-            <h2>Popular Services in Kavali</h2>
+            <p className="eyebrow">Popular in {cityName}</p>
+            <h2>Popular Services in {cityName}</h2>
           </div>
           <p className="section-caption">Verified pro availability updates daily</p>
         </div>
@@ -224,7 +227,7 @@ export default function Home() {
         <div className="why-grid">
           <div>
             <h3>Local-first matching</h3>
-            <p>We prioritize professionals who actively service your neighborhood in Kavali.</p>
+            <p>We prioritize professionals who actively service your neighborhood in {cityName}.</p>
           </div>
           <div>
             <h3>Transparent quotes</h3>

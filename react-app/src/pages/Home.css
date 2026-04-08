@@ -429,12 +429,24 @@
   }
 
   .services-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+    padding-bottom: 8px;
+    scrollbar-width: none;
   }
 
-  .service-card {
-    padding: 12px;
+  .services-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .services-grid .service-card {
+    flex: 0 0 78vw;
+    max-width: 300px;
+    scroll-snap-align: start;
+    padding: 14px;
   }
 
   .service-card p {
@@ -444,5 +456,26 @@
 
   .service-card-actions {
     flex-direction: row;
+  }
+
+  /* Horizontal steps swipe on mobile */
+  .steps-grid {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+  }
+
+  .steps-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .steps-grid .step-card {
+    flex: 0 0 78vw;
+    max-width: 280px;
+    scroll-snap-align: start;
   }
 }

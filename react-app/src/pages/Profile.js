@@ -118,18 +118,19 @@ export default function Profile() {
 
   const handleDetectAndSetLocation = () => {
     if (detectLocation) detectLocation();
-    // Use detected location after a brief delay
-    setTimeout(() => {
-      if (detectedLocation) {
-        setProfileData((prev) => ({
-          ...prev,
-          locationCity: detectedLocation.city || "",
-          locationLat: detectedLocation.lat,
-          locationLng: detectedLocation.lng,
-        }));
-      }
-    }, 2000);
   };
+
+  // Sync detected location into profile when it changes and user has triggered detection
+  useEffect(() => {
+    if (detectedLocation && !profileData.locationCity) {
+      setProfileData((prev) => ({
+        ...prev,
+        locationCity: detectedLocation.city || prev.locationCity,
+        locationLat: detectedLocation.lat ?? prev.locationLat,
+        locationLng: detectedLocation.lng ?? prev.locationLng,
+      }));
+    }
+  }, [detectedLocation, profileData.locationCity]);
 
   const handleDeleteLocation = () => {
     setProfileData({
@@ -200,10 +201,11 @@ export default function Profile() {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           boxShadow: '0 4px 12px rgba(162,89,255,0.15)'
         }}>
-          <span style={{ fontWeight: 600, color: '#5b21b6', fontSize: '14px' }}>📍 Location: {profileData.locationCity || 'Not set'}</span>
+          <span style={{ fontWeight: 600, color: '#5b21b6', fontSize: '14px' }} aria-label={`Location: ${profileData.locationCity || 'Not set'}`}>📍 Location: {profileData.locationCity || 'Not set'}</span>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={() => { setEditingLocation(true); setShowLocationActions(false); }}
+              aria-label="Edit location"
               style={{
                 padding: '6px 14px', fontSize: '13px', fontWeight: 600,
                 background: '#7C3AED', color: '#fff', border: 'none',
@@ -214,6 +216,7 @@ export default function Profile() {
             </button>
             <button
               onClick={handleDeleteLocation}
+              aria-label="Delete location"
               style={{
                 padding: '6px 14px', fontSize: '13px', fontWeight: 600,
                 background: '#ef4444', color: '#fff', border: 'none',
@@ -224,6 +227,7 @@ export default function Profile() {
             </button>
             <button
               onClick={() => setShowLocationActions(false)}
+              aria-label="Close location actions"
               style={{
                 padding: '6px 10px', fontSize: '13px', fontWeight: 600,
                 background: '#e5e7eb', color: '#374151', border: 'none',

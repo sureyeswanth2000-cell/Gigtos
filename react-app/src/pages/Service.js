@@ -120,7 +120,7 @@ export default function Service() {
   };
 
   const validateStepOne = () => {
-    // Step 1 is read-only profile display; just check if profile is filled
+    // Step 1 is read-only profile display; only check if profile is filled
     if (!name.trim() || !address.trim() || !userPhone.trim()) {
       setError('Your profile is incomplete. Please update your profile first.');
       return false;
@@ -273,7 +273,7 @@ export default function Service() {
               )}
 
               <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '12px' }}>
-                👆 Tap on the details above to update your profile.
+                Click on the details above to update your profile.
               </p>
             </div>
           )}

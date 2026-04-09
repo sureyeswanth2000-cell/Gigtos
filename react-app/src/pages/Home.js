@@ -76,7 +76,7 @@ export default function Home() {
   // Handle service selection and login check
   const handleBookService = (job) => {
     // Block booking for services not available in the user's area
-    const isAvailable = availableJobIds === null || availableJobIds.has(job.id);
+    const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
     if (!isAvailable) return;
 
     // If not logged in, redirect to auth with user mode
@@ -179,8 +179,8 @@ export default function Home() {
 
         <div className="services-grid">
           {visibleServices.map((job) => {
-            const isAvailable = availableJobIds === null || availableJobIds.has(job.id);
-            const isLoading = availableJobIds === null && location;
+            const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
+            const isCheckingAvailability = availableJobIds === null && location;
 
             return (
               <article key={job.id} className={`service-card${!isAvailable ? ' service-card--disabled' : ''}`}>
@@ -199,12 +199,12 @@ export default function Home() {
                 )}
                 <div className="service-card-actions">
                   {!isAvailable ? (
-                    <button className="primary-btn service-btn--disabled" disabled>
+                    <button className="primary-btn" disabled>
                       Coming Soon
                     </button>
                   ) : (
-                    <button className="primary-btn" onClick={() => handleBookService(job)} disabled={isLoading}>
-                      {isLoading ? 'Checking…' : job.isSpecial ? 'View Options' : 'Book Service'}
+                    <button className="primary-btn" onClick={() => handleBookService(job)} disabled={isCheckingAvailability}>
+                      {isCheckingAvailability ? 'Checking…' : job.isSpecial ? 'View Options' : 'Book Service'}
                     </button>
                   )}
                 </div>

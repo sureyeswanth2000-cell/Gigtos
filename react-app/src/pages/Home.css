@@ -258,23 +258,29 @@
 
 .service-card--disabled {
   opacity: 0.65;
-  pointer-events: none;
-  position: relative;
 }
 
-.service-card--disabled .primary-btn {
-  pointer-events: auto;
+.service-card--disabled .service-top,
+.service-card--disabled h3,
+.service-card--disabled > p {
+  opacity: 0.8;
 }
 
-.service-btn--disabled {
-  background: #9CA3AF !important;
-  border-color: #9CA3AF !important;
-  cursor: not-allowed !important;
-  box-shadow: none !important;
+.service-card--disabled:hover {
+  transform: none;
+  box-shadow: none;
 }
 
-.service-btn--disabled:hover {
-  transform: none !important;
+.service-card--disabled .service-card-actions .primary-btn {
+  background: #9CA3AF;
+  border-color: #9CA3AF;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.service-card--disabled .service-card-actions .primary-btn:hover {
+  transform: none;
+  background: #9CA3AF;
 }
 
 .coming-soon-chip {

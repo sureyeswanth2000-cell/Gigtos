@@ -1,50 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocation } from '../context/LocationContext';
-import { SERVICE_CATALOG } from '../utils/aiAssistant';
-import { SPECIAL_JOBS } from '../config/specialJobs';
+import { ALL_JOBS } from '../utils/jobListBuilder';
 import JobCard from './JobCard';
 import LocationDetector from './LocationDetector';
 import NearbyMessage from './NearbyMessage';
 
 const GEO_RADIUS_KM = 20;
-
-/**
- * Merges SERVICE_CATALOG entries with matching SPECIAL_JOBS to produce a unified list.
- */
-function buildJobList() {
-  // Start with special jobs
-  const specialIds = new Set(SPECIAL_JOBS.map((j) => j.id));
-  const list = SPECIAL_JOBS.map((sj) => ({
-    id: sj.id,
-    name: sj.label,
-    icon: sj.icon,
-    desc: sj.desc,
-    category: sj.category,
-    isSpecial: true,
-  }));
-
-  // Add catalog items that are not already represented by a special job
-  for (const svc of SERVICE_CATALOG) {
-    const normalizedId = svc.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    if (!specialIds.has(normalizedId)) {
-      list.push({
-        id: normalizedId,
-        name: svc.name,
-        icon: svc.icon,
-        desc: svc.desc,
-        category: svc.category,
-        isUpcoming: svc.isUpcoming,
-        isSpecial: false,
-        catalogRef: svc,
-      });
-    }
-  }
-
-  return list;
-}
-
-const ALL_JOBS = buildJobList();
 
 /**
  * JobList – geo-filtered list of available jobs.

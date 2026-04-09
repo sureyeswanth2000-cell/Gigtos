@@ -401,3 +401,246 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* ─── Location Bar ───────────────────────────────────────── */
+.location-bar {
+  background: linear-gradient(90deg, #7C3AED 0%, #A259FF 100%);
+  padding: 6px 24px;
+  position: relative;
+  z-index: 900;
+}
+
+.location-bar-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.location-bar-detecting {
+  color: rgba(255,255,255,0.8);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.location-bar-detecting .location-bar-dot {
+  animation: pulse 1.4s ease infinite;
+}
+
+.location-bar-error {
+  color: #FEF3C7;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.location-bar-city {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(255,255,255,0.15);
+  transition: background 0.15s;
+}
+
+.location-bar-city:hover {
+  background: rgba(255,255,255,0.25);
+}
+
+.location-bar-dot {
+  font-size: 14px;
+}
+
+.location-bar-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.location-bar-change {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.location-bar-radius {
+  color: rgba(255,255,255,0.7);
+  font-size: 12px;
+}
+
+.location-bar-btn {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+.location-bar-btn:hover {
+  background: rgba(255,255,255,0.35);
+}
+
+.location-bar-btn--close {
+  padding: 4px 8px;
+}
+
+.location-bar-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.location-bar-input {
+  padding: 6px 12px;
+  border: 1.5px solid rgba(255,255,255,0.4);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background: rgba(255,255,255,0.95);
+  color: var(--text-dark);
+  width: 220px;
+  outline: none;
+  font-family: inherit;
+}
+
+.location-bar-input:focus {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
+}
+
+.location-bar-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: 1000;
+  min-width: 280px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.location-bar-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-dark);
+  border-bottom: 1px solid #f3f4f6;
+  font-family: inherit;
+  transition: background 0.1s;
+}
+
+.location-bar-item:hover {
+  background: var(--primary-purple-light);
+}
+
+.location-bar-item:last-child {
+  border-bottom: none;
+}
+
+.location-bar-item--empty {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+/* ─── Location Search Results (LocationDetector) ─────────── */
+.location-search-results {
+  width: 100%;
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: var(--space-1);
+}
+
+.location-search-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-dark);
+  border-bottom: 1px solid #f3f4f6;
+  font-family: inherit;
+}
+
+.location-search-item:hover {
+  background: var(--primary-purple-light);
+}
+
+.location-search-item:last-child {
+  border-bottom: none;
+}
+
+/* ─── User Location Map ──────────────────────────────────── */
+.user-location-map-wrapper {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1.5px solid var(--border-color);
+}
+
+.user-location-map {
+  border-radius: var(--radius-md);
+}
+
+.user-location-map--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-light);
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.user-location-map-caption {
+  padding: 8px 14px;
+  background: var(--bg-light);
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .location-bar {
+    padding: 6px 14px;
+  }
+
+  .location-bar-input {
+    width: 160px;
+  }
+
+  .location-bar-radius {
+    display: none;
+  }
+}

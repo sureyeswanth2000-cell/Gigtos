@@ -4,6 +4,7 @@ import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import LocationBar from './LocationBar';
 
 export default function Header() {
   const navigate = useNavigate();
@@ -48,6 +49,7 @@ export default function Header() {
   };
 
   return (
+    <>
     <header style={{
       padding: '12px 24px',
       background: '#A259FF',
@@ -197,5 +199,7 @@ export default function Header() {
         }
       `}</style>
     </header>
+    <LocationBar />
+    </>
   );
 }

@@ -8,10 +8,51 @@ const LocationContext = createContext(null);
 export const DEFAULT_RADIUS_KM = 20;
 
 /**
+ * Reverse-geocode lat/lng to a city name using OpenStreetMap Nominatim.
+ * Returns the city/town/village name or null.
+ */
+async function reverseGeocode(lat, lng) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const data = await res.json();
+    const addr = data.address || {};
+    return addr.city || addr.town || addr.village || addr.county || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Forward-geocode a city/place name to lat/lng using OpenStreetMap Nominatim.
+ * Returns { lat, lng, city } or null.
+ */
+export async function geocodeCity(query) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const results = await res.json();
+    if (results.length === 0) return null;
+    return results.map((r) => ({
+      lat: parseFloat(r.lat),
+      lng: parseFloat(r.lon),
+      city: r.address?.city || r.address?.town || r.address?.village || r.display_name?.split(',')[0] || query,
+      displayName: r.display_name,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Provides user location state and geo-filtering utilities.
  */
 export function LocationProvider({ children }) {
-  const [location, setLocation] = useState(null); // { lat, lng, source }
+  const [location, setLocation] = useState(null); // { lat, lng, city?, source }
   const [locationError, setLocationError] = useState(null);
   const [locationLoading, setLocationLoading] = useState(true);
 
@@ -26,12 +67,11 @@ export function LocationProvider({ children }) {
     }
 
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          source: 'gps',
-        });
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const city = await reverseGeocode(lat, lng);
+        setLocation({ lat, lng, city, source: 'gps' });
         setLocationLoading(false);
       },
       () => {

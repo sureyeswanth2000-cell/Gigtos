@@ -7,6 +7,7 @@ import { getSpecialJob } from '../config/specialJobs';
 import { ALL_JOBS } from '../utils/jobListBuilder';
 import { useLocation } from '../context/LocationContext';
 import { getHeroCTAText } from '../utils/abTest';
+import UserLocationMap from '../components/UserLocationMap';
 import './Home.css';
 
 export default function Home() {
@@ -128,6 +129,17 @@ export default function Home() {
           </div>
           <small>Gito AI will open automatically with your selected query.</small>
         </div>
+      </section>
+
+      <section className="map-section" id="location-map">
+        <div className="section-header-row">
+          <div>
+            <p className="eyebrow">Your Location</p>
+            <h2>Workers near {cityName}</h2>
+          </div>
+          <p className="section-caption">Showing verified professionals within 20 km</p>
+        </div>
+        <UserLocationMap height={300} showRadius={true} />
       </section>
 
       <section className="services-section" id="services">

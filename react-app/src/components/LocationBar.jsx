@@ -68,7 +68,7 @@ export default function LocationBar() {
           </span>
         ) : (
           <>
-            <span className="location-bar-city" onClick={() => setEditing(true)} role="button" tabIndex={0} aria-label="Change location">
+            <span className="location-bar-city" onClick={() => setEditing(true)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing(true); } }} role="button" tabIndex={0} aria-label="Change location">
               <span className="location-bar-dot">📍</span>
               <span className="location-bar-name">{cityLabel}</span>
               <span className="location-bar-change">▾</span>

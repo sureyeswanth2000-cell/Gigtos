@@ -15,7 +15,7 @@ async function reverseGeocode(lat, lng) {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
-      { headers: { 'Accept-Language': 'en' } }
+      { headers: { 'Accept-Language': 'en', 'User-Agent': 'Gigtos/1.0' } }
     );
     const data = await res.json();
     const addr = data.address || {};
@@ -33,7 +33,7 @@ export async function geocodeCity(query) {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`,
-      { headers: { 'Accept-Language': 'en' } }
+      { headers: { 'Accept-Language': 'en', 'User-Agent': 'Gigtos/1.0' } }
     );
     const results = await res.json();
     if (results.length === 0) return null;

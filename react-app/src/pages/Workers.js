@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, createUserWithEmailAndPassword } from 'firebase/auth';
 import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, getDoc, setDoc, getDocs } from 'firebase/firestore';
+import MasonDashboard from '../components/MasonDashboard';
 
 export default function Workers() {
   const [user, setUser] = useState(null);
@@ -385,25 +386,27 @@ export default function Workers() {
   return (
     <div style={{ padding: 20 }}>
       <h2>Workers</h2>
-      
-      {/* DEBUG: Show current role */}
-      <div style={{ 
-        background: '#f0f9ff', 
-        border: '2px solid #3b82f6', 
-        color: '#1e40af', 
-        padding: 10, 
-        borderRadius: 8, 
-        marginBottom: 12,
-        fontSize: 12,
-        fontWeight: 'bold'
-      }}>
-        🔐 Current Role: {adminRole || 'loading...'} | UID: {user?.uid?.slice(0, 8)}...
-        {(adminRole === 'admin' || adminRole === 'mason') && (
-          <div style={{ marginTop: 4, fontSize: 11, fontWeight: 'normal' }}>
-            🔒 You can ONLY see and manage gigs that YOU created. Other {adminRole}s' gigs are hidden.
+
+      {/* Mason Dashboard — full job browser for mason/admin roles */}
+      {(adminRole === 'mason' || adminRole === 'admin' || adminRole === 'superadmin' || adminRole === 'regionLead') && (
+        <details style={{ marginBottom: 20 }}>
+          <summary style={{
+            cursor: 'pointer',
+            padding: '10px 14px',
+            background: 'var(--bg-light)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 10,
+            fontWeight: 700,
+            fontSize: 14,
+            color: 'var(--primary-purple)',
+          }}>
+            🧱 Mason Dashboard — Browse All Job Types &amp; Manage Workers
+          </summary>
+          <div style={{ marginTop: 12 }}>
+            <MasonDashboard />
           </div>
-        )}
-      </div>
+        </details>
+      )}
       
       {adminRole === 'regionLead' && (
         <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', padding: 10, borderRadius: 8, marginBottom: 12 }}>

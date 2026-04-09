@@ -2,127 +2,96 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 
 const LocationContext = createContext(null);
 
-const STORAGE_KEY = 'gigtos_user_location';
-const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/reverse';
+/**
+ * Default radius for worker availability checks (km).
+ */
+export const DEFAULT_RADIUS_KM = 20;
 
-async function reverseGeocode(lat, lng) {
-  try {
-    const res = await fetch(
-      `${NOMINATIM_URL}?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
-      { headers: { Accept: 'application/json' } }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const addr = data.address || {};
-    const city =
-      addr.city ||
-      addr.town ||
-      addr.village ||
-      addr.county ||
-      addr.state_district ||
-      addr.state ||
-      'Your Location';
-    const state = addr.state || '';
-    return { city, state, display: state ? `${city}, ${state}` : city };
-  } catch {
-    return null;
-  }
-}
-
+/**
+ * Provides user location state and geo-filtering utilities.
+ */
 export function LocationProvider({ children }) {
-  const [location, setLocation] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [detecting, setDetecting] = useState(false);
-  const [error, setError] = useState('');
+  const [location, setLocation] = useState(null); // { lat, lng, source }
+  const [locationError, setLocationError] = useState(null);
+  const [locationLoading, setLocationLoading] = useState(true);
 
-  const detect = useCallback(() => {
+  const detectLocation = useCallback(() => {
+    setLocationLoading(true);
+    setLocationError(null);
+
     if (!navigator.geolocation) {
-      setError('Geolocation not supported');
+      setLocationError('Geolocation is not supported by your browser.');
+      setLocationLoading(false);
       return;
     }
-    setDetecting(true);
-    setError('');
+
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        const geo = await reverseGeocode(lat, lng);
-        const loc = {
-          lat,
-          lng,
-          city: geo?.city || 'Your Location',
-          state: geo?.state || '',
-          display: geo?.display || 'Your Location',
-          radius: 20,
+      (pos) => {
+        setLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
           source: 'gps',
-        };
-        setLocation(loc);
-        // Only persist the city/display name, not coordinates
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          city: loc.city,
-          state: loc.state,
-          display: loc.display,
-          radius: loc.radius,
-          source: loc.source,
-        }));
-        setDetecting(false);
+        });
+        setLocationLoading(false);
       },
-      (err) => {
-        setError(err.message || 'Location access denied');
-        setDetecting(false);
+      () => {
+        // Fallback: try GeoIP
+        fetch('https://ipapi.co/json/')
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.latitude && data.longitude) {
+              setLocation({
+                lat: data.latitude,
+                lng: data.longitude,
+                city: data.city,
+                source: 'geoip',
+              });
+            } else {
+              setLocationError('Could not determine your location automatically.');
+            }
+          })
+          .catch(() => {
+            setLocationError('Could not determine your location automatically.');
+          })
+          .finally(() => {
+            setLocationLoading(false);
+          });
       },
-      { timeout: 10000, maximumAge: 300000 }
+      { timeout: 8000, enableHighAccuracy: false }
     );
-  }, []);
-
-  const setManualLocation = useCallback((city, state, lat, lng) => {
-    const loc = {
-      lat: lat || null,
-      lng: lng || null,
-      city,
-      state: state || '',
-      display: state ? `${city}, ${state}` : city,
-      radius: 20,
-      source: 'manual',
-    };
-    setLocation(loc);
-    // Only persist the city/display name, not coordinates
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      city: loc.city,
-      state: loc.state,
-      display: loc.display,
-      radius: loc.radius,
-      source: loc.source,
-    }));
-  }, []);
-
-  const clearLocation = useCallback(() => {
-    setLocation(null);
-    localStorage.removeItem(STORAGE_KEY);
   }, []);
 
   useEffect(() => {
-    if (!location) {
-      detect();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    detectLocation();
+  }, [detectLocation]);
+
+  /**
+   * Manually set location from an address or map picker.
+   * @param {{ lat: number, lng: number, city?: string }} coords
+   */
+  const setManualLocation = useCallback((coords) => {
+    setLocation({ ...coords, source: 'manual' });
+    setLocationError(null);
+  }, []);
 
   return (
     <LocationContext.Provider
-      value={{ location, detecting, error, detect, setManualLocation, clearLocation }}
+      value={{
+        location,
+        locationError,
+        locationLoading,
+        detectLocation,
+        setManualLocation,
+      }}
     >
       {children}
     </LocationContext.Provider>
   );
 }
 
+/**
+ * Hook to access location context.
+ */
 export function useLocation() {
   return useContext(LocationContext);
 }
-
-export default LocationContext;

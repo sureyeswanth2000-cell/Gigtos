@@ -77,12 +77,9 @@ function Auth() {
         throw new Error('Please enter your password to login');
       }
       
-      console.log('🔐 Attempting login with phone:', phone);
       await signInWithEmailAndPassword(auth, storedEmail, userPassword);
-      console.log('✅ Login successful!');
       navigate('/');
     } catch (err) {
-      console.error('❌ Login error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -159,11 +156,8 @@ function Auth() {
     try {
       const userCred = await signInWithEmailAndPassword(auth, email, password);
       const uid = userCred.user.uid;
-      console.log('✅ Firebase Auth success, UID:', uid);
 
       const adminDoc = await getDoc(doc(db, 'admins', uid));
-      console.log('📋 Admin doc exists:', adminDoc.exists());
-      console.log('👤 Admin data:', adminDoc.data());
       
       if (!adminDoc.exists()) {
         await signOut(auth);
@@ -172,7 +166,6 @@ function Auth() {
 
       const adminData = adminDoc.data();
       const role = adminData?.role || 'unknown';
-      console.log('🔐 Admin role:', role);
 
       if (isRegionSuspended(adminData)) {
         await signOut(auth);
@@ -181,7 +174,6 @@ function Auth() {
 
       navigate(getAdminRedirectPath(adminData));
     } catch (err) {
-      console.error('❌ Admin login error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -325,7 +317,6 @@ function Auth() {
 
       navigate('/worker/dashboard');
     } catch (err) {
-      console.error('❌ Worker login error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -392,7 +383,6 @@ function Auth() {
 
       navigate('/worker/dashboard');
     } catch (err) {
-      console.error('❌ Worker activation error:', err);
       setError(err.message);
     } finally {
       setLoading(false);

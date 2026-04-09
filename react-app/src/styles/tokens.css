@@ -1,28 +1,25 @@
 :root {
-  --primary-purple: #A259FF;
-  --primary-purple-dark: #7C3AED;
-  --primary-purple-light: #E9D5FF;
-  --primary-purple-mid: #C084FC;
-  --color-brand-600: #A259FF;
-  --color-brand-700: #7C3AED;
+  /* ─── Legacy brand tokens (kept for backward compatibility) ── */
+  --color-brand-600: #764ba2;
+  --color-brand-700: #5f3a86;
   --color-action-600: #057a31;
   --color-action-700: #046127;
   --color-accent-500: #f97316;
 
-  --color-bg-50: #f8f7fb;
+  --color-bg-50: #f9f6ff;
   --color-surface-0: #ffffff;
   --color-surface-50: #f8fafc;
   --color-surface-100: #f3f4f6;
-  --color-border-200: #d6d8de;
-  --color-border-300: #c5c8d3;
+  --color-border-200: #e5d8ff;
+  --color-border-300: #d3b8ff;
 
-  --color-text-900: #1f2937;
+  --color-text-900: #2d1836;
   --color-text-700: #4b5563;
   --color-text-500: #6b7280;
 
-  --color-success-600: #15803d;
-  --color-warning-600: #b45309;
-  --color-danger-600: #b91c1c;
+  --color-success-600: #22c55e;
+  --color-warning-600: #f59e0b;
+  --color-danger-600: #ef4444;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -47,4 +44,17 @@
   --motion-fast: 120ms;
   --motion-base: 220ms;
   --motion-slow: 320ms;
+
+  /* ─── Gigtos Purple Theme ────────────────────────────────── */
+  --primary-purple: #a259ff;
+  --primary-purple-dark: #7c3aed;
+  --primary-purple-light: #e9d5ff;
+  --bg-light: #f9f6ff;
+  --text-dark: #2d1836;
+  --text-muted: #6b7280;
+  --card-bg: #ffffff;
+  --border-color: #e5d8ff;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
 }

@@ -4,6 +4,7 @@ import { auth } from '../firebase';
 import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
 import { useLocation } from '../context/LocationContext';
+import { getHeroCTAText } from '../utils/abTest';
 import './Home.css';
 
 function ServiceIcon({ serviceName }) {
@@ -121,7 +122,7 @@ export default function Home() {
             From urgent repairs to planned upgrades, Gigtos helps you find verified professionals with transparent quotes.
           </p>
           <div className="hero-actions">
-            <button className="primary-btn" onClick={() => scrollToSection('services')}>Book a Service</button>
+            <button className="primary-btn" onClick={() => scrollToSection('services')} aria-label="Get started with Gigtos">{getHeroCTAText()}</button>
             <button className="secondary-btn" onClick={() => scrollToSection('how-it-works')}>How It Works</button>
           </div>
           <div className="trust-row">

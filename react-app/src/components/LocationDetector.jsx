@@ -1,26 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLocation } from '../context/LocationContext';
+import { geocodeCity } from '../context/LocationContext';
 
 /**
- * LocationDetector – shows the user's detected location and allows manual override.
+ * LocationDetector – shows the user's detected location and allows manual override
+ * via city name search or raw lat/lng.
  */
 export default function LocationDetector() {
   const { location, locationError, locationLoading, detectLocation, setManualLocation } = useLocation();
   const [showManual, setShowManual] = useState(false);
-  const [lat, setLat] = useState('');
-  const [lng, setLng] = useState('');
+  const [cityQuery, setCityQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
   const [manualError, setManualError] = useState('');
+  const debounceRef = useRef(null);
 
-  const handleManualSubmit = (e) => {
-    e.preventDefault();
-    const latNum = parseFloat(lat);
-    const lngNum = parseFloat(lng);
-    if (isNaN(latNum) || isNaN(lngNum)) {
-      setManualError('Please enter valid latitude and longitude values.');
+  // Debounced city search
+  useEffect(() => {
+    if (!cityQuery.trim() || cityQuery.trim().length < 2) {
+      setSearchResults([]);
       return;
     }
-    setManualLocation({ lat: latNum, lng: lngNum });
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      const hits = await geocodeCity(cityQuery.trim());
+      setSearchResults(hits || []);
+      setSearching(false);
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [cityQuery]);
+
+  const handleSelectPlace = (place) => {
+    setManualLocation({ lat: place.lat, lng: place.lng, city: place.city });
     setShowManual(false);
+    setCityQuery('');
+    setSearchResults([]);
     setManualError('');
   };
 
@@ -42,26 +57,26 @@ export default function LocationDetector() {
           <button className="btn-link" onClick={() => setShowManual(true)}>Enter location manually</button>
         </div>
         {showManual && (
-          <form className="location-manual-form" onSubmit={handleManualSubmit}>
+          <div className="location-manual-form">
             <input
-              type="number"
-              step="any"
-              placeholder="Latitude"
-              value={lat}
-              onChange={(e) => setLat(e.target.value)}
-              required
+              type="text"
+              placeholder="Search city or area…"
+              value={cityQuery}
+              onChange={(e) => setCityQuery(e.target.value)}
+              style={{ width: '220px' }}
             />
-            <input
-              type="number"
-              step="any"
-              placeholder="Longitude"
-              value={lng}
-              onChange={(e) => setLng(e.target.value)}
-              required
-            />
+            {searching && <span style={{ fontSize: '12px', color: '#6B7280' }}>Searching…</span>}
+            {!searching && searchResults.length > 0 && (
+              <div className="location-search-results">
+                {searchResults.map((place, i) => (
+                  <button key={i} className="location-search-item" onClick={() => handleSelectPlace(place)}>
+                    📍 {place.displayName}
+                  </button>
+                ))}
+              </div>
+            )}
             {manualError && <p className="location-manual-error">{manualError}</p>}
-            <button type="submit" className="btn-primary-sm">Set Location</button>
-          </form>
+          </div>
         )}
       </div>
     );
@@ -82,26 +97,27 @@ export default function LocationDetector() {
         </span>
         <button className="btn-link" onClick={() => setShowManual(!showManual)}>Change</button>
         {showManual && (
-          <form className="location-manual-form" onSubmit={handleManualSubmit}>
+          <div className="location-manual-form">
             <input
-              type="number"
-              step="any"
-              placeholder="Latitude"
-              value={lat}
-              onChange={(e) => setLat(e.target.value)}
-              required
+              type="text"
+              placeholder="Search city or area…"
+              value={cityQuery}
+              onChange={(e) => setCityQuery(e.target.value)}
+              style={{ width: '220px' }}
             />
-            <input
-              type="number"
-              step="any"
-              placeholder="Longitude"
-              value={lng}
-              onChange={(e) => setLng(e.target.value)}
-              required
-            />
+            <button className="btn-primary-sm" onClick={detectLocation}>📍 Auto-detect</button>
+            {searching && <span style={{ fontSize: '12px', color: '#6B7280' }}>Searching…</span>}
+            {!searching && searchResults.length > 0 && (
+              <div className="location-search-results">
+                {searchResults.map((place, i) => (
+                  <button key={i} className="location-search-item" onClick={() => handleSelectPlace(place)}>
+                    📍 {place.displayName}
+                  </button>
+                ))}
+              </div>
+            )}
             {manualError && <p className="location-manual-error">{manualError}</p>}
-            <button type="submit" className="btn-primary-sm">Update</button>
-          </form>
+          </div>
         )}
       </div>
     );

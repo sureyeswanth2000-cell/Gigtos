@@ -21,7 +21,8 @@
 .services-section,
 .steps-section,
 .testimonials-section,
-.why-section {
+.why-section,
+.map-section {
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid var(--color-border-200);
   border-radius: var(--radius-xl);
@@ -174,7 +175,8 @@
 .services-section,
 .steps-section,
 .testimonials-section,
-.why-section {
+.why-section,
+.map-section {
   padding: var(--space-6);
   margin-bottom: var(--space-6);
 }
@@ -416,7 +418,8 @@
   .services-section,
   .steps-section,
   .testimonials-section,
-  .why-section {
+  .why-section,
+  .map-section {
     border-radius: 14px;
   }
 

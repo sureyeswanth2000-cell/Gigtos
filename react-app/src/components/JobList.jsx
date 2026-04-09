@@ -130,7 +130,7 @@ export default function JobList({ onBook }) {
               />
             ))}
           </div>
-          {filteredJobs.length > 3 && (
+          {filteredJobs.length > 2 && (
             <div className="job-cards-scroll-hint">
               <span>Swipe to see more jobs</span>
               <span className="job-cards-scroll-hint-arrow">→</span>

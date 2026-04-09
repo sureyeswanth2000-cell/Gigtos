@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://sureyeswanth2000-cell.github.io/Gigtos/sitemap.xml

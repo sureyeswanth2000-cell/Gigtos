@@ -3,45 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
-import { SPECIAL_JOBS, getSpecialJob } from '../config/specialJobs';
+import { getSpecialJob } from '../config/specialJobs';
+import { ALL_JOBS } from '../utils/jobListBuilder';
 import { useLocation } from '../context/LocationContext';
 import { getHeroCTAText } from '../utils/abTest';
 import './Home.css';
-
-/**
- * Merges SERVICE_CATALOG entries with matching SPECIAL_JOBS to produce a unified list.
- * Same logic as JobList.jsx buildJobList().
- */
-function buildJobList() {
-  const specialIds = new Set(SPECIAL_JOBS.map((j) => j.id));
-  const list = SPECIAL_JOBS.map((sj) => ({
-    id: sj.id,
-    name: sj.label,
-    icon: sj.icon,
-    desc: sj.desc,
-    category: sj.category,
-    isSpecial: true,
-  }));
-
-  for (const svc of SERVICE_CATALOG) {
-    const normalizedId = svc.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    if (!specialIds.has(normalizedId)) {
-      list.push({
-        id: normalizedId,
-        name: svc.name,
-        icon: svc.icon,
-        desc: svc.desc,
-        category: svc.category,
-        isUpcoming: svc.isUpcoming,
-        isSpecial: false,
-      });
-    }
-  }
-
-  return list;
-}
-
-const ALL_JOBS = buildJobList();
 
 export default function Home() {
   const navigate = useNavigate();
@@ -122,6 +88,7 @@ export default function Home() {
       job.name.toLowerCase().includes(query)
       || job.desc.toLowerCase().includes(query)
       || (job.category || '').toLowerCase().includes(query)
+      || (job.keywords || []).some((kw) => kw.toLowerCase().includes(query))
     );
   });
 

@@ -888,7 +888,6 @@ export default function AdminBookings() {
         </div>
       )}
 
-      {/* DEBUG INFO: Show what role and data is loaded */}
       {adminRole === 'regionLead' && (
         <div style={{
           background: '#f0f9ff', color: '#0369a1', border: '2px solid #0ea5e9',

@@ -92,6 +92,45 @@
   gap: var(--space-4);
 }
 
+/* Job cards scroll wrapper for peek and hint */
+.job-cards-scroll-wrapper {
+  position: relative;
+}
+
+.job-cards-scroll-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: calc(100% - 8px);
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.85));
+  pointer-events: none;
+  z-index: 1;
+  display: none;
+}
+
+.job-cards-scroll-hint {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.job-cards-scroll-hint-arrow {
+  display: inline-block;
+  animation: nudge-right-jobs 1.5s ease-in-out infinite;
+}
+
+@keyframes nudge-right-jobs {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(6px); }
+}
+
 .job-card {
   background: var(--card-bg);
   border: 1.5px solid var(--border-color);
@@ -400,4 +439,35 @@
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+/* ─── Mobile: Horizontal scroll for job cards ────────────── */
+@media (max-width: 700px) {
+  .job-cards-grid {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+  }
+
+  .job-cards-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .job-cards-grid .job-card {
+    flex: 0 0 72vw;
+    max-width: 280px;
+    scroll-snap-align: start;
+  }
+
+  .job-cards-scroll-wrapper::after {
+    display: block;
+  }
+
+  .job-cards-scroll-hint {
+    display: flex;
+  }
 }

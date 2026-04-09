@@ -169,21 +169,30 @@ export default function Home() {
           />
         </div>
 
-        <div className="services-grid">
-          {visibleServices.map((service) => (
-            <article key={service.id} className="service-card">
-              <div className="service-top">
-                <ServiceIcon serviceName={service.name} />
-                <span className="verified-chip">Verified Pro</span>
-              </div>
-              <h3>{service.name}</h3>
-              <p>{service.desc}</p>
-              <div className="service-card-actions">
-                <button className="primary-btn" onClick={() => handleBookService(service)}>Book Service</button>
-              </div>
-            </article>
-          ))}
+        <div className="services-scroll-wrapper">
+          <div className="services-grid">
+            {visibleServices.map((service) => (
+              <article key={service.id} className="service-card">
+                <div className="service-top">
+                  <ServiceIcon serviceName={service.name} />
+                  <span className="verified-chip">Verified Pro</span>
+                </div>
+                <h3>{service.name}</h3>
+                <p>{service.desc}</p>
+                <div className="service-card-actions">
+                  <button className="primary-btn" onClick={() => handleBookService(service)}>Book Service</button>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
+
+        {visibleServices.length > 2 && (
+          <div className="scroll-hint">
+            <span>Swipe to see more services</span>
+            <span className="scroll-hint-arrow">→</span>
+          </div>
+        )}
 
         {visibleServices.length === 0 && (
           <div className="no-services-note">

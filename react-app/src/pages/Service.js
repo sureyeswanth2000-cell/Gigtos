@@ -33,9 +33,10 @@ const professionalDirectory = {
 };
 
 const steps = [
-  { id: 1, label: 'Service Details' },
-  { id: 2, label: 'Schedule & Pro' },
-  { id: 3, label: 'Confirm & Next Steps' },
+  { id: 1, label: 'Your Details' },
+  { id: 2, label: 'Service Details' },
+  { id: 3, label: 'Schedule & Pro' },
+  { id: 4, label: 'Confirm & Next Steps' },
 ];
 
 export default function Service() {
@@ -51,6 +52,7 @@ export default function Service() {
   const [name, setName] = useState('');
   const [address, setAddress] = useState(location.state?.prefillAddress || '');
   const [userPhone, setUserPhone] = useState(location.state?.prefillPhone || '');
+  const [userLocationCity, setUserLocationCity] = useState('');
 
   const [issueTitle, setIssueTitle] = useState('');
   const [jobDetails, setJobDetails] = useState('');
@@ -85,6 +87,7 @@ export default function Service() {
         setName((prev) => prev || data.name || '');
         if (!location.state?.prefillAddress) setAddress((prev) => prev || data.address || '');
         if (!location.state?.prefillPhone) setUserPhone((prev) => prev || data.phone || '');
+        setUserLocationCity(data.locationCity || '');
 
         if (!data.phone || !data.name || !data.address) {
           setProfileIncomplete(true);
@@ -117,11 +120,15 @@ export default function Service() {
   };
 
   const validateStepOne = () => {
+    // Step 1 is read-only profile display; only check if profile is filled
     if (!name.trim() || !address.trim() || !userPhone.trim()) {
-      setError('Please provide your name, phone, and service address.');
+      setError('Your profile is incomplete. Please update your profile first.');
       return false;
     }
+    return true;
+  };
 
+  const validateStepTwo = () => {
     if (!issueTitle.trim()) {
       setError('Please add a short service request title.');
       return false;
@@ -130,7 +137,7 @@ export default function Service() {
     return true;
   };
 
-  const validateStepTwo = () => {
+  const validateStepThree = () => {
     if (isScheduled && (!scheduledDate || !timeSlot)) {
       setError('Select a scheduled date and time slot to continue.');
       return false;
@@ -148,7 +155,8 @@ export default function Service() {
     setError('');
     if (currentStep === 1 && !validateStepOne()) return;
     if (currentStep === 2 && !validateStepTwo()) return;
-    setCurrentStep((prev) => Math.min(3, prev + 1));
+    if (currentStep === 3 && !validateStepThree()) return;
+    setCurrentStep((prev) => Math.min(4, prev + 1));
   };
 
   const goBack = () => {
@@ -159,7 +167,7 @@ export default function Service() {
   const handleBooking = async () => {
     setError('');
 
-    if (!validateStepOne() || !validateStepTwo()) {
+    if (!validateStepOne() || !validateStepTwo() || !validateStepThree()) {
       return;
     }
 
@@ -241,37 +249,39 @@ export default function Service() {
           ))}
         </div>
 
-        {profileIncomplete && (
-          <div className="alert warning">
-            Your profile appears incomplete. Update name, phone, and address for smoother booking.
-            <button onClick={() => navigate('/profile')}>Edit Profile</button>
-          </div>
-        )}
-
         {error && <div className="alert error">{error}</div>}
         {success && <div className="alert success">{success}</div>}
 
         <section className="step-content">
           {currentStep === 1 && (
             <div className="step-layout">
-              <h2>1. Service Selection & Details</h2>
-              <p className="step-note">Tell us what you need so professionals can quote accurately.</p>
+              <h2>1. Your Details</h2>
+              <p className="step-note">Review your profile information. To make changes, visit your profile page.</p>
 
-              <div className="form-grid two-col">
-                <label>
-                  Full Name
-                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your full name" />
-                </label>
-                <label>
-                  Phone Number
-                  <input value={userPhone} onChange={(e) => setUserPhone(e.target.value)} placeholder="10-digit mobile number" />
-                </label>
+              <div className="summary-card" onClick={() => navigate('/profile')} style={{ cursor: 'pointer' }} title="Click to edit your profile">
+                <div><strong>Name:</strong> {name || <span style={{ color: '#9ca3af' }}>Not set</span>}</div>
+                <div><strong>Phone:</strong> {userPhone || <span style={{ color: '#9ca3af' }}>Not set</span>}</div>
+                <div><strong>Address:</strong> {address || <span style={{ color: '#9ca3af' }}>Not set</span>}</div>
+                <div><strong>Location:</strong> {userLocationCity || cityName || <span style={{ color: '#9ca3af' }}>Not set</span>}</div>
               </div>
 
-              <label>
-                Service Address
-                <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} placeholder="House number, street, landmark" />
-              </label>
+              {profileIncomplete && (
+                <div className="alert warning" style={{ marginTop: '12px' }}>
+                  Your profile is incomplete. Please update your profile before booking.
+                  <button onClick={() => navigate('/profile')}>Edit Profile</button>
+                </div>
+              )}
+
+              <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '12px' }}>
+                Click on the details above to update your profile.
+              </p>
+            </div>
+          )}
+
+          {currentStep === 2 && (
+            <div className="step-layout">
+              <h2>2. Service Selection & Details</h2>
+              <p className="step-note">Tell us what you need so professionals can quote accurately.</p>
 
               <div className="form-grid two-col">
                 <label>
@@ -301,9 +311,9 @@ export default function Service() {
             </div>
           )}
 
-          {currentStep === 2 && (
+          {currentStep === 3 && (
             <div className="step-layout">
-              <h2>2. Scheduling & Professional Selection</h2>
+              <h2>3. Scheduling & Professional Selection</h2>
               <p className="step-note">Choose when you need service and optionally nominate a preferred verified professional.</p>
 
               <div className="mode-toggle">
@@ -375,9 +385,9 @@ export default function Service() {
             </div>
           )}
 
-          {currentStep === 3 && (
+          {currentStep === 4 && (
             <div className="step-layout">
-              <h2>3. Confirmation & Next Steps</h2>
+              <h2>4. Confirmation & Next Steps</h2>
               <p className="step-note">Review details before final submission.</p>
 
               <div className="summary-card">
@@ -420,7 +430,7 @@ export default function Service() {
             </button>
           )}
 
-          {currentStep < 3 ? (
+          {currentStep < 4 ? (
             <button className="btn primary" onClick={goNext}>
               Continue
             </button>

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { LocationProvider } from './context/LocationContext';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import Auth from './pages/Auth';
@@ -90,6 +91,7 @@ function App() {
   };
 
   return (
+    <LocationProvider>
     <BrowserRouter basename="/Gigtos">
       <Header />
       <main style={{ minHeight: '70vh' }}>
@@ -120,6 +122,7 @@ function App() {
       </main>
       <Footer />
     </BrowserRouter>
+    </LocationProvider>
   );
 }
 

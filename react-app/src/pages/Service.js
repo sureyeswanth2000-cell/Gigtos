@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { addDoc, collection, doc, getDoc } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { auth, db } from '../firebase';
+import { useLocation as useUserLocation } from '../context/LocationContext';
 import './Service.css';
 
 const serviceIcons = {
@@ -42,6 +43,8 @@ export default function Service() {
   const navigate = useNavigate();
   const params = new URLSearchParams(location.search);
   const type = location.state?.serviceType || params.get('type') || 'Service';
+  const { location: userLoc } = useUserLocation() || {};
+  const cityName = userLoc?.city || 'your area';
 
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -213,7 +216,7 @@ export default function Service() {
         <header className="service-header">
           <div className="service-badge">Editorial Concierge Booking</div>
           <h1>
-            <span aria-hidden="true">{serviceIcons[type] || '🛠️'}</span> Book {type} in Kavali
+            <span aria-hidden="true">{serviceIcons[type] || '🛠️'}</span> Book {type} in {cityName}
           </h1>
           <p>
             A guided 3-step journey with verified professionals, transparent quotes, and clear next steps.

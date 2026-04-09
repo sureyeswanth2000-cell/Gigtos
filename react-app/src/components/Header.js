@@ -4,6 +4,7 @@ import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useLocation } from '../context/LocationContext';
 
 export default function Header() {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ export default function Header() {
   const [isWorker, setIsWorker] = React.useState(false);
   const [adminRole, setAdminRole] = React.useState(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const { location, detecting, detect } = useLocation() || {};
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -47,15 +49,21 @@ export default function Header() {
     setMenuOpen(false);
   };
 
+  const locationLabel = detecting
+    ? '📍 Detecting...'
+    : location?.display
+      ? `📍 ${location.display}`
+      : '📍 Set Location';
+
   return (
     <header style={{
       padding: '12px 20px',
-      background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+      background: 'linear-gradient(90deg, #A259FF 0%, #7C3AED 100%)',
       color: '#fff',
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      boxShadow: '0 2px 8px rgba(162,89,255,0.3)',
       position: 'relative'
     }}>
       {/* Logo */}
@@ -66,9 +74,31 @@ export default function Header() {
           color: '#fff',
           cursor: 'pointer'
         }}>
-          🏠 Gigto
+          🏠 Gigtos
         </div>
       </Link>
+
+      {/* Location pill */}
+      <button
+        onClick={() => detect && detect()}
+        title="Refresh location"
+        style={{
+          background: 'rgba(255,255,255,0.18)',
+          border: '1px solid rgba(255,255,255,0.4)',
+          color: '#fff',
+          borderRadius: 999,
+          padding: '4px 12px',
+          fontSize: '12px',
+          cursor: 'pointer',
+          fontWeight: 500,
+          maxWidth: 200,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {locationLabel}
+      </button>
 
       {/* Navigation */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>

@@ -468,6 +468,17 @@
   white-space: nowrap;
 }
 
+.location-bar-arrow {
+  font-size: 10px;
+  opacity: 0.8;
+  margin-left: 2px;
+  transition: transform 0.2s;
+}
+
+.location-bar-city:hover .location-bar-arrow {
+  transform: translateY(1px);
+}
+
 .location-bar-change {
   font-size: 10px;
   opacity: 0.7;

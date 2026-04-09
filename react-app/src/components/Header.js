@@ -4,7 +4,6 @@ import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useLocation } from '../context/LocationContext';
 
 export default function Header() {
   const navigate = useNavigate();
@@ -15,7 +14,6 @@ export default function Header() {
   const [isWorker, setIsWorker] = React.useState(false);
   const [adminRole, setAdminRole] = React.useState(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
-  const { location, detecting, detect } = useLocation() || {};
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -49,56 +47,29 @@ export default function Header() {
     setMenuOpen(false);
   };
 
-  const locationLabel = detecting
-    ? '📍 Detecting...'
-    : location?.display
-      ? `📍 ${location.display}`
-      : '📍 Set Location';
-
   return (
     <header style={{
-      padding: '12px 20px',
-      background: 'linear-gradient(90deg, #A259FF 0%, #7C3AED 100%)',
+      padding: '12px 24px',
+      background: '#A259FF',
       color: '#fff',
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
       boxShadow: '0 2px 8px rgba(162,89,255,0.3)',
-      position: 'relative'
+      position: 'relative',
     }}>
       {/* Logo */}
       <Link to="/" style={{ textDecoration: 'none' }}>
         <div style={{
-          fontWeight: 'bold',
-          fontSize: '22px',
+          fontWeight: '800',
+          fontSize: '24px',
           color: '#fff',
-          cursor: 'pointer'
+          cursor: 'pointer',
+          letterSpacing: '-0.5px',
         }}>
           🏠 Gigtos
         </div>
       </Link>
-
-      {/* Location pill */}
-      <button
-        onClick={() => detect && detect()}
-        title="Refresh location"
-        style={{
-          background: 'rgba(255,255,255,0.18)',
-          border: '1px solid rgba(255,255,255,0.4)',
-          color: '#fff',
-          borderRadius: 999,
-          padding: '4px 12px',
-          fontSize: '12px',
-          cursor: 'pointer',
-          fontWeight: 500,
-          maxWidth: 200,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {locationLabel}
-      </button>
 
       {/* Navigation */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -106,27 +77,28 @@ export default function Header() {
           <>
             {/* Desktop Quick Nav */}
             <nav className="desktop-nav" style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-              <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>Home</Link>
+              <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '600' }}>Home</Link>
+              <Link to="/jobs" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '600' }}>Browse Jobs</Link>
 
               {/* Show Admin Dashboard instead of My Bookings for admins */}
               {isSuperAdmin ? (
-                <Link to="/admin/super" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,200,0,0.3)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(255,200,0,0.5)' }}>
+                <Link to="/admin/super" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '600', backgroundColor: 'rgba(255,200,0,0.3)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(255,200,0,0.5)' }}>
                   🛡️ SuperAdmin Dash
                 </Link>
               ) : isRegionLead ? (
-                <Link to="/admin/region-lead" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(100,200,255,0.3)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(100,200,255,0.5)' }}>
+                <Link to="/admin/region-lead" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '600', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.3)' }}>
                   📍 Region Lead Dash
                 </Link>
               ) : isAdmin ? (
-                <Link to="/admin" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '4px' }}>
+                <Link to="/admin" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '600', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '4px' }}>
                   👨‍💼 Admin Dash
                 </Link>
               ) : isWorker ? (
-                <Link to="/worker/dashboard" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500', backgroundColor: 'rgba(16,185,129,0.35)', padding: '6px 12px', borderRadius: '4px' }}>
+                <Link to="/worker/dashboard" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '600', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '4px' }}>
                   👷 Worker Dash
                 </Link>
               ) : (
-                <Link to="/my-bookings" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>My Bookings</Link>
+                <Link to="/my-bookings" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '600' }}>My Bookings</Link>
               )}
             </nav>
 
@@ -161,6 +133,9 @@ export default function Header() {
                     <Link to="/" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
                       🏠 Home
                     </Link>
+                    <Link to="/jobs" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
+                      💼 Browse Jobs
+                    </Link>
                     {(isAdmin || isSuperAdmin || isRegionLead) ? (
                       <>
                         <Link to="/my-bookings" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
@@ -173,9 +148,14 @@ export default function Header() {
                     ) : (
                       <>
                         {isWorker ? (
-                          <Link to="/worker/dashboard" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
-                            👷 Worker Dashboard
-                          </Link>
+                          <>
+                            <Link to="/worker/dashboard" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
+                              👷 Worker Dashboard
+                            </Link>
+                            <Link to="/worker/job-selection" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
+                              📋 Select Jobs
+                            </Link>
+                          </>
                         ) : (
                           <Link to="/my-bookings" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
                             📅 My Bookings

@@ -30,7 +30,9 @@ export default function Header() {
           setAdminRole(role);
           setIsSuperAdmin(d.exists() && role === 'superadmin');
           setIsRegionLead(d.exists() && role === 'regionLead');
-        }).catch(() => { });
+        }).catch(() => {
+          // Firestore read failed — use defaults
+        });
       } else {
         setIsAdmin(false);
         setIsSuperAdmin(false);
@@ -43,7 +45,11 @@ export default function Header() {
   }, []);
 
   const handleLogout = async () => {
-    await signOut(auth);
+    try {
+      await signOut(auth);
+    } catch {
+      // Sign-out failed — proceed with navigation anyway
+    }
     navigate('/');
     setMenuOpen(false);
   };

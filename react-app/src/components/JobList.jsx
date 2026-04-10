@@ -36,8 +36,7 @@ export default function JobList({ onBook }) {
         const ids = Array.isArray(data) ? data : data.jobs || data.jobIds || [];
         setAvailableJobIds(new Set(ids.map(String)));
       })
-      .catch((err) => {
-        console.warn('Available jobs API unavailable, showing all jobs:', err.message);
+      .catch(() => {
         // If API is unavailable, show all jobs (graceful degradation)
         setAvailableJobIds(new Set(ALL_JOBS.map((j) => j.id)));
         setFetchError('Could not load location-based availability. Showing all jobs.');

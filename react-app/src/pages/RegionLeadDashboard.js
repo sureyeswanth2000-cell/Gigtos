@@ -98,7 +98,7 @@ export default function RegionLeadDashboard() {
         setPendingGigs(pending);
         setStats(prev => ({ ...prev, pendingApprovals: pending.length }));
       },
-      (error) => console.error('❌ Error loading pending gigs:', error.message)
+      (error) => { /* error loading pending gigs */ }
     ));
 
     const childIds = childAdmins.map(a => a.id);
@@ -122,7 +122,7 @@ export default function RegionLeadDashboard() {
           gigsByAdmin[adminId] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           updateApprovedGigs();
         },
-        (error) => console.error(`❌ Error loading gigs for mason ${adminId}:`, error.message)
+        (error) => { /* error loading gigs */ }
       ));
     });
 
@@ -145,8 +145,6 @@ export default function RegionLeadDashboard() {
       const assignedBookings = Object.values(bookingsByAdmin).flat();
       const allBookings = [...assignedBookings, ...unassignedBookings];
       
-      console.log(`📊 Total bookings: ${allBookings.length} (${assignedBookings.length} assigned, ${unassignedBookings.length} unassigned)`);
-      
       const active = allBookings.filter(b =>
         ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status)
       );
@@ -154,8 +152,6 @@ export default function RegionLeadDashboard() {
       
       const disputeBookings = allBookings.filter(b => b.dispute?.status);
       const openDisputes = disputeBookings.filter(b => b.dispute?.status === 'open');
-      
-      console.log(`✅ Active: ${active.length}, Delayed: ${delayed.length}, Open disputes: ${openDisputes.length}`);
       
       setActiveBookings(active);
       setDelayedBookings(delayed);
@@ -168,7 +164,6 @@ export default function RegionLeadDashboard() {
       }));
     };
     
-    console.log('🔍 RegionLead loading bookings for masons:', childAdminIds);
     
     // Query 1: Listen to bookings assigned to child admins
     childAdminIds.forEach(adminId => {
@@ -176,11 +171,10 @@ export default function RegionLeadDashboard() {
         query(collection(db, 'bookings'), where('adminId', '==', adminId)),
         (snap) => {
           bookingsByAdmin[adminId] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          console.log(`📦 Loaded ${bookingsByAdmin[adminId].length} bookings for mason ${adminId}`);
           aggregateAndUpdate();
         },
-        (error) => {
-          console.error(`❌ Error loading bookings for mason ${adminId}:`, error.message);
+        () => {
+          /* error loading bookings for mason */
         }
       );
       unsubscribers.push(unsub);
@@ -194,11 +188,10 @@ export default function RegionLeadDashboard() {
       ),
       (snap) => {
         unassignedBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        console.log(`📦 Loaded ${unassignedBookings.length} unassigned bookings`);
         aggregateAndUpdate();
       },
-      (error) => {
-        console.error('❌ Error loading unassigned bookings:', error.message);
+      () => {
+        /* error loading unassigned bookings */
       }
     );
     unsubscribers.push(unsubUnassigned);

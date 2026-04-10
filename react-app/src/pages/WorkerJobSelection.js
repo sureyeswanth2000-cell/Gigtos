@@ -6,9 +6,8 @@ import WorkerRegistration from '../components/WorkerRegistration';
  * Shows all job types (not geo-filtered), allows selecting up to 3.
  */
 export default function WorkerJobSelection() {
-  const handleSubmit = (selectedJobs) => {
+  const handleSubmit = () => {
     // In production this would save to Firestore
-    console.log('Worker job selection submitted:', selectedJobs);
   };
 
   return <WorkerRegistration onSubmit={handleSubmit} />;

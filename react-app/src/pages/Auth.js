@@ -95,8 +95,9 @@ function Auth() {
       return;
     }
 
-    if (phone.length < 10) {
-      setError('Please enter a valid 10-digit phone number');
+    const digitsOnly = phone.replace(/\D/g, '');
+    if (digitsOnly.length < 10 || digitsOnly.length > 15) {
+      setError('Please enter a valid phone number (10–15 digits)');
       return;
     }
 

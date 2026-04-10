@@ -90,7 +90,6 @@ export default function AiActivityMonitor({ onBookWorker }) {
         if (!cancelled) setWorkers(matched);
       } catch (err) {
         // Log for debugging; UI falls back to empty state
-        console.warn('Failed to fetch nearby workers:', err);
         if (!cancelled) setWorkers([]);
       } finally {
         if (!cancelled) setLoading(false);

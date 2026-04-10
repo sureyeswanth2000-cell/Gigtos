@@ -196,7 +196,6 @@ export default function SuperAdmin() {
                 // Get SuperAdmin credentials and re-authenticate
                 // For now, we'll stay logged in as the newly created region lead briefly, 
                 // but show a message that they should log out and back in as SuperAdmin
-                console.log('⚠️ NEW REGION LEAD CREATED - You are now logged in as:', email);
             }
 
             setCreateSuccess(`✅ Region Admin "${name}" created successfully! You are logged in as the new region lead. Please LOGOUT and log back in to return to SuperAdmin mode.`);
@@ -216,7 +215,6 @@ export default function SuperAdmin() {
             setTimeout(() => setCreateSuccess(''), 5000);
         } catch (err) {
             setCreateError('Error: ' + (err.message || err));
-            console.error('Create region admin error:', err);
         } finally {
             setCreateLoading(false);
         }
@@ -285,8 +283,8 @@ export default function SuperAdmin() {
                     { label: 'Escalated Disputes', value: escalatedBookings.length, icon: '🚨', color: '#dc2626' },
                     { label: 'Total Workers', value: allWorkers.length, icon: '👷', color: '#10b981' },
                     { label: 'Fraud Workers', value: allWorkers.filter(w => w.isFraud).length, icon: '🕵️', color: '#7c3aed' },
-                ].map((card, i) => (
-                    <div key={i} style={{
+                ].map((card) => (
+                    <div key={card.label} style={{
                         background: 'white', padding: '16px', borderRadius: '12px',
                         border: `2px solid ${card.color}20`, textAlign: 'center',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.04)',

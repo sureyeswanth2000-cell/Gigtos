@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { auth, db } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -22,6 +22,7 @@ export default function FutureWork() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+  const toastTimeoutRef = useRef(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -45,8 +46,13 @@ export default function FutureWork() {
 
   const showToast = (msg, type = '') => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   };
+
+  useEffect(() => {
+    return () => clearTimeout(toastTimeoutRef.current);
+  }, []);
 
   const handleAccept = (job) => {
     setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'confirmed' } : j));

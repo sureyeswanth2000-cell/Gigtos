@@ -35,7 +35,7 @@ export default function Home() {
       .then((snap) => {
         if (snap.exists()) setUserData(snap.data());
       })
-      .catch(() => { /* silent */ });
+      .catch(() => { /* Firestore read failed — user data not critical */ });
   }, []);
 
   useEffect(() => {

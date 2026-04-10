@@ -47,8 +47,8 @@ export default function LiveServiceTracker({ bookingId, compact = false }) {
         setSession(null);
       }
       setLoading(false);
-    }, (err) => {
-      console.error('LiveServiceTracker snapshot error:', err);
+    }, () => {
+      /* snapshot error */
       setLoading(false);
     });
 

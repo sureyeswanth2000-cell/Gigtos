@@ -26,6 +26,7 @@ import UserDashboard from './pages/UserDashboard';
 import WorkerJobSelection from './pages/WorkerJobSelection';
 import MasonDashboardPage from './pages/MasonDashboardPage';
 import NotFound from './pages/NotFound';
+import ErrorBoundary from './components/ErrorBoundary';
 import LiveTrackingBanner from './components/LiveTrackingBanner';
 import WorkerMapPage from './pages/worker/WorkerMap';
 import OpenWork from './pages/worker/OpenWork';
@@ -105,6 +106,7 @@ function App() {
   };
 
   return (
+    <ErrorBoundary>
     <LocationProvider>
     <BrowserRouter basename="/Gigtos">
       <Header />
@@ -160,6 +162,7 @@ function App() {
       <Footer />
     </BrowserRouter>
     </LocationProvider>
+    </ErrorBoundary>
   );
 }
 

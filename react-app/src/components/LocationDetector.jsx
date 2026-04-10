@@ -68,8 +68,8 @@ export default function LocationDetector() {
             {searching && <span style={{ fontSize: '12px', color: '#6B7280' }}>Searching…</span>}
             {!searching && searchResults.length > 0 && (
               <div className="location-search-results">
-                {searchResults.map((place, i) => (
-                  <button key={i} className="location-search-item" onClick={() => handleSelectPlace(place)}>
+                {searchResults.map((place) => (
+                  <button key={`${place.lat}-${place.lng}`} className="location-search-item" onClick={() => handleSelectPlace(place)}>
                     📍 {place.displayName}
                   </button>
                 ))}
@@ -109,8 +109,8 @@ export default function LocationDetector() {
             {searching && <span style={{ fontSize: '12px', color: '#6B7280' }}>Searching…</span>}
             {!searching && searchResults.length > 0 && (
               <div className="location-search-results">
-                {searchResults.map((place, i) => (
-                  <button key={i} className="location-search-item" onClick={() => handleSelectPlace(place)}>
+                {searchResults.map((place) => (
+                  <button key={`${place.lat}-${place.lng}`} className="location-search-item" onClick={() => handleSelectPlace(place)}>
                     📍 {place.displayName}
                   </button>
                 ))}

@@ -40,10 +40,9 @@ export default function JobDetail() {
         const ids = Array.isArray(data) ? data : data.subtypes || data.subTypeIds || [];
         setAvailableSubtypeIds(new Set(ids.map(String)));
       })
-      .catch((err) => {
-        console.warn('Worker availability API unavailable, showing all subtypes:', err.message);
+      .catch(() => {
         // Graceful degradation: show all subtypes when API unavailable
-        if (job) {
+        if (job?.subtypes) {
           setAvailableSubtypeIds(new Set(job.subtypes.map((s) => s.id)));
         }
         setFetchError('Could not load worker availability. Showing all options.');

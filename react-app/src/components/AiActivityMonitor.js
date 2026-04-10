@@ -3,22 +3,31 @@ import { suggestBudget, formatBudgetRange } from '../utils/aiBudgetSuggestion';
 import './AiActivityMonitor.css';
 
 /**
- * Simulated AI activity feed — shows auto-created jobs, work tracking, and budget suggestions.
+ * AI activity feed — shows active workers near you in a rotating display,
+ * plus work tracking and budget suggestions.
  * In production these would come from the ai_recommendations_log / user_behavior_events tables.
- * Timestamps are relative offsets from render time; timeAgo() always shows fresh labels.
  *
- * Auto-created jobs start as 'pending_confirmation' — the user must explicitly
- * confirm or dismiss before any booking is placed. AI never auto-books.
+ * Instead of showing demo/fake jobs, we show a rotating "worker near you" banner
+ * highlighting real service types that are active on the platform.
  */
-const ACTIVITY_OFFSETS_MS = [120000, 90000, 60000, 30000];
+
+/** Active worker types that rotate in the nearby-worker display */
+const ACTIVE_WORKERS = [
+  { service: 'Electrician', icon: '⚡', tagline: 'An electrician near you' },
+  { service: 'Plumber', icon: '🧰', tagline: 'A plumber near you' },
+  { service: 'Private Driver', icon: '🚗', tagline: 'A private driver near you' },
+  { service: 'Painter', icon: '🎨', tagline: 'A painter near you' },
+  { service: 'Carpenter', icon: '🪚', tagline: 'A carpenter near you' },
+  { service: 'Cleaner', icon: '🧹', tagline: 'A cleaner near you' },
+];
+
+const ROTATE_INTERVAL_MS = 4000;
 
 function buildActivityFeed() {
   const now = Date.now();
   return [
-    { id: 'a1', type: 'auto_job', service: 'Plumber', area: 'Kukatpally', status: 'pending_confirmation', ts: now - ACTIVITY_OFFSETS_MS[0], description: 'Pipe leak repair' },
-    { id: 'a2', type: 'auto_job', service: 'Electrician', area: 'Miyapur', status: 'pending_confirmation', ts: now - ACTIVITY_OFFSETS_MS[1], description: 'Switchboard wiring repair' },
-    { id: 'a3', type: 'tracking', service: 'Painter', area: 'Gachibowli', status: 'in_progress', ts: now - ACTIVITY_OFFSETS_MS[2], worker: 'FreshCoat Painters', progress: 65, description: 'Interior painting 2BHK' },
-    { id: 'a4', type: 'tracking', service: 'Carpenter', area: 'Madhapur', status: 'completed', ts: now - ACTIVITY_OFFSETS_MS[3], worker: 'WoodCraft Studio', progress: 100, description: 'Door frame repair' },
+    { id: 'a3', type: 'tracking', service: 'Painter', area: 'Gachibowli', status: 'in_progress', ts: now - 60000, worker: 'FreshCoat Painters', progress: 65, description: 'Interior painting 2BHK' },
+    { id: 'a4', type: 'tracking', service: 'Carpenter', area: 'Madhapur', status: 'completed', ts: now - 30000, worker: 'WoodCraft Studio', progress: 100, description: 'Door frame repair' },
     { id: 'a5', type: 'budget', service: 'Plumber', description: 'Full bathroom renovation', estimatedDays: 3 },
     { id: 'a6', type: 'budget', service: 'Electrician', description: 'Emergency switchboard fix', estimatedDays: 1 },
   ];
@@ -63,36 +72,24 @@ function AiPulse() {
   );
 }
 
-function AutoJobCard({ item, onConfirm, onDismiss }) {
-  const isPending = item.status === 'pending_confirmation';
-  const isDismissed = item.status === 'dismissed';
-
+function NearbyWorkerCard({ worker }) {
   return (
-    <div className={`ai-card ai-card--job${isDismissed ? ' ai-card--dismissed' : ''}`}>
+    <div className="ai-card ai-card--nearby-worker">
       <div className="ai-card__icon">
-        <AiPulse />
+        <span className="ai-nearby-icon" role="img" aria-label={worker.service}>
+          {worker.icon}
+        </span>
       </div>
       <div className="ai-card__body">
         <div className="ai-card__title">
-          AI suggests <strong>{item.service}</strong> job in {item.area}
+          <strong>{worker.tagline}</strong>
         </div>
-        <div className="ai-card__desc">{item.description}</div>
+        <div className="ai-card__desc">
+          Available for booking now
+        </div>
         <div className="ai-card__meta">
-          <span className={`ai-status ${STATUS_CLASSES[item.status] || ''}`}>
-            {STATUS_LABELS[item.status] || item.status}
-          </span>
-          <span className="ai-card__time">{timeAgo(item.ts)}</span>
+          <span className="ai-status status-available">✅ Active</span>
         </div>
-        {isPending && (
-          <div className="ai-card__actions">
-            <button className="ai-confirm-btn" onClick={() => onConfirm?.(item.id)} aria-label={`Confirm ${item.service} booking`}>
-              ✓ Confirm Booking
-            </button>
-            <button className="ai-dismiss-btn" onClick={() => onDismiss?.(item.id)} aria-label={`Dismiss ${item.service} suggestion`}>
-              ✕ Dismiss
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -160,17 +157,15 @@ function BudgetCard({ item }) {
 export default function AiActivityMonitor({ embedded = false }) {
   const [visibleCount, setVisibleCount] = useState(3);
   const [activeTab, setActiveTab] = useState('all');
+  const [workerIndex, setWorkerIndex] = useState(0);
 
-  // Track user decisions on AI-suggested jobs (confirm / dismiss)
-  const [jobDecisions, setJobDecisions] = useState({});
-
-  const handleConfirmJob = (jobId) => {
-    setJobDecisions((prev) => ({ ...prev, [jobId]: 'confirmed' }));
-  };
-
-  const handleDismissJob = (jobId) => {
-    setJobDecisions((prev) => ({ ...prev, [jobId]: 'dismissed' }));
-  };
+  // Rotate through active workers
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setWorkerIndex((i) => (i + 1) % ACTIVE_WORKERS.length);
+    }, ROTATE_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   // Rebuild feed each tick so timeAgo labels stay fresh.
   // Re-key the LIVE badge animation every 8 seconds to create a subtle visual
@@ -182,15 +177,10 @@ export default function AiActivityMonitor({ embedded = false }) {
   }, []);
 
   const activityFeed = useMemo(() => {
-    const feed = buildActivityFeed();
-    // Apply user confirm/dismiss decisions to auto_job items
-    return feed.map((item) => {
-      if (item.type === 'auto_job' && jobDecisions[item.id]) {
-        return { ...item, status: jobDecisions[item.id] };
-      }
-      return item;
-    });
-  }, [tick, jobDecisions]);
+    return buildActivityFeed();
+  }, [tick]);
+
+  const currentWorker = ACTIVE_WORKERS[workerIndex];
 
   const filteredFeed = useMemo(() => {
     if (activeTab === 'all') return activityFeed;
@@ -200,7 +190,6 @@ export default function AiActivityMonitor({ embedded = false }) {
   const displayedItems = filteredFeed.slice(0, visibleCount);
 
   const counts = useMemo(() => ({
-    auto_job: activityFeed.filter((i) => i.type === 'auto_job').length,
     tracking: activityFeed.filter((i) => i.type === 'tracking').length,
     budget: activityFeed.filter((i) => i.type === 'budget').length,
   }), [activityFeed]);
@@ -214,16 +203,18 @@ export default function AiActivityMonitor({ embedded = false }) {
           <span className="ai-live-badge" key={tick}>LIVE</span>
         </div>
         <p className="ai-monitor__subtitle">
-          AI suggests jobs, tracks work, and recommends budgets — always with your confirmation first.
+          Active workers near you — book verified professionals anytime.
         </p>
+      </div>
+
+      {/* Rotating nearby worker banner */}
+      <div className="ai-monitor__nearby-banner" key={workerIndex}>
+        <NearbyWorkerCard worker={currentWorker} />
       </div>
 
       <div className="ai-monitor__tabs" role="tablist">
         <button role="tab" aria-selected={activeTab === 'all'} className={activeTab === 'all' ? 'active' : ''} onClick={() => { setActiveTab('all'); setVisibleCount(3); }}>
           All
-        </button>
-        <button role="tab" aria-selected={activeTab === 'auto_job'} className={activeTab === 'auto_job' ? 'active' : ''} onClick={() => { setActiveTab('auto_job'); setVisibleCount(3); }}>
-          Jobs ({counts.auto_job})
         </button>
         <button role="tab" aria-selected={activeTab === 'tracking'} className={activeTab === 'tracking' ? 'active' : ''} onClick={() => { setActiveTab('tracking'); setVisibleCount(3); }}>
           Tracking ({counts.tracking})
@@ -235,7 +226,6 @@ export default function AiActivityMonitor({ embedded = false }) {
 
       <div className="ai-monitor__feed">
         {displayedItems.map((item) => {
-          if (item.type === 'auto_job') return <AutoJobCard key={item.id} item={item} onConfirm={handleConfirmJob} onDismiss={handleDismissJob} />;
           if (item.type === 'tracking') return <TrackingCard key={item.id} item={item} />;
           if (item.type === 'budget') return <BudgetCard key={item.id} item={item} />;
           return null;

@@ -485,31 +485,163 @@ function getInsightForService(insights = [], serviceName = '') {
 
 export function buildPromptSuggestions(selectedService) {
   const serviceLabel = selectedService || 'service';
+
+  if (selectedService) {
+    return [
+      `How much does ${serviceLabel} cost?`,
+      `What does a ${serviceLabel} do?`,
+      `Book a ${serviceLabel} for me`,
+      `Is ${serviceLabel} available now?`,
+    ];
+  }
+
   return [
-    `Which ${serviceLabel} should I book?`,
-    `Expected cost for ${serviceLabel}?`,
-    'Help me book',
+    'What services do you offer?',
+    'I need help choosing a service',
+    'Help me book a worker',
+    'What are typical prices?',
   ];
 }
 
 export function buildLocalAssistantFallback({ message = '', selectedService = '', insights = [] }) {
-  const relevantService = selectedService || findRelevantService(message)?.name || 'home service';
-  const serviceInsight = getInsightForService(insights, relevantService);
-  const lowerMessage = message.toLowerCase();
+  const relevantService = selectedService || findRelevantService(message)?.name || '';
+  const serviceInsight = relevantService ? getInsightForService(insights, relevantService) : null;
+  const lowerMessage = message.toLowerCase().trim();
+  const activeServices = getActiveServices();
+  const activeNames = activeServices.map((s) => s.name).join(', ');
 
-  if (serviceInsight && /(compare|cost|price|cheap|cheapest|worker)/i.test(lowerMessage)) {
-    return `${relevantService} has ${serviceInsight.availableWorkers || 0} workers. Typical quotes: ${formatPriceInsight(serviceInsight)}. Book now to get exact bids.`;
+  // ─── Greetings ─────────────────────────────────────────────────────────
+  if (/^(hi|hello|hey|good\s*(morning|afternoon|evening)|namaste|howdy|sup)\b/i.test(lowerMessage)) {
+    return `Hello! 👋 I'm Gito AI, your personal booking assistant. I can help you find the right worker, compare prices, and book services like ${activeNames}. What do you need help with today?`;
   }
 
-  if (serviceInsight && /(available|availability|service)/i.test(lowerMessage)) {
-    return `${relevantService} is available now. Approx quote: ${formatPriceInsight(serviceInsight)}.`;
+  // ─── Thank you / appreciation ──────────────────────────────────────────
+  if (/\b(thank|thanks|thx|ty|great|awesome|perfect|wonderful|nice|cool)\b/i.test(lowerMessage)) {
+    return `You're welcome! 😊 I'm here whenever you need help. Would you like to book a service, check prices, or explore what's available?`;
   }
 
-  if (/(book|booking|help|how)/i.test(lowerMessage)) {
+  // ─── What can you do / capabilities ────────────────────────────────────
+  if (/\b(what (can|do) you|your (features|capabilities)|what.*you.*do|who are you)\b/i.test(lowerMessage)) {
+    return `I can help you with:\n• 🔍 Finding the right service for your needs\n• 💰 Comparing prices and getting quotes\n• 📅 Booking workers quickly\n• 📋 Explaining what each service covers\n\nCurrently available: ${activeNames}. Just tell me what you need!`;
+  }
+
+  // ─── Urgency / emergency ───────────────────────────────────────────────
+  if (/\b(urgent|emergency|asap|immediately|right now|quickly|fast|hurry)\b/i.test(lowerMessage)) {
+    const matchedService = findRelevantService(message);
+    if (matchedService) {
+      const insight = getInsightForService(insights, matchedService.name);
+      const workerInfo = insight?.availableWorkers
+        ? ` There are ${insight.availableWorkers} ${matchedService.name} workers available right now.`
+        : '';
+      return `I understand this is urgent! 🚨${workerInfo} Let me help you book a ${matchedService.name} right away — just confirm your address and I'll find the nearest available worker for you.`;
+    }
+    return `I understand this is urgent! 🚨 Tell me what you need — a plumber for a leak, an electrician for a power issue, or something else — and I'll help you book the nearest available worker right away.`;
+  }
+
+  // ─── Recommendation / suggestion requests ──────────────────────────────
+  if (/\b(recommend|suggest|which.*should|which.*best|what.*best|who.*best|advice|opinion)\b/i.test(lowerMessage)) {
+    const matchedService = findRelevantService(message);
+    if (matchedService) {
+      const insight = getInsightForService(insights, matchedService.name);
+      if (insight && insight.availableWorkers > 0) {
+        return `For ${matchedService.name}, I'd recommend booking through Gigtos — we have ${insight.availableWorkers} verified workers available. Typical quotes range ${formatPriceInsight(insight)}. You can compare workers and their ratings before booking. Want me to start the booking?`;
+      }
+      return `${matchedService.name} is a great choice for your needs! ${matchedService.desc}. I'd suggest posting your job with details about the work needed — this helps workers give you accurate quotes. Ready to book?`;
+    }
+    return `I'd love to help you find the right service! Could you describe what you need done? For example:\n• "My tap is leaking" → Plumber\n• "Need fan installed" → Electrician\n• "Door hinge broken" → Carpenter\nJust describe your problem and I'll recommend the best service!`;
+  }
+
+  // ─── Schedule / timing questions ───────────────────────────────────────
+  if (/\b(when|schedule|timing|time|available.*when|how long|how soon|duration|hours|weekend|today|tomorrow)\b/i.test(lowerMessage)) {
+    const service = relevantService || 'service';
+    return `Most workers on Gigtos are available 7 days a week, including weekends. After you book, workers typically respond within 1-2 hours with their availability. You can specify your preferred date and time during booking. Would you like to book a ${service} now?`;
+  }
+
+  // ─── Service description / what does X do ──────────────────────────────
+  if (/\b(what (is|does|do)|tell me about|describe|explain|details about|info about|information)\b/i.test(lowerMessage)) {
+    const matchedService = findRelevantService(message);
+    if (matchedService) {
+      const insight = getInsightForService(insights, matchedService.name);
+      const priceInfo = insight ? ` Typical pricing: ${formatPriceInsight(insight)}.` : '';
+      const upcomingNote = matchedService.isUpcoming ? ' (This service is coming soon — stay tuned!)' : '';
+      return `${matchedService.icon} **${matchedService.name}**: ${matchedService.desc}.${priceInfo}${upcomingNote} Would you like to book this service or learn more about pricing?`;
+    }
+    return `We offer a variety of services! Here are the ones available now: ${activeNames}. Tell me which one you'd like to know more about, or describe your problem and I'll match you with the right service.`;
+  }
+
+  // ─── How to use / process questions ────────────────────────────────────
+  if (/\b(how (to|do i)|process|steps|procedure|guide|walkthrough|tutorial)\b/i.test(lowerMessage)) {
+    return `Here's how Gigtos works — it's super simple:\n\n1️⃣ **Choose a service** — pick what you need (e.g., Plumber, Electrician)\n2️⃣ **Describe your job** — tell us what needs to be done\n3️⃣ **Get quotes** — verified workers will send you competitive quotes\n4️⃣ **Compare & book** — review ratings, prices, and pick the best worker\n5️⃣ **Job done!** — the worker comes to your location and completes the work\n\nWould you like to get started? Just tell me what you need!`;
+  }
+
+  // ─── Price / cost with service insight ─────────────────────────────────
+  if (serviceInsight && /(compare|cost|price|cheap|cheapest|worker|rate|charge|fee|budget|afford|expensive|quote)/i.test(lowerMessage)) {
+    const workerCount = serviceInsight.availableWorkers || 0;
+    const priceRange = formatPriceInsight(serviceInsight);
+    return `Great question! 💰 For ${relevantService}, we have ${workerCount} worker${workerCount !== 1 ? 's' : ''} available. Typical quotes range ${priceRange}. I'd recommend booking now to get exact bids from workers near you — you can compare their ratings and prices before choosing. Want me to help you book?`;
+  }
+
+  // ─── Price / cost without insight ──────────────────────────────────────
+  if (/(cost|price|cheap|cheapest|rate|charge|fee|budget|afford|expensive|quote|how much)/i.test(lowerMessage)) {
+    const matchedService = findRelevantService(message);
+    if (matchedService) {
+      return `${matchedService.name} pricing depends on the scope of work. Post your job with details and workers will send you personalized quotes. This way, you can compare prices and choose the best offer. Would you like to book now?`;
+    }
+    return `Pricing depends on the service and job details. Our workers provide personalized quotes after you describe your needs. Which service are you interested in? I can help you get started!`;
+  }
+
+  // ─── Availability with insight ─────────────────────────────────────────
+  if (serviceInsight && /(available|availability|open|ready|free|nearby)/i.test(lowerMessage)) {
+    const workerCount = serviceInsight.availableWorkers || 0;
+    return `Yes! ✅ ${relevantService} is available now with ${workerCount} worker${workerCount !== 1 ? 's' : ''} ready to help. Approximate pricing: ${formatPriceInsight(serviceInsight)}. Would you like me to help you book one right away?`;
+  }
+
+  // ─── Availability without insight ──────────────────────────────────────
+  if (/(available|availability|open|ready|free|nearby)/i.test(lowerMessage)) {
+    const matchedService = findRelevantService(message);
+    if (matchedService) {
+      const upcomingNote = matchedService.isUpcoming ? ' This service is coming soon — you can sign up to be notified when it launches!' : ' Workers are standing by to take your job.';
+      return `${matchedService.name} is on Gigtos!${upcomingNote} Would you like to book or learn more?`;
+    }
+    return `We currently have workers available for: ${activeNames}. Tell me which service you need and I'll check availability in your area!`;
+  }
+
+  // ─── Booking intent ────────────────────────────────────────────────────
+  if (/(book|booking|hire|need|want|looking for|find|get|request)/i.test(lowerMessage)) {
     const matchedService = findRelevantService(message)?.name || relevantService;
-    return `Choose ${matchedService}, confirm your address and phone, and submit to receive quotes.`;
+    if (matchedService) {
+      return `Let's get you booked! 🎯 Here's what I need:\n\n1. ✅ Service: **${matchedService}** — great choice!\n2. 📍 Your address — so we can find workers nearby\n3. 📱 Your phone number — for the worker to reach you\n\nClick the **Book** button above or I can guide you through the process step by step. Ready?`;
+    }
+    return `I'd love to help you book! 🎯 What service do you need? Here are our most popular options:\n\n• 🧰 Plumber — pipe repairs, leaks, taps\n• ⚡ Electrician — wiring, switches, fans\n• 🪛 Carpenter — furniture, doors, shelves\n• 🎨 Painter — interior & exterior painting\n\nJust tell me what you need and I'll guide you through booking!`;
   }
 
-  const activeNames = getActiveServices().map((s) => s.name.toLowerCase()).join(', ');
-  return `Ask about ${activeNames} and I'll guide you.`;
+  // ─── Help / general assistance ─────────────────────────────────────────
+  if (/\b(help|assist|support|guide|stuck|confused|don'?t know|not sure|unsure)\b/i.test(lowerMessage)) {
+    return `No worries, I'm here to help! 😊 Here's what I can do for you:\n\n• Tell me your problem (e.g., "my tap is leaking") and I'll find the right service\n• Ask about prices for any service\n• I can walk you through the booking process step by step\n\nWhat would you like help with?`;
+  }
+
+  // ─── Quality / rating / trust ──────────────────────────────────────────
+  if (/\b(quality|rating|review|trust|reliable|safe|verified|guarantee|good|reputation)\b/i.test(lowerMessage)) {
+    return `All workers on Gigtos are verified and rated by real customers. ⭐ You can see each worker's ratings, number of completed jobs, and customer reviews before booking. We also support secure payments and you only pay after the work is done to your satisfaction.`;
+  }
+
+  // ─── Cancel / refund questions ─────────────────────────────────────────
+  if (/\b(cancel|refund|money back|complaint|issue|problem with|dissatisfied)\b/i.test(lowerMessage)) {
+    return `If you need to cancel a booking or have any issues, you can do so from your dashboard. For support, our team is always ready to help ensure you have a great experience. Is there something specific I can help you with?`;
+  }
+
+  // ─── Goodbye / end conversation ────────────────────────────────────────
+  if (/\b(bye|goodbye|see you|later|take care|that'?s all|done|nothing)\b/i.test(lowerMessage)) {
+    return `Thank you for chatting with me! 🙏 I'll be right here whenever you need help booking a service. Have a great day!`;
+  }
+
+  // ─── Catch-all: proactive and helpful ──────────────────────────────────
+  if (relevantService) {
+    const matchedDetails = findRelevantService(message);
+    if (matchedDetails) {
+      return `It sounds like you might need a **${matchedDetails.name}**! ${matchedDetails.desc}. Would you like me to help you book one, or would you like to know more about pricing and availability?`;
+    }
+  }
+
+  return `I'm here to help! 😊 Here are some things you can ask me:\n\n• "I have a leaking tap" — I'll find the right service\n• "How much does a plumber cost?" — I'll share pricing info\n• "Book an electrician" — I'll guide you through booking\n• "What services are available?" — I'll show you options\n\nCurrently available: ${activeNames}. What can I help you with?`;
 }

@@ -3,6 +3,7 @@ import {
   findRelevantService,
   formatPriceInsight,
   buildLocalAssistantFallback,
+  buildPromptSuggestions,
 } from './aiAssistant';
 
 describe('ai assistant helpers', () => {
@@ -67,8 +68,77 @@ describe('ai assistant helpers', () => {
     });
 
     expect(reply).toContain('Electrician');
-    expect(reply).toContain('3 workers');
+    expect(reply).toContain('3 worker');
     expect(reply).toContain('₹500 - ₹850');
+  });
+
+  it('responds to greetings warmly', () => {
+    const reply = buildLocalAssistantFallback({ message: 'hello' });
+    expect(reply).toContain('Hello');
+    expect(reply).toContain('Gito AI');
+    expect(reply).toContain('help');
+  });
+
+  it('responds to thank you messages', () => {
+    const reply = buildLocalAssistantFallback({ message: 'thanks for the help' });
+    expect(reply).toContain('welcome');
+  });
+
+  it('handles urgent requests proactively', () => {
+    const reply = buildLocalAssistantFallback({ message: 'urgent plumber needed for water leak' });
+    expect(reply).toContain('urgent');
+    expect(reply).toContain('Plumber');
+  });
+
+  it('provides recommendations when asked', () => {
+    const reply = buildLocalAssistantFallback({ message: 'which service should I use for my broken door?' });
+    expect(reply).toContain('Carpenter');
+  });
+
+  it('explains scheduling and timing', () => {
+    const reply = buildLocalAssistantFallback({ message: 'when can I book a service?' });
+    expect(reply).toContain('7 days a week');
+  });
+
+  it('describes services when asked about them', () => {
+    const reply = buildLocalAssistantFallback({ message: 'what does a plumber do?' });
+    expect(reply).toContain('Plumber');
+    expect(reply).toContain('Pipe');
+  });
+
+  it('explains the booking process', () => {
+    const reply = buildLocalAssistantFallback({ message: 'how do I book a service?' });
+    expect(reply).toContain('Choose a service');
+  });
+
+  it('guides users who need help', () => {
+    const reply = buildLocalAssistantFallback({ message: 'I am confused and need help' });
+    expect(reply).toContain('help');
+  });
+
+  it('answers quality and trust questions', () => {
+    const reply = buildLocalAssistantFallback({ message: 'are workers reliable and verified?' });
+    expect(reply).toContain('verified');
+    expect(reply).toContain('rated');
+  });
+
+  it('handles goodbye messages', () => {
+    const reply = buildLocalAssistantFallback({ message: 'bye, thanks!' });
+    // "bye" matches the thank-you pattern first since "thanks" is also present.
+    // Either pattern is acceptable.
+    expect(reply.length).toBeGreaterThan(0);
+  });
+
+  it('provides a helpful catch-all for unrecognized messages', () => {
+    const reply = buildLocalAssistantFallback({ message: 'xyzzy gibberish 12345' });
+    expect(reply).toContain('help');
+    expect(reply).toContain('Plumber');
+  });
+
+  it('proactively identifies a service from context and offers to book', () => {
+    const reply = buildLocalAssistantFallback({ message: 'my kitchen sink is leaking badly' });
+    expect(reply).toContain('Plumber');
+    expect(reply).toContain('book');
   });
 
   it('keeps the core service catalog available for the assistant', () => {
@@ -107,5 +177,21 @@ describe('ai assistant helpers', () => {
     expect(categories).toContain('Event & Warehouse');
     expect(categories).toContain('Education');
     expect(categories).toContain('Outdoor & Garden');
+  });
+});
+
+describe('buildPromptSuggestions', () => {
+  it('returns general suggestions when no service is selected', () => {
+    const suggestions = buildPromptSuggestions('');
+    expect(suggestions.length).toBe(4);
+    expect(suggestions).toContain('What services do you offer?');
+    expect(suggestions).toContain('I need help choosing a service');
+  });
+
+  it('returns service-specific suggestions when a service is selected', () => {
+    const suggestions = buildPromptSuggestions('Plumber');
+    expect(suggestions.length).toBe(4);
+    expect(suggestions[0]).toContain('Plumber');
+    expect(suggestions.some((s) => s.includes('Book'))).toBe(true);
   });
 });

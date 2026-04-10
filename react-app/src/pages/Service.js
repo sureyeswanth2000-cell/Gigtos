@@ -4,6 +4,7 @@ import { addDoc, collection, doc, getDoc } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { auth, db } from '../firebase';
 import { useLocation as useUserLocation } from '../context/LocationContext';
+import { suggestBudgetForUser, formatBudgetRange } from '../utils/aiBudgetSuggestion';
 import './Service.css';
 
 const serviceIcons = {
@@ -73,6 +74,16 @@ export default function Service() {
 
   const professionals = useMemo(() => professionalDirectory[type] || [], [type]);
   const selectedProfessional = professionals.find((pro) => pro.id === preferredProId);
+
+  /** AI budget suggestion for user display (marked-up range) */
+  const budgetSuggestion = useMemo(() => {
+    if (currentStep !== 4) return null;
+    return suggestBudgetForUser({
+      serviceType: type,
+      description: `${issueTitle} ${jobDetails}`.trim(),
+      estimatedDays,
+    });
+  }, [currentStep, type, issueTitle, jobDetails, estimatedDays]);
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -460,6 +471,26 @@ export default function Service() {
                   </div>
                 )}
               </div>
+
+              {budgetSuggestion && (
+                <div className="budget-suggestion-card">
+                  <div className="budget-suggestion-header">
+                    <span className="budget-suggestion-title">🤖 Gito AI Budget Suggestion</span>
+                    <span className={`budget-confidence-badge ${budgetSuggestion.confidence}`}>
+                      📊 {budgetSuggestion.confidence}
+                    </span>
+                  </div>
+                  <div className="budget-suggestion-range">
+                    {formatBudgetRange(budgetSuggestion)}
+                  </div>
+                  <p className="budget-suggestion-explanation">
+                    {budgetSuggestion.explanation}
+                  </p>
+                  <p className="budget-suggestion-disclaimer">
+                    This is an AI-estimated range. Actual quotes from workers may vary based on materials and site conditions.
+                  </p>
+                </div>
+              )}
 
               <div className="next-steps">
                 <h3>What happens next</h3>

@@ -118,11 +118,11 @@ export default function LiveTrackingBanner() {
 
             return filtered;
           });
-        }, () => { /* ignore session errors */ });
+        }, (err) => { console.error('LiveTrackingBanner session error:', err); });
       });
 
       return () => sessionUnsubs.forEach((u) => u());
-    }, () => { /* ignore booking errors */ });
+    }, (err) => { console.error('LiveTrackingBanner bookings error:', err); });
 
     return unsub;
   }, [user, isHidden, isWorker]);

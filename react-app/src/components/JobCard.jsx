@@ -38,7 +38,7 @@ export default function JobCard({ job, available = null, onBook, showUpcoming = 
           <span className="job-badge job-badge--available">Available</span>
         )}
         {available === false && (
-          <span className="job-badge job-badge--unavailable">Not in your area</span>
+          <span className="job-badge job-badge--unavailable">Coming Soon</span>
         )}
       </div>
       <h3 className="job-card-title">{job.name}</h3>
@@ -49,7 +49,7 @@ export default function JobCard({ job, available = null, onBook, showUpcoming = 
       <div className="job-card-actions">
         {isDisabled ? (
           <button className="btn-secondary" disabled>
-            Not Available Nearby
+            Coming Soon in Your Area
           </button>
         ) : hasSpecialPage ? (
           <button className="btn-primary" onClick={handleClick}>

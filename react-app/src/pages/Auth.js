@@ -4,6 +4,7 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } f
 import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { getAdminRedirectPath, isRegionSuspended } from '../utils/authRouting';
+import { detectCurrentLocation } from '../context/LocationContext';
 
 function Auth() {
   const navigate = useNavigate();
@@ -126,11 +127,27 @@ function Auth() {
         createdAt: new Date()
       });
 
+      // Detect location once at signup and save it
+      let locationData = {};
+      try {
+        const loc = await detectCurrentLocation();
+        locationData = {
+          locationLat: loc.lat,
+          locationLng: loc.lng,
+          locationCity: loc.city || '',
+          locationSource: loc.source || 'gps',
+          locationDetectedAt: new Date(),
+        };
+      } catch {
+        // Location detection failed — user can set it later from profile
+      }
+
       await setDoc(doc(db, 'users', uid), {
         phone: phone,
         email: email,
         name: '',
         address: '',
+        ...locationData,
         createdAt: new Date()
       });
 
@@ -215,6 +232,21 @@ function Auth() {
       // For now, workers are created with approvalStatus: 'pending'
       // In a real scenario, you'd match area to region lead
 
+      // Detect location once at signup and save it
+      let locationData = {};
+      try {
+        const loc = await detectCurrentLocation();
+        locationData = {
+          locationLat: loc.lat,
+          locationLng: loc.lng,
+          locationCity: loc.city || '',
+          locationSource: loc.source || 'gps',
+          locationDetectedAt: new Date(),
+        };
+      } catch {
+        // Location detection failed — worker can set it later
+      }
+
       // Step 3: Create worker document
       await setDoc(doc(db, 'gig_workers', uid), {
         name: workerName,
@@ -232,6 +264,7 @@ function Auth() {
         rating: 0,
         isTopListed: false,
         isFraud: false,
+        ...locationData,
         createdAt: new Date()
       });
 
@@ -248,6 +281,7 @@ function Auth() {
         totalEarnings: 0,
         approvalStatus: 'pending',
         status: 'inactive',
+        ...locationData,
         createdAt: new Date()
       }, { merge: true });
 
@@ -261,6 +295,7 @@ function Auth() {
         area: workerArea,
         approvalStatus: 'pending',
         status: 'inactive',
+        ...locationData,
         createdAt: new Date()
       }, { merge: true });
 

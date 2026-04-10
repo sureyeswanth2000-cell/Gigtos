@@ -1,49 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
+import AiActivityMonitor from '../components/AiActivityMonitor';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
+import { getSpecialJob } from '../config/specialJobs';
+import { ALL_JOBS } from '../utils/jobListBuilder';
 import { useLocation } from '../context/LocationContext';
 import { getHeroCTAText } from '../utils/abTest';
 import './Home.css';
 
-function ServiceIcon({ serviceName }) {
-  const icons = {
-    Plumber: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M16 3a3 3 0 0 0 3 3h1v2h-1a5 5 0 0 1-5-5h2zm-6 2v2H8a2 2 0 0 0-2 2v2H4V9a4 4 0 0 1 4-4h2zm-6 8h2v2h12v-2h2v2a2 2 0 0 1-2 2h-1v3h-2v-3H9v3H7v-3H6a2 2 0 0 1-2-2v-2z" fill="currentColor" />
-      </svg>
-    ),
-    Electrician: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M13 2L4 13h6l-1 9 9-11h-6l1-9z" fill="currentColor" />
-      </svg>
-    ),
-    Carpenter: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M3 17.25V21h3.75l11-11-3.75-3.75-11 11zM20.71 7.04a1 1 0 0 0 0-1.41L18.37 3.3a1 1 0 0 0-1.41 0L15.13 5.13l3.75 3.75 1.83-1.84z" fill="currentColor" />
-      </svg>
-    ),
-    Painter: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M18 3H6a3 3 0 0 0-3 3v5a3 3 0 0 0 3 3h5v4a3 3 0 0 0 6 0v-2h1a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3zm-8 7H6V6h4v4zm8 0h-6V6h6v4z" fill="currentColor" />
-      </svg>
-    ),
-  };
-
-  return <span className="service-icon">{icons[serviceName] || icons.Plumber}</span>;
-}
+const GEO_RADIUS_KM = 20;
 
 export default function Home() {
   const navigate = useNavigate();
   const [selectedService, setSelectedService] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [selectedSubtype, setSelectedSubtype] = useState(null);
   const [assistantPrompt, setAssistantPrompt] = useState('');
   const [serviceSearch, setServiceSearch] = useState('');
   const { location } = useLocation() || {};
   const cityName = location?.city || 'your area';
+  const [availableJobIds, setAvailableJobIds] = useState(null);
 
-  const services = SERVICE_CATALOG;
+  useEffect(() => {
+    if (!location) return;
+
+    const { lat, lng } = location;
+    setAvailableJobIds(null);
+
+    fetch(`/api/available-jobs?lat=${lat}&lng=${lng}&radius=${GEO_RADIUS_KM}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch available jobs');
+        return res.json();
+      })
+      .then((data) => {
+        const ids = Array.isArray(data) ? data : data.jobs || data.jobIds || [];
+        setAvailableJobIds(new Set(ids.map(String)));
+      })
+      .catch(() => {
+        // If API is unavailable, show all jobs as available (graceful degradation)
+        setAvailableJobIds(new Set(ALL_JOBS.map((j) => j.id)));
+      });
+  }, [location]);
+
   const trustPillars = [
     'Verified professionals with identity checks',
     'Transparent quote-based pricing before approval',
@@ -75,22 +75,30 @@ export default function Home() {
   ];
 
   // Handle service selection and login check
-  const handleBookService = (service) => {
+  const handleBookService = (job) => {
+    // Block booking for services not available in the user's area
+    const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
+    if (!isAvailable) return;
+
     // If not logged in, redirect to auth with user mode
     if (!auth.currentUser) {
       navigate('/auth?mode=user');
       return;
     }
-    // Set selected service and show confirmation modal
-    setSelectedService(service);
+    // Set selected job and show confirmation/subtype modal
+    setSelectedService(job);
+    setSelectedSubtype(null);
     setShowModal(true);
   };
 
   // Confirm selection and navigate to the detailed booking page
   const confirmBooking = () => {
     if (selectedService) {
-      // Pass service type as a query parameter
-      navigate(`/service?type=${selectedService.name}`);
+      if (selectedService.isSpecial && selectedSubtype) {
+        navigate(`/service?type=${encodeURIComponent(selectedSubtype.label)}`);
+      } else if (!selectedService.isSpecial) {
+        navigate(`/service?type=${encodeURIComponent(selectedService.name)}`);
+      }
       setShowModal(false);
     }
   };
@@ -102,13 +110,14 @@ export default function Home() {
     }
   };
 
-  const visibleServices = services.filter((service) => {
+  const visibleServices = ALL_JOBS.filter((job) => {
     const query = serviceSearch.trim().toLowerCase();
     if (!query) return true;
     return (
-      service.name.toLowerCase().includes(query)
-      || service.desc.toLowerCase().includes(query)
-      || service.keywords?.some((keyword) => keyword.toLowerCase().includes(query))
+      job.name.toLowerCase().includes(query)
+      || job.desc.toLowerCase().includes(query)
+      || (job.category || '').toLowerCase().includes(query)
+      || (job.keywords || []).some((kw) => kw.toLowerCase().includes(query))
     );
   });
 
@@ -150,6 +159,8 @@ export default function Home() {
         </div>
       </section>
 
+      <AiActivityMonitor />
+
       <section className="services-section" id="services">
         <div className="section-header-row">
           <div>
@@ -171,19 +182,39 @@ export default function Home() {
 
         <div className="services-scroll-wrapper">
           <div className="services-grid">
-            {visibleServices.map((service) => (
-              <article key={service.id} className="service-card">
-                <div className="service-top">
-                  <ServiceIcon serviceName={service.name} />
-                  <span className="verified-chip">Verified Pro</span>
-                </div>
-                <h3>{service.name}</h3>
-                <p>{service.desc}</p>
-                <div className="service-card-actions">
-                  <button className="primary-btn" onClick={() => handleBookService(service)}>Book Service</button>
-                </div>
-              </article>
-            ))}
+            {visibleServices.map((job) => {
+              const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
+              const isCheckingAvailability = availableJobIds === null && location;
+
+              return (
+                <article key={job.id} className={`service-card${!isAvailable ? ' service-card--disabled' : ''}`}>
+                  <div className="service-top">
+                    <span className="service-icon" role="img" aria-label={job.name}>{job.icon || '🔧'}</span>
+                    {!isAvailable ? (
+                      <span className="coming-soon-chip">Coming Soon</span>
+                    ) : (
+                      <span className="verified-chip">{job.isUpcoming ? 'Coming Soon' : 'Verified Pro'}</span>
+                    )}
+                  </div>
+                  <h3>{job.name}</h3>
+                  <p>{job.desc}</p>
+                  {!isAvailable && (
+                    <span className="coming-soon-area-label">🚀 Coming soon in your area</span>
+                  )}
+                  <div className="service-card-actions">
+                    {!isAvailable ? (
+                      <button className="primary-btn" disabled>
+                        Coming Soon
+                      </button>
+                    ) : (
+                      <button className="primary-btn" onClick={() => handleBookService(job)} disabled={isCheckingAvailability}>
+                        {isCheckingAvailability ? 'Checking…' : job.isSpecial ? 'View Options' : 'Book Service'}
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
 
@@ -251,41 +282,71 @@ export default function Home() {
       </section>
 
       <ConsumerAiAssistant
-        services={services}
+        services={SERVICE_CATALOG}
         onBookService={handleBookService}
         externalPrompt={assistantPrompt}
         onPromptConsumed={() => setAssistantPrompt('')}
       />
 
-      {/* Booking Confirmation Modal */}
+      {/* Booking / Subtype Selection Modal */}
       {showModal && selectedService && (
         <div className="booking-modal-overlay">
           <div className="booking-modal-card">
             <div className="booking-modal-head">
-              <ServiceIcon serviceName={selectedService.name} />
-              <h2>Book {selectedService.name}</h2>
-              <p>
-                {selectedService.desc}
-              </p>
+              <span className="service-icon" role="img" aria-label={selectedService.name}
+                style={{ fontSize: '38px', width: 'auto', height: 'auto' }}>{selectedService.icon || '🔧'}</span>
+              <h2>{selectedService.isSpecial ? selectedService.name : `Book ${selectedService.name}`}</h2>
+              <p>{selectedService.desc}</p>
             </div>
 
-            <div className="modal-benefits">
-              <p>
-                ✓ Verified worker profiles<br />
-                ✓ Quote-based approval flow<br />
-                ✓ Flexible time-slot booking<br />
-                ✓ Real-time update tracking
-              </p>
-            </div>
+            {selectedService.isSpecial ? (
+              <>
+                <div className="query-list">
+                  {(getSpecialJob(selectedService.id)?.subtypes || []).map((subtype) => (
+                    <button
+                      key={subtype.id}
+                      onClick={() => setSelectedSubtype(subtype)}
+                      style={selectedSubtype?.id === subtype.id ? { borderColor: 'var(--color-brand-600)', borderStyle: 'solid', background: '#fff' } : {}}
+                    >
+                      {subtype.icon} {subtype.label} — {subtype.desc}
+                    </button>
+                  ))}
+                </div>
 
-            <div className="modal-actions">
-              <button onClick={() => setShowModal(false)} className="cancel-btn">
-                Cancel
-              </button>
-              <button onClick={confirmBooking} className="primary-btn">
-                Proceed to Book
-              </button>
-            </div>
+                <div className="modal-actions">
+                  <button onClick={() => setShowModal(false)} className="cancel-btn">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmBooking}
+                    className="primary-btn"
+                    disabled={!selectedSubtype}
+                  >
+                    {selectedSubtype ? `Book ${selectedSubtype.label} →` : 'Select an option'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="modal-benefits">
+                  <p>
+                    ✓ Verified worker profiles<br />
+                    ✓ Quote-based approval flow<br />
+                    ✓ Flexible time-slot booking<br />
+                    ✓ Real-time update tracking
+                  </p>
+                </div>
+
+                <div className="modal-actions">
+                  <button onClick={() => setShowModal(false)} className="cancel-btn">
+                    Cancel
+                  </button>
+                  <button onClick={confirmBooking} className="primary-btn">
+                    Proceed to Book
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

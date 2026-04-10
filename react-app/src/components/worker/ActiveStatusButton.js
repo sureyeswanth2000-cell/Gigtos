@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useWorkerLocation } from '../../context/WorkerLocationContext';
 
 const ACTIVE_DURATION = 12 * 60 * 60 * 1000; // 12 hours in ms
 const LS_KEY = 'worker_active_since';
@@ -9,12 +10,21 @@ export default function ActiveStatusButton({ onStatusChange }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [toast, setToast] = useState(null);
 
+  const workerLoc = useWorkerLocation();
+  const workerLocRef = useRef(workerLoc);
+  useEffect(() => { workerLocRef.current = workerLoc; }, [workerLoc]);
+
   useEffect(() => {
     const stored = localStorage.getItem(LS_KEY);
     if (stored) {
       const ts = parseInt(stored, 10);
       if (Date.now() - ts < ACTIVE_DURATION) {
         setActiveSince(ts);
+        // Resume location tracking if was previously active
+        const loc = workerLocRef.current;
+        if (loc && !loc.tracking) {
+          loc.startTracking(null);
+        }
       } else {
         localStorage.removeItem(LS_KEY);
       }
@@ -31,6 +41,11 @@ export default function ActiveStatusButton({ onStatusChange }) {
         localStorage.removeItem(LS_KEY);
         showToast('⏰ Active status expired after 12 hours', 'error');
         if (onStatusChange) onStatusChange(false);
+        // Stop location tracking when active period expires
+        const loc = workerLocRef.current;
+        if (loc && loc.tracking) {
+          loc.stopTracking();
+        }
       }
     }, 1000);
     return () => clearInterval(interval);
@@ -47,6 +62,11 @@ export default function ActiveStatusButton({ onStatusChange }) {
     localStorage.setItem(LS_KEY, ts.toString());
     showToast('✅ You are now Active! Customers can see you.', 'success');
     if (onStatusChange) onStatusChange(true);
+    // Start worker location tracking (workLocation can be set later per booking)
+    const loc = workerLocRef.current;
+    if (loc && !loc.tracking) {
+      loc.startTracking(null);
+    }
   }, [onStatusChange]);
 
   const handleDeactivate = useCallback(() => {
@@ -55,7 +75,12 @@ export default function ActiveStatusButton({ onStatusChange }) {
     setShowConfirm(false);
     showToast('🔴 You are now Offline', 'error');
     if (onStatusChange) onStatusChange(false);
-  }, [onStatusChange]);
+    // Stop worker location tracking
+    const loc = workerLocRef.current;
+    if (loc && loc.tracking) {
+      loc.stopTracking();
+    }
+  }, [onStatusChange, workerLoc]);
 
   const isActive = !!activeSince;
   const remaining = isActive ? Math.max(0, ACTIVE_DURATION - (now - activeSince)) : 0;

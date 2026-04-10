@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { auth, db } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import RatingDisplay from '../../components/worker/RatingDisplay';
 import WorkerBottomNav from '../../components/worker/WorkerBottomNav';
 import '../../styles/worker-dashboard.css';
 
@@ -39,10 +38,37 @@ export default function WorkHistory() {
   }, []);
 
   const totalEarned = history.reduce((s, h) => s + (h.earned || 0), 0);
-  const ratedItems = history.filter(h => h.rating);
-  const avgRating = ratedItems.length > 0
-    ? (ratedItems.reduce((s, h) => s + h.rating, 0) / ratedItems.length).toFixed(1)
-    : 0;
+
+  // Finalized average rating logic:
+  // Ratings from the current week (Mon-Sun) are not yet included in the average.
+  // They are averaged on Sunday and reflected from the following Monday.
+  // Non-rated works are ignored in the calculation.
+  const parseDate = (d) => d && typeof d.toDate === 'function' ? d.toDate() : new Date(d);
+
+  const computeAvgRating = (items) => {
+    if (items.length === 0) return 0;
+    return (items.reduce((s, h) => s + h.rating, 0) / items.length).toFixed(1);
+  };
+
+  const getFinalizedAvgRating = (items) => {
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ...
+    // Find the most recent Monday (start of the display week)
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+    monday.setHours(0, 0, 0, 0);
+
+    // Only include rated items completed before this Monday (finalized weeks)
+    const finalizedItems = items.filter(h => {
+      if (!h.rating) return false;
+      return parseDate(h.completedAt) < monday;
+    });
+
+    return computeAvgRating(finalizedItems);
+  };
+
+  // Display only finalized ratings (current week excluded until next Monday)
+  const avgRating = getFinalizedAvgRating(history);
 
   return (
     <div className="worker-page">
@@ -89,11 +115,6 @@ export default function WorkHistory() {
                   </div>
                 )}
               </div>
-              {item.rating && (
-                <div style={{ marginBottom: 4 }}>
-                  <RatingDisplay rating={item.rating} size="sm" />
-                </div>
-              )}
               {item.review && (
                 <div style={{ fontSize: 13, color: '#6B7280', fontStyle: 'italic' }}>"{item.review}"</div>
               )}

@@ -10,12 +10,12 @@ export const SPECIAL_JOBS = [
     category: 'Transport',
     desc: 'Choose the type of driver service you need',
     subtypes: [
-      { id: 'driver-with-car', label: 'Driver with Car', icon: '🚗', desc: 'Driver who brings their own car', comingSoon: false },
-      { id: 'driver-only', label: 'Only Driver', icon: '🧑‍✈️', desc: 'Driver to operate your vehicle', comingSoon: false },
-      { id: 'driver-with-bike', label: 'Driver with Bike', icon: '🏍️', desc: 'Bike rider for deliveries or errands', comingSoon: true },
-      { id: 'driver-with-bus', label: 'Driver with Bus', icon: '🚌', desc: 'Bus driver for group transport', comingSoon: true },
-      { id: 'driver-with-bulldozer', label: 'Driver with Bulldozer', icon: '🚜', desc: 'Bulldozer operator for earthwork', comingSoon: true },
-      { id: 'driver-with-auto', label: 'Driver with Auto-Rickshaw', icon: '🛺', desc: 'Auto-rickshaw driver for local transport', comingSoon: true },
+      { id: 'driver-with-car', label: 'Car Driver', icon: '🚗', desc: 'Driver who brings their own car', comingSoon: false },
+      { id: 'driver-only', label: 'Only Driver', icon: '🧑‍✈️', desc: 'Driver to operate your vehicle', comingSoon: true },
+      { id: 'driver-with-bike', label: 'Bike Driver', icon: '🏍️', desc: 'Bike rider for deliveries or errands', comingSoon: true },
+      { id: 'driver-with-mini-van', label: 'Mini Van', icon: '🚐', desc: 'Mini van driver for local transport', comingSoon: true },
+      { id: 'driver-with-private-bus', label: 'Private Bus', icon: '🚌', desc: 'Private bus driver for group transport', comingSoon: true },
+      { id: 'driver-with-bulldozer', label: 'Bulldozer Operator', icon: '🚜', desc: 'Bulldozer operator for earthwork', comingSoon: true },
     ],
   },
   {

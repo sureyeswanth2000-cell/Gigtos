@@ -19,9 +19,11 @@ async function reverseGeocode(lat, lng) {
     );
     const data = await res.json();
     const addr = data.address || {};
-    return addr.city || addr.town || addr.village || addr.county || null;
+    const city = addr.city || addr.town || addr.village || addr.county || null;
+    const displayName = data.display_name || null;
+    return { city, displayName };
   } catch {
-    return null;
+    return { city: null, displayName: null };
   }
 }
 
@@ -70,8 +72,8 @@ export function LocationProvider({ children }) {
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        const city = await reverseGeocode(lat, lng);
-        setLocation({ lat, lng, city, source: 'gps' });
+        const { city, displayName } = await reverseGeocode(lat, lng);
+        setLocation({ lat, lng, city, displayName, source: 'gps' });
         setLocationLoading(false);
       },
       () => {

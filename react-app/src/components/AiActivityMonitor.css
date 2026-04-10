@@ -1,0 +1,325 @@
+/* ──────────────────────────────────────────────────────────
+   AI Activity Monitor — GIF-like animated monitoring display
+   ────────────────────────────────────────────────────────── */
+
+.ai-monitor {
+  background: linear-gradient(170deg, rgba(118, 75, 162, 0.06), rgba(5, 122, 49, 0.04));
+  border: 1px solid var(--color-border-200);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+  box-shadow: 0 14px 32px rgba(24, 35, 42, 0.06);
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+
+.ai-monitor__header {
+  margin-bottom: var(--space-4);
+}
+
+.ai-monitor__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ai-monitor__title-row h2 {
+  margin: 0;
+  font-size: clamp(18px, 2.4vw, 22px);
+  color: var(--color-text-900);
+}
+
+.ai-live-badge {
+  display: inline-block;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  animation: ai-live-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ai-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.ai-monitor__subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-700);
+  font-size: 13px;
+}
+
+/* ── Tabs ───────────────────────────────────────────────── */
+
+.ai-monitor__tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ai-monitor__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.ai-monitor__tabs button {
+  border: 1px solid var(--color-border-200);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--color-text-700);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--motion-fast) ease;
+}
+
+.ai-monitor__tabs button.active {
+  background: var(--primary-purple);
+  color: #fff;
+  border-color: var(--primary-purple);
+}
+
+.ai-monitor__tabs button:hover:not(.active) {
+  border-color: var(--primary-purple-light);
+  background: #f3e8ff;
+}
+
+/* ── Feed ───────────────────────────────────────────────── */
+
+.ai-monitor__feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ── Cards (shared) ─────────────────────────────────────── */
+
+.ai-card {
+  display: flex;
+  gap: var(--space-3);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--color-border-200);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  transition: transform var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+  animation: ai-card-in 400ms ease both;
+}
+
+.ai-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(162, 89, 255, 0.1);
+}
+
+@keyframes ai-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ai-card__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.ai-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-card__title {
+  font-size: 13px;
+  color: var(--color-text-900);
+  margin-bottom: 2px;
+}
+
+.ai-card__desc {
+  font-size: 12px;
+  color: var(--color-text-500);
+  margin-bottom: var(--space-1);
+}
+
+.ai-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.ai-card__time {
+  font-size: 11px;
+  color: var(--color-text-500);
+}
+
+/* ── Status chips ───────────────────────────────────────── */
+
+.ai-status {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.status-created   { background: #dbeafe; color: #1d4ed8; }
+.status-matched   { background: #d1fae5; color: #065f46; }
+.status-progress  { background: #fef3c7; color: #92400e; }
+.status-completed { background: #d1fae5; color: #065f46; }
+.status-pending   { background: #f3f4f6; color: #6b7280; }
+
+/* ── Pulse dot (GIF-like animated indicator) ────────────── */
+
+.ai-pulse-dot {
+  position: relative;
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary-purple);
+}
+
+.ai-pulse-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--primary-purple);
+  animation: ai-ring-expand 1.8s ease-out infinite;
+}
+
+@keyframes ai-ring-expand {
+  0%   { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* ── Tracking GIF-like spinner ──────────────────────────── */
+
+.ai-tracking-gif {
+  display: inline-block;
+  font-size: 20px;
+  animation: ai-spin-gentle 3s linear infinite;
+}
+
+@keyframes ai-spin-gentle {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ── Progress bar ───────────────────────────────────────── */
+
+.ai-progress-bar {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: var(--space-1) 0;
+}
+
+.ai-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-purple), var(--color-action-600));
+  border-radius: 3px;
+  transition: width 600ms ease;
+}
+
+.ai-card__progress-label {
+  font-size: 11px;
+  color: var(--color-text-500);
+  font-weight: 600;
+}
+
+/* ── Budget card specifics ──────────────────────────────── */
+
+.ai-budget-icon {
+  font-size: 20px;
+}
+
+.ai-budget-range {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-1) 0;
+  flex-wrap: wrap;
+}
+
+.ai-budget-amount {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--primary-purple-dark);
+}
+
+.ai-confidence {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.ai-confidence--high {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.ai-confidence--moderate {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.ai-card__explain {
+  font-size: 11px;
+  color: var(--color-text-500);
+  line-height: 1.4;
+}
+
+/* ── Show more ──────────────────────────────────────────── */
+
+.ai-monitor__show-more {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-3);
+  padding: 8px;
+  border: 1px dashed var(--color-border-300);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--primary-purple);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--motion-fast) ease;
+}
+
+.ai-monitor__show-more:hover {
+  background: rgba(162, 89, 255, 0.06);
+}
+
+/* ── Empty state ────────────────────────────────────────── */
+
+.ai-empty {
+  text-align: center;
+  color: var(--color-text-500);
+  padding: var(--space-4);
+  font-size: 13px;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+
+@media (max-width: 700px) {
+  .ai-monitor {
+    padding: var(--space-4);
+    border-radius: 14px;
+  }
+
+  .ai-card {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .ai-budget-amount {
+    font-size: 14px;
+  }
+}

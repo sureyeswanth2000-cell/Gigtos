@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
+import AiActivityMonitor from '../components/AiActivityMonitor';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
 import { getSpecialJob } from '../config/specialJobs';
 import { ALL_JOBS } from '../utils/jobListBuilder';
@@ -157,6 +158,8 @@ export default function Home() {
           <small>Gito AI will open automatically with your selected query.</small>
         </div>
       </section>
+
+      <AiActivityMonitor />
 
       <section className="services-section" id="services">
         <div className="section-header-row">

@@ -73,14 +73,8 @@ export function detectCurrentLocation() {
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-<<<<<<< HEAD
         const { city, displayName } = await reverseGeocode(lat, lng);
-        setLocation({ lat, lng, city, displayName, source: 'gps' });
-        setLocationLoading(false);
-=======
-        const city = await reverseGeocode(lat, lng);
-        resolve({ lat, lng, city, source: 'gps' });
->>>>>>> origin/main
+        resolve({ lat, lng, city, displayName, source: 'gps' });
       },
       () => {
         // Fallback: try GeoIP

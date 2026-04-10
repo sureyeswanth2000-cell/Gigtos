@@ -26,10 +26,10 @@ const ROTATE_INTERVAL_MS = 4000;
 function buildActivityFeed() {
   const now = Date.now();
   return [
-    { id: 'a3', type: 'tracking', service: 'Painter', area: 'Gachibowli', status: 'in_progress', ts: now - 60000, worker: 'FreshCoat Painters', progress: 65, description: 'Interior painting 2BHK' },
-    { id: 'a4', type: 'tracking', service: 'Carpenter', area: 'Madhapur', status: 'completed', ts: now - 30000, worker: 'WoodCraft Studio', progress: 100, description: 'Door frame repair' },
-    { id: 'a5', type: 'budget', service: 'Plumber', description: 'Full bathroom renovation', estimatedDays: 3 },
-    { id: 'a6', type: 'budget', service: 'Electrician', description: 'Emergency switchboard fix', estimatedDays: 1 },
+    { id: 'a1', type: 'tracking', service: 'Painter', area: 'Gachibowli', status: 'in_progress', ts: now - 60000, worker: 'FreshCoat Painters', progress: 65, description: 'Interior painting 2BHK' },
+    { id: 'a2', type: 'tracking', service: 'Carpenter', area: 'Madhapur', status: 'completed', ts: now - 30000, worker: 'WoodCraft Studio', progress: 100, description: 'Door frame repair' },
+    { id: 'a3', type: 'budget', service: 'Plumber', description: 'Full bathroom renovation', estimatedDays: 3 },
+    { id: 'a4', type: 'budget', service: 'Electrician', description: 'Emergency switchboard fix', estimatedDays: 1 },
   ];
 }
 

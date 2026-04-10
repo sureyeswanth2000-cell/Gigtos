@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { auth, db } from "../firebase";
 import { doc, getDoc, setDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { useLocation as useUserLocation } from "../context/LocationContext";
-import { geocodeCity } from "../context/LocationContext";
 
 export default function Profile() {
   const [profileData, setProfileData] = useState({
@@ -22,15 +21,9 @@ export default function Profile() {
   const [success, setSuccess] = useState("");
   const [cashbacks, setCashbacks] = useState([]);
 
-  // Location edit/delete toolbar
-  const [showLocationActions, setShowLocationActions] = useState(false);
-  const [editingLocation, setEditingLocation] = useState(false);
-  const [locationQuery, setLocationQuery] = useState("");
-  const [locationResults, setLocationResults] = useState([]);
-  const [searchingLocation, setSearchingLocation] = useState(false);
-  const debounceRef = useRef(null);
+  const userDetectRef = useRef(false);
 
-  const { location: detectedLocation, detectLocation } = useUserLocation() || {};
+  const { location: detectedLocation, detectLocation, locationLoading } = useUserLocation() || {};
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -87,60 +80,30 @@ export default function Profile() {
     return unsub;
   }, []);
 
-  // Debounced location search
-  useEffect(() => {
-    if (!locationQuery.trim() || locationQuery.trim().length < 2) {
-      setLocationResults([]);
-      return;
-    }
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      setSearchingLocation(true);
-      const hits = await geocodeCity(locationQuery.trim());
-      setLocationResults(hits || []);
-      setSearchingLocation(false);
-    }, 400);
-    return () => clearTimeout(debounceRef.current);
-  }, [locationQuery]);
-
-  const handleSelectLocation = (place) => {
-    setProfileData({
-      ...profileData,
-      locationCity: place.city,
-      locationLat: place.lat,
-      locationLng: place.lng,
-    });
-    setEditingLocation(false);
-    setLocationQuery("");
-    setLocationResults([]);
-    setShowLocationActions(false);
-  };
-
   const handleDetectAndSetLocation = () => {
+    userDetectRef.current = true;
     if (detectLocation) detectLocation();
   };
 
-  // Sync detected location into profile when it changes and user has triggered detection
+  // Sync detected location into profile when it changes
   useEffect(() => {
-    if (detectedLocation && !profileData.locationCity) {
-      setProfileData((prev) => ({
-        ...prev,
-        locationCity: detectedLocation.city || prev.locationCity,
-        locationLat: detectedLocation.lat ?? prev.locationLat,
-        locationLng: detectedLocation.lng ?? prev.locationLng,
-      }));
+    if (detectedLocation) {
+      setProfileData((prev) => {
+        if (userDetectRef.current || !prev.locationCity) {
+          userDetectRef.current = false;
+          return {
+            ...prev,
+            locationCity: detectedLocation.city || prev.locationCity,
+            locationLat: detectedLocation.lat ?? prev.locationLat,
+            locationLng: detectedLocation.lng ?? prev.locationLng,
+            // Auto-fill address with full display name if address is empty
+            address: prev.address || detectedLocation.displayName || detectedLocation.city || '',
+          };
+        }
+        return prev;
+      });
     }
-  }, [detectedLocation, profileData.locationCity]);
-
-  const handleDeleteLocation = () => {
-    setProfileData({
-      ...profileData,
-      locationCity: "",
-      locationLat: null,
-      locationLng: null,
-    });
-    setShowLocationActions(false);
-  };
+  }, [detectedLocation]);
 
   const handleSave = async () => {
     setError("");
@@ -190,55 +153,6 @@ export default function Profile() {
     <div style={{ maxWidth: "620px", margin: "20px auto", padding: "24px 18px 90px", color: '#1f2937' }}>
       <h2 style={{ marginBottom: "8px", fontSize: '34px', fontFamily: 'Manrope, Inter, sans-serif' }}>My Profile</h2>
       <p style={{ margin: '0 0 16px 0', color: '#4b5563', fontSize: '14px' }}>Keep your contact details up to date for faster booking confirmations.</p>
-
-      {/* Location action toolbar – appears at top when location is clicked */}
-      {showLocationActions && (
-        <div style={{
-          position: 'sticky', top: 0, zIndex: 100,
-          padding: '12px 16px', marginBottom: '16px',
-          background: 'linear-gradient(135deg, #f3e8ff, #ede9fe)',
-          borderRadius: '10px', border: '1px solid #c4b5fd',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          boxShadow: '0 4px 12px rgba(162,89,255,0.15)'
-        }}>
-          <span style={{ fontWeight: 600, color: '#5b21b6', fontSize: '14px' }} aria-label={`Location: ${profileData.locationCity || 'Not set'}`}>📍 Location: {profileData.locationCity || 'Not set'}</span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => { setEditingLocation(true); setShowLocationActions(false); }}
-              aria-label="Edit location"
-              style={{
-                padding: '6px 14px', fontSize: '13px', fontWeight: 600,
-                background: '#7C3AED', color: '#fff', border: 'none',
-                borderRadius: '6px', cursor: 'pointer'
-              }}
-            >
-              ✏️ Edit
-            </button>
-            <button
-              onClick={handleDeleteLocation}
-              aria-label="Delete location"
-              style={{
-                padding: '6px 14px', fontSize: '13px', fontWeight: 600,
-                background: '#ef4444', color: '#fff', border: 'none',
-                borderRadius: '6px', cursor: 'pointer'
-              }}
-            >
-              🗑️ Delete
-            </button>
-            <button
-              onClick={() => setShowLocationActions(false)}
-              aria-label="Close location actions"
-              style={{
-                padding: '6px 10px', fontSize: '13px', fontWeight: 600,
-                background: '#e5e7eb', color: '#374151', border: 'none',
-                borderRadius: '6px', cursor: 'pointer'
-              }}
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
 
       {error && (
         <div style={{
@@ -374,127 +288,32 @@ export default function Profile() {
               />
             </div>
 
-            {/* Location section in edit mode */}
+            {/* Location section in edit mode – detect only */}
             <div style={{ marginBottom: "20px" }}>
               <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
                 Location:
               </label>
-              {profileData.locationCity ? (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '10px',
-                  padding: '10px', background: '#f3e8ff', borderRadius: '8px',
-                  border: '1px solid #c4b5fd'
-                }}>
-                  <span>📍 {profileData.locationCity}</span>
-                  <button
-                    onClick={() => setEditingLocation(true)}
-                    style={{
-                      padding: '4px 10px', fontSize: '12px',
-                      background: '#7C3AED', color: '#fff', border: 'none',
-                      borderRadius: '4px', cursor: 'pointer'
-                    }}
-                  >
-                    Change
-                  </button>
-                  <button
-                    onClick={handleDeleteLocation}
-                    style={{
-                      padding: '4px 10px', fontSize: '12px',
-                      background: '#ef4444', color: '#fff', border: 'none',
-                      borderRadius: '4px', cursor: 'pointer'
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    onClick={() => setEditingLocation(true)}
-                    style={{
-                      padding: '8px 16px', fontSize: '13px',
-                      background: '#7C3AED', color: '#fff', border: 'none',
-                      borderRadius: '6px', cursor: 'pointer', fontWeight: 600
-                    }}
-                  >
-                    🔍 Search Location
-                  </button>
-                  <button
-                    onClick={handleDetectAndSetLocation}
-                    style={{
-                      padding: '8px 16px', fontSize: '13px',
-                      background: '#A259FF', color: '#fff', border: 'none',
-                      borderRadius: '6px', cursor: 'pointer', fontWeight: 600
-                    }}
-                  >
-                    📍 Detect Location
-                  </button>
-                </div>
-              )}
-
-              {/* Location search dropdown */}
-              {editingLocation && (
-                <div style={{ marginTop: '10px' }}>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      value={locationQuery}
-                      onChange={(e) => setLocationQuery(e.target.value)}
-                      placeholder="Search city or area…"
-                      style={{
-                        flex: 1, padding: '8px 12px', border: '1px solid #ccc',
-                        borderRadius: '6px', fontSize: '14px'
-                      }}
-                      autoFocus
-                    />
-                    <button
-                      onClick={handleDetectAndSetLocation}
-                      style={{
-                        padding: '8px 12px', fontSize: '13px',
-                        background: '#A259FF', color: '#fff', border: 'none',
-                        borderRadius: '6px', cursor: 'pointer'
-                      }}
-                    >
-                      📍 Detect
-                    </button>
-                    <button
-                      onClick={() => { setEditingLocation(false); setLocationQuery(""); setLocationResults([]); }}
-                      style={{
-                        padding: '8px 10px', fontSize: '13px',
-                        background: '#e5e7eb', color: '#374151', border: 'none',
-                        borderRadius: '6px', cursor: 'pointer'
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  {searchingLocation && <div style={{ padding: '8px', fontSize: '13px', color: '#6B7280' }}>Searching…</div>}
-                  {!searchingLocation && locationResults.length > 0 && (
-                    <div style={{
-                      marginTop: '4px', border: '1px solid #e5e7eb', borderRadius: '8px',
-                      background: '#fff', maxHeight: '200px', overflowY: 'auto'
-                    }}>
-                      {locationResults.map((place, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleSelectLocation(place)}
-                          style={{
-                            display: 'block', width: '100%', padding: '10px 12px',
-                            border: 'none', background: 'none', textAlign: 'left',
-                            cursor: 'pointer', borderBottom: '1px solid #f3f4f6',
-                            fontSize: '13px'
-                          }}
-                        >
-                          📍 {place.displayName}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {!searchingLocation && locationQuery.trim().length >= 2 && locationResults.length === 0 && (
-                    <div style={{ padding: '8px', fontSize: '13px', color: '#9ca3af' }}>No results found</div>
-                  )}
-                </div>
-              )}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '10px', background: '#f3e8ff', borderRadius: '8px',
+                border: '1px solid #c4b5fd'
+              }}>
+                <span style={{ flex: 1, fontSize: '14px', color: profileData.locationCity ? '#1f2937' : '#9ca3af' }}>
+                  {profileData.locationCity ? `📍 ${profileData.locationCity}` : 'Not detected'}
+                </span>
+                <button
+                  onClick={handleDetectAndSetLocation}
+                  disabled={locationLoading}
+                  style={{
+                    padding: '6px 14px', fontSize: '13px', fontWeight: 600,
+                    background: locationLoading ? '#c4b5fd' : '#A259FF', color: '#fff', border: 'none',
+                    borderRadius: '6px', cursor: locationLoading ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {locationLoading ? '⏳ Detecting…' : '📍 Detect Location'}
+                </button>
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: "10px" }}>
@@ -553,24 +372,18 @@ export default function Profile() {
               <p style={{ margin: "5px 0 0 0", fontSize: "14px", whiteSpace: "pre-wrap" }}>
                 {profileData.address || "Not set"}
               </p>
+              {profileData.locationLat && profileData.locationLng && (
+                <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#7C3AED", fontWeight: 500 }}>
+                  📍 {profileData.locationLat.toFixed(4)}, {profileData.locationLng.toFixed(4)}
+                </p>
+              )}
             </div>
 
             <div style={{ marginBottom: "15px" }}>
               <span style={{ fontWeight: "bold", color: "#666" }}>Location:</span>
-              {profileData.locationCity ? (
-                <p
-                  style={{
-                    margin: "5px 0 0 0", fontSize: "14px", cursor: 'pointer',
-                    color: '#7C3AED', fontWeight: 500
-                  }}
-                  onClick={() => setShowLocationActions(true)}
-                  title="Click to edit or delete location"
-                >
-                  📍 {profileData.locationCity}
-                </p>
-              ) : (
-                <p style={{ margin: "5px 0 0 0", fontSize: "14px", color: '#9ca3af' }}>Not set</p>
-              )}
+              <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>
+                {profileData.locationCity || "Not set"}
+              </p>
             </div>
 
             <button

@@ -27,9 +27,11 @@ export async function reverseGeocode(lat, lng) {
     );
     const data = await res.json();
     const addr = data.address || {};
-    return addr.city || addr.town || addr.village || addr.county || null;
+    const city = addr.city || addr.town || addr.village || addr.county || null;
+    const displayName = data.display_name || null;
+    return { city, displayName };
   } catch {
-    return null;
+    return { city: null, displayName: null };
   }
 }
 
@@ -71,8 +73,8 @@ export function detectCurrentLocation() {
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        const city = await reverseGeocode(lat, lng);
-        resolve({ lat, lng, city, source: 'gps' });
+        const { city, displayName } = await reverseGeocode(lat, lng);
+        resolve({ lat, lng, city, displayName, source: 'gps' });
       },
       () => {
         // Fallback: try GeoIP

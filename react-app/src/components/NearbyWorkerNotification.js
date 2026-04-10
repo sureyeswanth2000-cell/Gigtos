@@ -45,15 +45,7 @@ export default function NearbyWorkerNotification({ onBookWorker }) {
         );
         const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-        // Find workers within 20km for any service type
-        const matched = matchNearbyWorkers(all, {
-          serviceType: all.length > 0 ? all[0].serviceType : '',
-          lat: location.lat,
-          lng: location.lng,
-          radiusKm: 20,
-        });
-
-        // If first match didn't cover all types, match for each unique service type
+        // Match for each unique service type within radius
         const serviceTypes = [...new Set(all.map((w) => w.serviceType))];
         const allMatched = [];
         const seen = new Set();

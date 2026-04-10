@@ -272,11 +272,11 @@ export default function InstantBookingModal({ worker, userData, onClose, onBooke
               padding: 12, marginBottom: 16, fontSize: 13,
             }}>
               <div style={{ fontWeight: 600, color: '#15803D', marginBottom: 4 }}>After payment:</div>
-              <div style={{ color: '#374151' }}>
-                ✓ Worker gets notified instantly<br />
-                ✓ You can track the worker live<br />
-                ✓ Worker's contact shared after arrival
-              </div>
+              <ul style={{ color: '#374151', margin: 0, paddingLeft: 18, listStyle: 'none' }}>
+                <li>✓ Worker gets notified instantly</li>
+                <li>✓ You can track the worker live</li>
+                <li>✓ Worker's contact shared after arrival</li>
+              </ul>
             </div>
 
             {error && (

@@ -42,7 +42,7 @@ export default function MapView({ center, jobs = [], workerLocation }) {
           iconSize: [30, 30],
           iconAnchor: [15, 15]
         })
-      }).addTo(map).bindPopup(`<b>${job.title}</b><br/>₹${job.budget || 'Negotiable'}<br/><a href="https://www.google.com/maps/dir/?api=1&destination=${job.lat},${job.lng}" target="_blank">Navigate →</a>`);
+      }).addTo(map).bindPopup(`<b>${job.title}</b><br/><a href="https://www.google.com/maps/dir/?api=1&destination=${job.lat},${job.lng}" target="_blank">Navigate →</a>`);
     });
 
     mapInstance.current = map;

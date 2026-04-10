@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { suggestBudget, formatBudgetRange } from '../utils/aiBudgetSuggestion';
 import './AiActivityMonitor.css';
 
 /**
@@ -24,13 +23,7 @@ const ACTIVE_WORKERS = [
 const ROTATE_INTERVAL_MS = 4000;
 
 function buildActivityFeed() {
-  const now = Date.now();
-  return [
-    { id: 'a1', type: 'tracking', service: 'Painter', area: 'Gachibowli', status: 'in_progress', ts: now - 60000, worker: 'FreshCoat Painters', progress: 65, description: 'Interior painting 2BHK' },
-    { id: 'a2', type: 'tracking', service: 'Carpenter', area: 'Madhapur', status: 'completed', ts: now - 30000, worker: 'WoodCraft Studio', progress: 100, description: 'Door frame repair' },
-    { id: 'a3', type: 'budget', service: 'Plumber', description: 'Full bathroom renovation', estimatedDays: 3 },
-    { id: 'a4', type: 'budget', service: 'Electrician', description: 'Emergency switchboard fix', estimatedDays: 1 },
-  ];
+  return [];
 }
 
 const STATUS_LABELS = {
@@ -122,38 +115,6 @@ function TrackingCard({ item }) {
   );
 }
 
-function BudgetCard({ item }) {
-  const suggestion = useMemo(
-    () => suggestBudget({
-      serviceType: item.service,
-      description: item.description,
-      estimatedDays: item.estimatedDays || 1,
-    }),
-    [item.service, item.description, item.estimatedDays]
-  );
-
-  return (
-    <div className="ai-card ai-card--budget">
-      <div className="ai-card__icon">
-        <span className="ai-budget-icon" role="img" aria-label="budget suggestion">💰</span>
-      </div>
-      <div className="ai-card__body">
-        <div className="ai-card__title">
-          AI Budget for <strong>{item.service}</strong>
-        </div>
-        <div className="ai-card__desc">{item.description} · {item.estimatedDays} day{item.estimatedDays > 1 ? 's' : ''}</div>
-        <div className="ai-budget-range">
-          <span className="ai-budget-amount">{formatBudgetRange(suggestion)}</span>
-          <span className={`ai-confidence ai-confidence--${suggestion.confidence}`}>
-            {suggestion.confidence === 'high' ? '🎯' : '📊'} {suggestion.confidence} confidence
-          </span>
-        </div>
-        <div className="ai-card__explain">{suggestion.explanation}</div>
-      </div>
-    </div>
-  );
-}
-
 export default function AiActivityMonitor({ embedded = false }) {
   const [visibleCount, setVisibleCount] = useState(3);
   const [activeTab, setActiveTab] = useState('all');
@@ -191,7 +152,6 @@ export default function AiActivityMonitor({ embedded = false }) {
 
   const counts = useMemo(() => ({
     tracking: activityFeed.filter((i) => i.type === 'tracking').length,
-    budget: activityFeed.filter((i) => i.type === 'budget').length,
   }), [activityFeed]);
 
   return (
@@ -219,15 +179,11 @@ export default function AiActivityMonitor({ embedded = false }) {
         <button role="tab" aria-selected={activeTab === 'tracking'} className={activeTab === 'tracking' ? 'active' : ''} onClick={() => { setActiveTab('tracking'); setVisibleCount(3); }}>
           Tracking ({counts.tracking})
         </button>
-        <button role="tab" aria-selected={activeTab === 'budget'} className={activeTab === 'budget' ? 'active' : ''} onClick={() => { setActiveTab('budget'); setVisibleCount(3); }}>
-          Budgets ({counts.budget})
-        </button>
       </div>
 
       <div className="ai-monitor__feed">
         {displayedItems.map((item) => {
           if (item.type === 'tracking') return <TrackingCard key={item.id} item={item} />;
-          if (item.type === 'budget') return <BudgetCard key={item.id} item={item} />;
           return null;
         })}
 

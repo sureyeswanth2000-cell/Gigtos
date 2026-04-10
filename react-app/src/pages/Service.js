@@ -4,7 +4,6 @@ import { addDoc, collection, doc, getDoc } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { auth, db } from '../firebase';
 import { useLocation as useUserLocation } from '../context/LocationContext';
-import { suggestBudget, formatBudgetRange } from '../utils/aiBudgetSuggestion';
 import './Service.css';
 
 const serviceIcons = {
@@ -461,32 +460,6 @@ export default function Service() {
                   </div>
                 )}
               </div>
-
-              {(() => {
-                const budgetSuggestion = suggestBudget({
-                  serviceType: type,
-                  description: `${issueTitle} ${jobDetails}`.trim(),
-                  estimatedDays,
-                });
-                return (
-                  <div className="ai-budget-suggestion" role="region" aria-label="AI Budget Suggestion">
-                    <div className="ai-budget-suggestion__header">
-                      <span role="img" aria-label="AI">🤖</span>
-                      <strong>Gito AI Budget Suggestion</strong>
-                      <span className={`ai-budget-suggestion__confidence ai-budget-suggestion__confidence--${budgetSuggestion.confidence}`}>
-                        {budgetSuggestion.confidence === 'high' ? '🎯' : '📊'} {budgetSuggestion.confidence}
-                      </span>
-                    </div>
-                    <div className="ai-budget-suggestion__range">
-                      {formatBudgetRange(budgetSuggestion)}
-                    </div>
-                    <p className="ai-budget-suggestion__explain">{budgetSuggestion.explanation}</p>
-                    <p className="ai-budget-suggestion__note">
-                      This is an AI-estimated range. Actual quotes from workers may vary based on materials and site conditions.
-                    </p>
-                  </div>
-                );
-              })()}
 
               <div className="next-steps">
                 <h3>What happens next</h3>

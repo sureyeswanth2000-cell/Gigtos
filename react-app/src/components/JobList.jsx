@@ -81,15 +81,23 @@ export default function JobList({ onBook }) {
       {noJobsInArea ? (
         <NearbyMessage />
       ) : (
-        <div className="job-cards-grid">
-          {filteredJobs.map((job) => (
-            <JobCard
-              key={job.id}
-              job={job}
-              available={availableJobIds === null ? null : availableJobIds.has(job.id)}
-              onBook={onBook || ((j) => navigate(`/service?type=${encodeURIComponent(j.name)}`))}
-            />
-          ))}
+        <div className="job-cards-scroll-wrapper">
+          <div className="job-cards-grid">
+            {filteredJobs.map((job) => (
+              <JobCard
+                key={job.id}
+                job={job}
+                available={availableJobIds === null ? null : availableJobIds.has(job.id)}
+                onBook={onBook || ((j) => navigate(`/service?type=${encodeURIComponent(j.name)}`))}
+              />
+            ))}
+          </div>
+          {filteredJobs.length > 2 && (
+            <div className="job-cards-scroll-hint">
+              <span>Swipe to see more jobs</span>
+              <span className="job-cards-scroll-hint-arrow">→</span>
+            </div>
+          )}
         </div>
       )}
 

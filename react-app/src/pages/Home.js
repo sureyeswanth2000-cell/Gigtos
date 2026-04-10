@@ -164,41 +164,50 @@ export default function Home() {
           />
         </div>
 
-        <div className="services-grid">
-          {visibleServices.map((job) => {
-            const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
-            const isCheckingAvailability = availableJobIds === null && location;
+        <div className="services-scroll-wrapper">
+          <div className="services-grid">
+            {visibleServices.map((job) => {
+              const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
+              const isCheckingAvailability = availableJobIds === null && location;
 
-            return (
-              <article key={job.id} className={`service-card${!isAvailable ? ' service-card--disabled' : ''}`}>
-                <div className="service-top">
-                  <span className="service-icon" role="img" aria-label={job.name}>{job.icon || '🔧'}</span>
-                  {!isAvailable ? (
-                    <span className="coming-soon-chip">Coming Soon</span>
-                  ) : (
-                    <span className="verified-chip">{job.isUpcoming ? 'Coming Soon' : 'Verified Pro'}</span>
+              return (
+                <article key={job.id} className={`service-card${!isAvailable ? ' service-card--disabled' : ''}`}>
+                  <div className="service-top">
+                    <span className="service-icon" role="img" aria-label={job.name}>{job.icon || '🔧'}</span>
+                    {!isAvailable ? (
+                      <span className="coming-soon-chip">Coming Soon</span>
+                    ) : (
+                      <span className="verified-chip">{job.isUpcoming ? 'Coming Soon' : 'Verified Pro'}</span>
+                    )}
+                  </div>
+                  <h3>{job.name}</h3>
+                  <p>{job.desc}</p>
+                  {!isAvailable && (
+                    <span className="coming-soon-area-label">🚀 Coming soon in your area</span>
                   )}
-                </div>
-                <h3>{job.name}</h3>
-                <p>{job.desc}</p>
-                {!isAvailable && (
-                  <span className="coming-soon-area-label">🚀 Coming soon in your area</span>
-                )}
-                <div className="service-card-actions">
-                  {!isAvailable ? (
-                    <button className="primary-btn" disabled>
-                      Coming Soon
-                    </button>
-                  ) : (
-                    <button className="primary-btn" onClick={() => handleBookService(job)} disabled={isCheckingAvailability}>
-                      {isCheckingAvailability ? 'Checking…' : job.isSpecial ? 'View Options' : 'Book Service'}
-                    </button>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+                  <div className="service-card-actions">
+                    {!isAvailable ? (
+                      <button className="primary-btn" disabled>
+                        Coming Soon
+                      </button>
+                    ) : (
+                      <button className="primary-btn" onClick={() => handleBookService(job)} disabled={isCheckingAvailability}>
+                        {isCheckingAvailability ? 'Checking…' : job.isSpecial ? 'View Options' : 'Book Service'}
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         </div>
+
+        {visibleServices.length > 2 && (
+          <div className="scroll-hint">
+            <span>Swipe to see more services</span>
+            <span className="scroll-hint-arrow">→</span>
+          </div>
+        )}
 
         {visibleServices.length === 0 && (
           <div className="no-services-note">

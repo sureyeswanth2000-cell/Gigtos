@@ -34,7 +34,6 @@ export default function FutureJobCard({ job, onAccept, onViewDetails }) {
         <span className="job-meta-item">📅 {formatDate(job.scheduledAt)}</span>
         {job.scheduledAt && <span className="job-meta-item">🕐 {formatTime(job.scheduledAt)}</span>}
         {job.area && <span className="job-meta-item">📍 {job.area}</span>}
-        {job.budget && <span className="job-meta-item">💰 ₹{job.budget}</span>}
       </div>
       <div className="job-actions">
         <button className="btn-secondary" onClick={() => onViewDetails && onViewDetails(job)}>

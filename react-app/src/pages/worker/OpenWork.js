@@ -10,13 +10,6 @@ import '../../styles/worker-dashboard.css';
 
 const CATEGORIES = ['All', 'Plumbing', 'Electrical', 'Cleaning', 'Carpentry', 'Painting', 'Driving', 'Other'];
 
-const MOCK_OPEN_JOBS = [
-  { id: 'm1', title: 'Fix leaking pipe', serviceType: 'Plumbing', description: 'Kitchen sink pipe is leaking. Need urgent fix.', area: 'Adyar', budget: 800, createdAt: new Date(Date.now() - 2*3600000).toISOString(), category: 'Plumbing' },
-  { id: 'm2', title: 'Install ceiling fan', serviceType: 'Electrical', description: 'Need 2 ceiling fans installed in bedroom.', area: 'Velachery', budget: 600, createdAt: new Date(Date.now() - 5*3600000).toISOString(), category: 'Electrical' },
-  { id: 'm3', title: 'Deep clean apartment', serviceType: 'Cleaning', description: '2BHK apartment needs deep cleaning before move-in.', area: 'OMR', budget: 1500, createdAt: new Date(Date.now() - 1*86400000).toISOString(), category: 'Cleaning' },
-  { id: 'm4', title: 'Repaint bedroom walls', serviceType: 'Painting', description: 'Bedroom walls need fresh coat. White/off-white color.', area: 'Porur', budget: 2000, createdAt: new Date(Date.now() - 3*3600000).toISOString(), category: 'Painting' },
-];
-
 export default function OpenWork() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,9 +24,9 @@ export default function OpenWork() {
       try {
         const snap = await getDocs(query(collection(db, 'bookings'), where('status', '==', 'open')));
         const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setJobs(fetched.length > 0 ? fetched : MOCK_OPEN_JOBS);
+        setJobs(fetched);
       } catch {
-        setJobs(MOCK_OPEN_JOBS);
+        setJobs([]);
       } finally {
         setLoading(false);
       }
@@ -55,7 +48,6 @@ export default function OpenWork() {
     .filter(j => activeCategory === 'All' || (j.category || j.gigType || j.serviceType) === activeCategory)
     .sort((a, b) => {
       if (sortBy === 'recent') return new Date(b.createdAt) - new Date(a.createdAt);
-      if (sortBy === 'budget') return (b.budget || 0) - (a.budget || 0);
       return 0;
     });
 
@@ -83,7 +75,7 @@ export default function OpenWork() {
         {/* Sort */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
           <span style={{ fontSize: 13, color: '#6B7280', paddingTop: 6 }}>Sort:</span>
-          {[{v:'recent',l:'Recent'},{v:'budget',l:'Budget'}].map(s => (
+          {[{v:'recent',l:'Recent'}].map(s => (
             <button
               key={s.v}
               className={`filter-chip ${sortBy === s.v ? 'active' : ''}`}

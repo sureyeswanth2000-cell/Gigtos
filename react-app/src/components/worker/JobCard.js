@@ -25,7 +25,6 @@ export default function JobCard({ job, onSendQuote, onViewDetails }) {
         {job.area && <span className="job-meta-item">📍 {job.area}</span>}
         {job.distance && <span className="job-meta-item">🗺️ {job.distance}</span>}
         {job.createdAt && <span className="job-meta-item">🕐 {timeAgo(job.createdAt)}</span>}
-        {job.budget && <span className="job-meta-item">💰 ₹{job.budget}</span>}
       </div>
       <div className="job-actions">
         <button className="btn-secondary" onClick={() => onViewDetails && onViewDetails(job)}>

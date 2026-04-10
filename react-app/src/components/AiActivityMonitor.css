@@ -282,49 +282,6 @@
   font-weight: 600;
 }
 
-/* ── Budget card specifics ──────────────────────────────── */
-
-.ai-budget-icon {
-  font-size: 20px;
-}
-
-.ai-budget-range {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: var(--space-1) 0;
-  flex-wrap: wrap;
-}
-
-.ai-budget-amount {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--primary-purple-dark);
-}
-
-.ai-confidence {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-}
-
-.ai-confidence--high {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.ai-confidence--moderate {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.ai-card__explain {
-  font-size: 11px;
-  color: var(--color-text-500);
-  line-height: 1.4;
-}
-
 /* ── Show more ──────────────────────────────────────────── */
 
 .ai-monitor__show-more {
@@ -386,9 +343,5 @@
 
   .ai-card {
     padding: var(--space-2) var(--space-3);
-  }
-
-  .ai-budget-amount {
-    font-size: 14px;
   }
 }

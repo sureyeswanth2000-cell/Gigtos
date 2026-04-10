@@ -7,12 +7,6 @@ import FutureJobCard from '../../components/worker/FutureJobCard';
 import WorkerBottomNav from '../../components/worker/WorkerBottomNav';
 import '../../styles/worker-dashboard.css';
 
-const MOCK_FUTURE = [
-  { id: 'f1', title: 'AC Service', category: 'AC Technician', area: 'Adyar', budget: 1500, scheduledAt: new Date(Date.now() + 86400000).toISOString(), status: 'pending' },
-  { id: 'f2', title: 'Plumbing repair', category: 'Plumbing', area: 'Velachery', budget: 900, scheduledAt: new Date(Date.now() + 2*86400000).toISOString(), status: 'confirmed' },
-  { id: 'f3', title: 'House painting', category: 'Painting', area: 'OMR', budget: 4000, scheduledAt: new Date(Date.now() + 5*86400000).toISOString(), status: 'pending' },
-];
-
 function groupByDate(jobs) {
   const groups = {};
   jobs.forEach(job => {
@@ -39,9 +33,9 @@ export default function FutureWork() {
           where('status', 'in', ['pending', 'confirmed'])
         ));
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setJobs(data.length > 0 ? data : MOCK_FUTURE);
+        setJobs(data);
       } catch {
-        setJobs(MOCK_FUTURE);
+        setJobs([]);
       } finally {
         setLoading(false);
       }
@@ -107,7 +101,7 @@ export default function FutureWork() {
                   key={job.id}
                   job={job}
                   onAccept={handleAccept}
-                  onViewDetails={(j) => alert(`Job: ${j.title}\nArea: ${j.area}\nBudget: ₹${j.budget}`)}
+                  onViewDetails={(j) => alert(`Job: ${j.title}\nArea: ${j.area}`)}
                 />
               ))}
             </div>

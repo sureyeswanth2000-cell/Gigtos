@@ -47,7 +47,7 @@ export default function QuoteModal({ job, onClose, onSubmit }) {
                 {job.title || job.serviceType}
               </div>
               <div style={{ fontSize: 13, color: '#6B7280' }}>
-                📍 {job.area} {job.budget ? `· Budget: ₹${job.budget}` : ''}
+                📍 {job.area}
               </div>
             </div>
 

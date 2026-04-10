@@ -3,17 +3,12 @@ import { Link } from 'react-router-dom';
 import WorkerBottomNav from '../../components/worker/WorkerBottomNav';
 import '../../styles/worker-dashboard.css';
 
-const MOCK_JOBS = [
-  { id: 1, title: 'Plumber needed', area: 'Adyar', budget: 800, lat: 13.0012, lng: 80.2565, category: 'Plumbing' },
-  { id: 2, title: 'Electrician', area: 'Velachery', budget: 1200, lat: 12.9816, lng: 80.2209, category: 'Electrical' },
-  { id: 3, title: 'House cleaning', area: 'OMR', budget: 600, lat: 12.9200, lng: 80.2300, category: 'Cleaning' },
-];
-
 export default function WorkerMap() {
   const [location, setLocation] = useState(null);
   const [locationError, setLocationError] = useState('');
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
+  const [jobs] = useState([]);
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
 
@@ -67,21 +62,21 @@ export default function WorkerMap() {
     }).addTo(map).bindPopup('<b>Your Location</b>').openPopup();
 
     // Job markers
-    MOCK_JOBS.forEach(job => {
+    jobs.forEach(job => {
       L.marker([job.lat, job.lng], {
         icon: L.divIcon({
-          html: `<div style="background:#F59E0B;color:white;border-radius:8px;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;padding:0 6px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.2)">&#8377;${job.budget}</div>`,
+          html: `<div style="background:#F59E0B;color:white;border-radius:8px;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;padding:0 6px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.2)">📋</div>`,
           className: '',
           iconSize: [null, 28],
           iconAnchor: [14, 14]
         })
       }).addTo(map).bindPopup(
-        `<div style="min-width:160px"><b>${job.title}</b><br/>📍 ${job.area}<br/>💰 ₹${job.budget}<br/><a href="https://www.google.com/maps/dir/?api=1&destination=${job.lat},${job.lng}" target="_blank" style="color:#A259FF;font-weight:600">Navigate →</a></div>`
+        `<div style="min-width:160px"><b>${job.title}</b><br/>📍 ${job.area}<br/><a href="https://www.google.com/maps/dir/?api=1&destination=${job.lat},${job.lng}" target="_blank" style="color:#A259FF;font-weight:600">Navigate →</a></div>`
       );
     });
 
     mapInstance.current = map;
-  }, [leafletLoaded, location]);
+  }, [leafletLoaded, location, jobs]);
 
   return (
     <div className="worker-page">
@@ -110,8 +105,8 @@ export default function WorkerMap() {
         </div>
 
         {/* Nearby Jobs */}
-        <h3 className="section-title">📍 Nearby Jobs ({MOCK_JOBS.length})</h3>
-        {MOCK_JOBS.map(job => (
+        <h3 className="section-title">📍 Nearby Jobs ({jobs.length})</h3>
+        {jobs.map(job => (
           <div
             key={job.id}
             className="job-card"
@@ -124,7 +119,6 @@ export default function WorkerMap() {
             </div>
             <div className="job-meta">
               <span className="job-meta-item">📍 {job.area}</span>
-              <span className="job-meta-item">💰 ₹{job.budget}</span>
             </div>
             <div className="job-actions">
               <button

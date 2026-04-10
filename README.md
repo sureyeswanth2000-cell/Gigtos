@@ -85,6 +85,20 @@ firebase functions:config:set gemini.key="YOUR_GEMINI_1_5_FLASH_API_KEY"
 ```
 
 ### Gemini AI assistant setup:
+
+**Option A — Environment file (recommended for local development):**
+```bash
+cd functions
+cp .env.example .env
+# Edit .env and add your Gemini API key (the .env file is gitignored)
+```
+
+**Option B — Firebase Functions config (recommended for production):**
+```bash
+firebase functions:config:set gemini.key="YOUR_GEMINI_API_KEY"
+```
+
+Then deploy:
 ```bash
 cd functions
 npm install

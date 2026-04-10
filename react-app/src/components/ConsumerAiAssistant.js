@@ -17,7 +17,7 @@ export default function ConsumerAiAssistant({
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      text: 'Hi, I’m Gito AI. Ask about service choice, price, schedule, or booking steps.',
+      text: "Hi there! 👋 I'm Gito AI, your personal booking assistant. Tell me what you need \u2014 whether it's fixing a leak, installing a fan, or painting a room \u2014 and I'll find the right worker for you!",
     },
   ]);
   const [loading, setLoading] = useState(false);
@@ -67,7 +67,7 @@ export default function ConsumerAiAssistant({
   }, [messages, loading, isOpen]);
 
   const promptSuggestions = useMemo(
-    () => buildPromptSuggestions(selectedService || 'service').slice(0, 3),
+    () => buildPromptSuggestions(selectedService),
     [selectedService]
   );
 

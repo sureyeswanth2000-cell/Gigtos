@@ -5,6 +5,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { WorkerLocationProvider } from '../../context/WorkerLocationContext';
 import ActiveStatusButton from '../../components/worker/ActiveStatusButton';
+import WorkerFixedRateForm from '../../components/worker/WorkerFixedRateForm';
 import WorkerStatsCard from '../../components/worker/WorkerStatsCard';
 import RatingDisplay from '../../components/worker/RatingDisplay';
 import WorkerBottomNav from '../../components/worker/WorkerBottomNav';
@@ -129,6 +130,9 @@ export default function WorkerDashboard() {
 
         {/* Active Status */}
         <ActiveStatusButton onStatusChange={handleStatusChange} />
+
+        {/* Fixed Day Rate */}
+        <WorkerFixedRateForm workerData={worker} />
 
         {/* Worker Location Tracker — shown when worker is active */}
         <WorkerLocationTracker />

@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
 import AiHeroCarousel from '../components/AiHeroCarousel';
+import NearbyWorkerNotification from '../components/NearbyWorkerNotification';
+import InstantBookingModal from '../components/InstantBookingModal';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
 import { getSpecialJob } from '../config/specialJobs';
 import { ALL_JOBS } from '../utils/jobListBuilder';
@@ -22,6 +25,18 @@ export default function Home() {
   const { location } = useLocation() || {};
   const cityName = location?.city || 'your area';
   const [availableJobIds, setAvailableJobIds] = useState(null);
+  const [instantWorker, setInstantWorker] = useState(null);
+  const [userData, setUserData] = useState(null);
+
+  // Load user data for instant booking
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    getDoc(doc(db, 'users', auth.currentUser.uid))
+      .then((snap) => {
+        if (snap.exists()) setUserData(snap.data());
+      })
+      .catch(() => { /* silent */ });
+  }, []);
 
   useEffect(() => {
     if (!location) return;
@@ -271,6 +286,23 @@ export default function Home() {
         externalPrompt={assistantPrompt}
         onPromptConsumed={() => setAssistantPrompt('')}
       />
+
+      {/* Nearby Worker Notification + Instant Booking Modal */}
+      <NearbyWorkerNotification onBookWorker={(w) => setInstantWorker(w)} />
+
+      {instantWorker && (
+        <InstantBookingModal
+          worker={instantWorker}
+          userData={userData}
+          onClose={() => {
+            setInstantWorker(null);
+          }}
+          onBooked={({ bookingId }) => {
+            setInstantWorker(null);
+            navigate('/my-bookings');
+          }}
+        />
+      )}
 
       {/* Booking / Subtype Selection Modal */}
       {showModal && selectedService && (

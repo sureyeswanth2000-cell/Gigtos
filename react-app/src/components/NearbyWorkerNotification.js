@@ -55,7 +55,7 @@ export default function NearbyWorkerNotification({ onBookWorker }) {
             serviceType: sType,
             lat: location.lat,
             lng: location.lng,
-            radiusKm: 20,
+            radiusKm: 10,
           });
           for (const w of results) {
             if (!seen.has(w.workerId)) {

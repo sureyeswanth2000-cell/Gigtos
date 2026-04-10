@@ -13,7 +13,7 @@ import { useLocation } from '../context/LocationContext';
 import { getHeroCTAText } from '../utils/abTest';
 import './Home.css';
 
-const GEO_RADIUS_KM = 20;
+const GEO_RADIUS_KM = 10;
 
 export default function Home() {
   const navigate = useNavigate();
@@ -158,7 +158,10 @@ export default function Home() {
 
       </section>
 
-      <AiHeroCarousel onQuerySelect={(query) => setAssistantPrompt(query)} />
+      <AiHeroCarousel
+        onQuerySelect={(query) => setAssistantPrompt(query)}
+        onBookWorker={(w) => setInstantWorker(w)}
+      />
 
       <section className="services-section" id="services">
         <div className="section-header-row">

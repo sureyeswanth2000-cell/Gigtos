@@ -3,10 +3,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { auth, db } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { WorkerLocationProvider } from '../../context/WorkerLocationContext';
 import ActiveStatusButton from '../../components/worker/ActiveStatusButton';
 import WorkerStatsCard from '../../components/worker/WorkerStatsCard';
 import RatingDisplay from '../../components/worker/RatingDisplay';
 import WorkerBottomNav from '../../components/worker/WorkerBottomNav';
+import WorkerLocationTracker from '../../components/worker/WorkerLocationTracker';
 import '../../styles/worker-dashboard.css';
 
 const NAV_CARDS = [
@@ -91,6 +93,7 @@ export default function WorkerDashboard() {
   };
 
   return (
+    <WorkerLocationProvider>
     <div className="worker-page">
       <div className="worker-container">
         {/* Header */}
@@ -127,6 +130,9 @@ export default function WorkerDashboard() {
         {/* Active Status */}
         <ActiveStatusButton onStatusChange={handleStatusChange} />
 
+        {/* Worker Location Tracker — shown when worker is active */}
+        <WorkerLocationTracker />
+
         {/* Stats */}
         <WorkerStatsCard stats={stats} />
 
@@ -144,5 +150,6 @@ export default function WorkerDashboard() {
 
       <WorkerBottomNav />
     </div>
+    </WorkerLocationProvider>
   );
 }

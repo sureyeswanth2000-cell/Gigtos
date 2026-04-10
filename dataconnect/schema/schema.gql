@@ -109,6 +109,7 @@ type Worker @table(name: "workers") {
   serviceType: ServiceType!          @hasOne(foreignKey: "service_type_id")
   admin: Admin!                      @hasOne(foreignKey: "admin_id")
   bookings: [Booking!]!              @hasMany(foreignKey: "assigned_worker_id")
+  locationSessions: [WorkerLocationSession!]! @hasMany(foreignKey: "worker_id")
 }
 
 # ─── Booking Tables ───────────────────────────────────────────────────────────
@@ -393,4 +394,22 @@ type WorkerServiceArea @table(name: "worker_service_areas") {
   # Relationships
   worker: Worker!                    @hasOne(foreignKey: "worker_id")
   serviceType: ServiceType!          @hasOne(foreignKey: "service_type_id")
+}
+
+type WorkerLocationSession @table(name: "worker_location_sessions") {
+  sessionId: UUID!                   @col(name: "session_id") @default(expr: "uuidV4()")
+  workerId: UUID!                    @col(name: "worker_id")
+  bookingId: UUID                    @col(name: "booking_id")
+  workLocationLat: Float             @col(name: "work_location_lat")
+  workLocationLng: Float             @col(name: "work_location_lng")
+  lastLat: Float                     @col(name: "last_lat")
+  lastLng: Float                     @col(name: "last_lng")
+  reachTime: Timestamp               @col(name: "reach_time")
+  leftTime: Timestamp                @col(name: "left_time")
+  durationMinutes: Int               @col(name: "duration_minutes")
+  locationStatus: String!            @col(name: "location_status") @default(value: "tracking")
+  startedAt: Timestamp!              @col(name: "started_at") @default(expr: "request.time")
+  updatedAt: Timestamp!              @col(name: "updated_at") @default(expr: "request.time")
+  # Relationships
+  worker: Worker!                    @hasOne(foreignKey: "worker_id")
 }

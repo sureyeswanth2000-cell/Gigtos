@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase';
 
 const LocationContext = createContext(null);
 
@@ -8,10 +11,15 @@ const LocationContext = createContext(null);
 export const DEFAULT_RADIUS_KM = 20;
 
 /**
+ * localStorage key for cached user location (used for unauthenticated browsing).
+ */
+const LS_LOCATION_KEY = 'gigtos_user_location';
+
+/**
  * Reverse-geocode lat/lng to a city name using OpenStreetMap Nominatim.
  * Returns the city/town/village name or null.
  */
-async function reverseGeocode(lat, lng) {
+export async function reverseGeocode(lat, lng) {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
@@ -51,20 +59,13 @@ export async function geocodeCity(query) {
 }
 
 /**
- * Provides user location state and geo-filtering utilities.
+ * Detect current GPS location with GeoIP fallback.
+ * Returns a promise that resolves to { lat, lng, city, source } or rejects.
  */
-export function LocationProvider({ children }) {
-  const [location, setLocation] = useState(null); // { lat, lng, city?, source }
-  const [locationError, setLocationError] = useState(null);
-  const [locationLoading, setLocationLoading] = useState(true);
-
-  const detectLocation = useCallback(() => {
-    setLocationLoading(true);
-    setLocationError(null);
-
+export function detectCurrentLocation() {
+  return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      setLocationError('Geolocation is not supported by your browser.');
-      setLocationLoading(false);
+      reject(new Error('Geolocation is not supported by your browser.'));
       return;
     }
 
@@ -72,9 +73,14 @@ export function LocationProvider({ children }) {
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
+<<<<<<< HEAD
         const { city, displayName } = await reverseGeocode(lat, lng);
         setLocation({ lat, lng, city, displayName, source: 'gps' });
         setLocationLoading(false);
+=======
+        const city = await reverseGeocode(lat, lng);
+        resolve({ lat, lng, city, source: 'gps' });
+>>>>>>> origin/main
       },
       () => {
         // Fallback: try GeoIP
@@ -82,29 +88,131 @@ export function LocationProvider({ children }) {
           .then((res) => res.json())
           .then((data) => {
             if (data.latitude && data.longitude) {
-              setLocation({
+              resolve({
                 lat: data.latitude,
                 lng: data.longitude,
                 city: data.city,
                 source: 'geoip',
               });
             } else {
-              setLocationError('Could not determine your location automatically.');
+              reject(new Error('Could not determine your location automatically.'));
             }
           })
           .catch(() => {
-            setLocationError('Could not determine your location automatically.');
-          })
-          .finally(() => {
-            setLocationLoading(false);
+            reject(new Error('Could not determine your location automatically.'));
           });
       },
       { timeout: 8000, enableHighAccuracy: false }
     );
+  });
+}
+
+/**
+ * Provides user location state and geo-filtering utilities.
+ *
+ * Behaviour:
+ * - **Logged-in user/worker**: Loads saved location from Firestore (`users/{uid}` or
+ *   `worker_auth/{uid}`). No auto-detection on every page load.
+ * - **Unauthenticated visitor**: Auto-detects once via GPS / GeoIP (current behaviour)
+ *   so that the homepage can show local services.
+ */
+export function LocationProvider({ children }) {
+  const [location, setLocation] = useState(null); // { lat, lng, city?, source }
+  const [locationError, setLocationError] = useState(null);
+  const [locationLoading, setLocationLoading] = useState(true);
+  const authChecked = useRef(false);
+
+  /**
+   * One-shot detect via GPS / GeoIP. Used for unauthenticated visitors or
+   * when the user explicitly presses the detect button.
+   */
+  const detectLocation = useCallback(() => {
+    setLocationLoading(true);
+    setLocationError(null);
+
+    detectCurrentLocation()
+      .then((loc) => {
+        setLocation(loc);
+        // Cache in localStorage so unauthenticated visitors don't re-detect each page load
+        try { localStorage.setItem(LS_LOCATION_KEY, JSON.stringify(loc)); } catch { /* noop */ }
+      })
+      .catch((err) => {
+        setLocationError(err.message || 'Could not determine your location automatically.');
+      })
+      .finally(() => {
+        setLocationLoading(false);
+      });
   }, []);
 
+  // On mount, check auth state and decide how to load location.
   useEffect(() => {
-    detectLocation();
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (authChecked.current) return; // Only run once
+      authChecked.current = true;
+
+      if (currentUser) {
+        // Try loading saved location from Firestore
+        try {
+          // Check user doc first, then worker_auth doc
+          let savedLoc = null;
+          const userSnap = await getDoc(doc(db, 'users', currentUser.uid));
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            if (data.locationLat && data.locationLng) {
+              savedLoc = {
+                lat: data.locationLat,
+                lng: data.locationLng,
+                city: data.locationCity || null,
+                source: 'saved',
+              };
+            }
+          }
+
+          if (!savedLoc) {
+            const workerSnap = await getDoc(doc(db, 'worker_auth', currentUser.uid));
+            if (workerSnap.exists()) {
+              const data = workerSnap.data();
+              if (data.locationLat && data.locationLng) {
+                savedLoc = {
+                  lat: data.locationLat,
+                  lng: data.locationLng,
+                  city: data.locationCity || null,
+                  source: 'saved',
+                };
+              }
+            }
+          }
+
+          if (savedLoc) {
+            setLocation(savedLoc);
+            setLocationLoading(false);
+            return;
+          }
+        } catch {
+          // Firestore read failed — fall through to auto-detect
+        }
+
+        // No saved location — detect once (first login before location was saved)
+        detectLocation();
+      } else {
+        // Unauthenticated — try cached localStorage first, then auto-detect
+        try {
+          const cached = localStorage.getItem(LS_LOCATION_KEY);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.lat && parsed.lng) {
+              setLocation({ ...parsed, source: parsed.source || 'cached' });
+              setLocationLoading(false);
+              return;
+            }
+          }
+        } catch { /* noop */ }
+
+        detectLocation();
+      }
+    });
+
+    return () => unsubscribe();
   }, [detectLocation]);
 
   /**

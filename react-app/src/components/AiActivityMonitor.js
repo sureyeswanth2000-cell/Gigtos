@@ -157,7 +157,7 @@ function BudgetCard({ item }) {
   );
 }
 
-export default function AiActivityMonitor() {
+export default function AiActivityMonitor({ embedded = false }) {
   const [visibleCount, setVisibleCount] = useState(3);
   const [activeTab, setActiveTab] = useState('all');
 

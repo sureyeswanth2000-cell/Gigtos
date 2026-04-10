@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
-import AiActivityMonitor from '../components/AiActivityMonitor';
+import AiHeroCarousel from '../components/AiHeroCarousel';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
 import { getSpecialJob } from '../config/specialJobs';
 import { ALL_JOBS } from '../utils/jobListBuilder';
@@ -141,25 +141,9 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="hero-assistant-panel">
-          <h2>Ask Gito AI</h2>
-          <p>Try specific prompts for faster results:</p>
-          <div className="query-list">
-            {[
-              'Fix a leaky kitchen tap today',
-              'Paint a 2BHK apartment next week',
-              'Need an electrician for fan and switchboard',
-            ].map((query) => (
-              <button key={query} onClick={() => setAssistantPrompt(query)}>
-                {query}
-              </button>
-            ))}
-          </div>
-          <small>Gito AI will open automatically with your selected query.</small>
-        </div>
       </section>
 
-      <AiActivityMonitor />
+      <AiHeroCarousel onQuerySelect={(query) => setAssistantPrompt(query)} />
 
       <section className="services-section" id="services">
         <div className="section-header-row">

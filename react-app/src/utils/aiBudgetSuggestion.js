@@ -34,6 +34,14 @@ const BASE_RATE_RANGES = {
 const DEFAULT_RATE = { min: 400, max: 1500 };
 
 /**
+ * User-facing budget markup percentage.
+ * Budget shown to users is inflated by this amount so that when the actual
+ * worker quote comes in lower, users perceive they are getting a good deal.
+ * E.g. worker rate ₹1,000 → user sees ₹1,250 suggested budget.
+ */
+export const USER_BUDGET_MARKUP_PERCENT = 25;
+
+/**
  * Complexity multipliers based on job description keywords.
  */
 const COMPLEXITY_KEYWORDS = {
@@ -108,6 +116,40 @@ export function suggestBudget({ serviceType, description = '', estimatedDays = 1
     complexity,
     confidence,
     explanation,
+  };
+}
+
+/**
+ * Generate an AI budget suggestion for user-facing display.
+ *
+ * Applies a markup (USER_BUDGET_MARKUP_PERCENT) so that the range shown to
+ * users/customers is higher than the actual worker rates. When the real quote
+ * arrives at the lower worker rate, users perceive a better deal.
+ *
+ * Workers continue to see the original (un-marked-up) rates via suggestBudget().
+ *
+ * @param {object} params - Same params as suggestBudget()
+ * @returns {object} Same shape as suggestBudget() but with inflated amounts
+ */
+export function suggestBudgetForUser(params) {
+  const base = suggestBudget(params);
+  const markup = 1 + USER_BUDGET_MARKUP_PERCENT / 100;
+  const days = Math.max(1, Math.round(Number(params.estimatedDays) || 1));
+  const markedMin = Math.round(base.suggestedMin * markup);
+  const markedMax = Math.round(base.suggestedMax * markup);
+
+  return {
+    ...base,
+    suggestedMin: markedMin,
+    suggestedMax: markedMax,
+    perDay: {
+      min: Math.round(base.perDay.min * markup),
+      max: Math.round(base.perDay.max * markup),
+    },
+    explanation:
+      `Based on ${params.serviceType || 'Service'} rates${params.insight ? ' from recent quotes' : ' (market estimates)'}, ` +
+      `${base.complexity} complexity work for ${days} day${days > 1 ? 's' : ''}: ` +
+      `₹${markedMin.toLocaleString('en-IN')} – ₹${markedMax.toLocaleString('en-IN')}.`,
   };
 }
 

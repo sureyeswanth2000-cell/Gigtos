@@ -1,4 +1,4 @@
-import { suggestBudget, detectComplexity, formatBudgetRange } from './aiBudgetSuggestion';
+import { suggestBudget, detectComplexity, formatBudgetRange, suggestBudgetForUser, USER_BUDGET_MARKUP_PERCENT } from './aiBudgetSuggestion';
 
 describe('detectComplexity', () => {
   it('returns high for urgent keywords', () => {
@@ -84,5 +84,46 @@ describe('formatBudgetRange', () => {
 
   it('returns fallback for null input', () => {
     expect(formatBudgetRange(null)).toBe('Quote on request');
+  });
+});
+
+describe('suggestBudgetForUser', () => {
+  it('returns a higher range than suggestBudget (worker view)', () => {
+    const workerView = suggestBudget({ serviceType: 'Plumber', estimatedDays: 1 });
+    const userView = suggestBudgetForUser({ serviceType: 'Plumber', estimatedDays: 1 });
+    expect(userView.suggestedMin).toBeGreaterThan(workerView.suggestedMin);
+    expect(userView.suggestedMax).toBeGreaterThan(workerView.suggestedMax);
+  });
+
+  it('applies the correct markup percentage', () => {
+    const workerView = suggestBudget({ serviceType: 'Electrician', estimatedDays: 2 });
+    const userView = suggestBudgetForUser({ serviceType: 'Electrician', estimatedDays: 2 });
+    const expectedMin = Math.round(workerView.suggestedMin * (1 + USER_BUDGET_MARKUP_PERCENT / 100));
+    const expectedMax = Math.round(workerView.suggestedMax * (1 + USER_BUDGET_MARKUP_PERCENT / 100));
+    expect(userView.suggestedMin).toBe(expectedMin);
+    expect(userView.suggestedMax).toBe(expectedMax);
+  });
+
+  it('preserves complexity and confidence from base suggestion', () => {
+    const userView = suggestBudgetForUser({
+      serviceType: 'Painter',
+      description: 'Urgent full house renovation',
+      estimatedDays: 3,
+    });
+    expect(userView.complexity).toBe('high');
+    expect(userView.confidence).toBe('moderate');
+  });
+
+  it('marks up per-day rates as well', () => {
+    const workerView = suggestBudget({ serviceType: 'Carpenter', estimatedDays: 1 });
+    const userView = suggestBudgetForUser({ serviceType: 'Carpenter', estimatedDays: 1 });
+    expect(userView.perDay.min).toBeGreaterThan(workerView.perDay.min);
+    expect(userView.perDay.max).toBeGreaterThan(workerView.perDay.max);
+  });
+
+  it('includes an explanation with the marked-up amounts', () => {
+    const userView = suggestBudgetForUser({ serviceType: 'Plumber', estimatedDays: 1 });
+    expect(userView.explanation).toContain('Plumber');
+    expect(userView.explanation).toContain(`₹${userView.suggestedMin.toLocaleString('en-IN')}`);
   });
 });

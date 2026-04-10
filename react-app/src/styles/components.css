@@ -457,8 +457,19 @@
   background: rgba(255,255,255,0.25);
 }
 
+.location-bar-icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  color: #fff;
+}
+
 .location-bar-dot {
   font-size: 14px;
+}
+
+.location-bar-error-text {
+  opacity: 0.9;
 }
 
 .location-bar-name {
@@ -490,6 +501,9 @@
 }
 
 .location-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: rgba(255,255,255,0.2);
   border: 1px solid rgba(255,255,255,0.3);
   color: #fff;

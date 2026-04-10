@@ -98,7 +98,7 @@ export default function AiHeroCarousel({ onQuerySelect }) {
 
           {/* Panel 1: AI Activity Monitor */}
           <div className="ai-carousel__panel" aria-hidden={activeView !== 1}>
-            <AiActivityMonitor embedded />
+            <AiActivityMonitor />
           </div>
         </div>
       </div>

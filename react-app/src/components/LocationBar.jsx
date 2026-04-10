@@ -2,14 +2,15 @@ import React from 'react';
 import { useLocation } from '../context/LocationContext';
 
 /**
- * LocationBar – persistent bar below the header showing the user's city
- * with a detect-location button. No lat/lng displayed.
- * Location editing is done via the Profile page.
+ * LocationBar – persistent bar below the header showing the user's city.
+ * For logged-in users it displays the saved location from signup.
+ * The detect button is available for manual re-detection when needed.
  */
 export default function LocationBar() {
   const { location, locationLoading, locationError, detectLocation } = useLocation();
 
   const cityLabel = location?.city || null;
+  const isSaved = location?.source === 'saved';
 
   return (
     <div className="location-bar">
@@ -26,10 +27,12 @@ export default function LocationBar() {
         ) : (
           <>
             {cityLabel && (
-              <span className="location-bar-city" onClick={detectLocation} title="Detect my current location">
+              <span className="location-bar-city" title={isSaved ? 'Saved location from signup' : 'Click to re-detect'}>
                 <span className="location-bar-dot">📍</span>
                 <span className="location-bar-name">{cityLabel}</span>
-                <span className="location-bar-arrow">▼</span>
+                {!isSaved && (
+                  <span className="location-bar-arrow" onClick={detectLocation}>▼</span>
+                )}
               </span>
             )}
             {!cityLabel && (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
@@ -9,6 +9,8 @@ import { useLocation } from '../context/LocationContext';
 import { getHeroCTAText } from '../utils/abTest';
 import './Home.css';
 
+const GEO_RADIUS_KM = 20;
+
 export default function Home() {
   const navigate = useNavigate();
   const [selectedService, setSelectedService] = useState(null);
@@ -18,6 +20,28 @@ export default function Home() {
   const [serviceSearch, setServiceSearch] = useState('');
   const { location } = useLocation() || {};
   const cityName = location?.city || 'your area';
+  const [availableJobIds, setAvailableJobIds] = useState(null);
+
+  useEffect(() => {
+    if (!location) return;
+
+    const { lat, lng } = location;
+    setAvailableJobIds(null);
+
+    fetch(`/api/available-jobs?lat=${lat}&lng=${lng}&radius=${GEO_RADIUS_KM}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch available jobs');
+        return res.json();
+      })
+      .then((data) => {
+        const ids = Array.isArray(data) ? data : data.jobs || data.jobIds || [];
+        setAvailableJobIds(new Set(ids.map(String)));
+      })
+      .catch(() => {
+        // If API is unavailable, show all jobs as available (graceful degradation)
+        setAvailableJobIds(new Set(ALL_JOBS.map((j) => j.id)));
+      });
+  }, [location]);
 
   const trustPillars = [
     'Verified professionals with identity checks',
@@ -51,6 +75,10 @@ export default function Home() {
 
   // Handle service selection and login check
   const handleBookService = (job) => {
+    // Block booking for services not available in the user's area
+    const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
+    if (!isAvailable) return;
+
     // If not logged in, redirect to auth with user mode
     if (!auth.currentUser) {
       navigate('/auth?mode=user');
@@ -150,21 +178,39 @@ export default function Home() {
         </div>
 
         <div className="services-grid">
-          {visibleServices.map((job) => (
-            <article key={job.id} className="service-card">
-              <div className="service-top">
-                <span className="service-icon" role="img" aria-label={job.name}>{job.icon || '🔧'}</span>
-                <span className="verified-chip">{job.isUpcoming ? 'Coming Soon' : 'Verified Pro'}</span>
-              </div>
-              <h3>{job.name}</h3>
-              <p>{job.desc}</p>
-              <div className="service-card-actions">
-                <button className="primary-btn" onClick={() => handleBookService(job)}>
-                  {job.isSpecial ? 'View Options' : 'Book Service'}
-                </button>
-              </div>
-            </article>
-          ))}
+          {visibleServices.map((job) => {
+            const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
+            const isCheckingAvailability = availableJobIds === null && location;
+
+            return (
+              <article key={job.id} className={`service-card${!isAvailable ? ' service-card--disabled' : ''}`}>
+                <div className="service-top">
+                  <span className="service-icon" role="img" aria-label={job.name}>{job.icon || '🔧'}</span>
+                  {!isAvailable ? (
+                    <span className="coming-soon-chip">Coming Soon</span>
+                  ) : (
+                    <span className="verified-chip">{job.isUpcoming ? 'Coming Soon' : 'Verified Pro'}</span>
+                  )}
+                </div>
+                <h3>{job.name}</h3>
+                <p>{job.desc}</p>
+                {!isAvailable && (
+                  <span className="coming-soon-area-label">🚀 Coming soon in your area</span>
+                )}
+                <div className="service-card-actions">
+                  {!isAvailable ? (
+                    <button className="primary-btn" disabled>
+                      Coming Soon
+                    </button>
+                  ) : (
+                    <button className="primary-btn" onClick={() => handleBookService(job)} disabled={isCheckingAvailability}>
+                      {isCheckingAvailability ? 'Checking…' : job.isSpecial ? 'View Options' : 'Book Service'}
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
         </div>
 
         {visibleServices.length === 0 && (

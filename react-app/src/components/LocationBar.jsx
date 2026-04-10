@@ -26,14 +26,17 @@ export default function LocationBar() {
         ) : (
           <>
             {cityLabel && (
-              <span className="location-bar-city">
+              <span className="location-bar-city" onClick={detectLocation} title="Detect my current location">
                 <span className="location-bar-dot">📍</span>
                 <span className="location-bar-name">{cityLabel}</span>
+                <span className="location-bar-arrow">▼</span>
               </span>
             )}
-            <button className="location-bar-btn" onClick={detectLocation} title="Detect my current location">
-              📍 Detect Location
-            </button>
+            {!cityLabel && (
+              <button className="location-bar-btn" onClick={detectLocation} title="Detect my current location">
+                📍 Detect Location
+              </button>
+            )}
           </>
         )}
       </div>

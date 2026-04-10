@@ -5,7 +5,7 @@
  * (e.g. ₹500, ₹600) and save it to Firestore worker_availability collection.
  * This rate is shown to users when matching nearby workers.
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { auth, db } from '../../firebase';
 import { doc, getDoc, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 
@@ -15,6 +15,7 @@ export default function WorkerFixedRateForm({ workerData }) {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const toastTimeoutRef = useRef(null);
 
   // Load existing rate on mount
   useEffect(() => {
@@ -29,13 +30,18 @@ export default function WorkerFixedRateForm({ workerData }) {
           setRate(String(data.fixedRate || ''));
         }
       })
-      .catch(() => { /* silent — no existing rate */ });
+      .catch(() => { /* No existing rate — not an error */ });
   }, []);
 
   const showToast = (msg, type = '') => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   };
+
+  useEffect(() => {
+    return () => clearTimeout(toastTimeoutRef.current);
+  }, []);
 
   const handleSave = useCallback(async () => {
     const uid = auth.currentUser?.uid;

@@ -9,6 +9,7 @@ export default function ActiveStatusButton({ onStatusChange }) {
   const [now, setNow] = useState(Date.now());
   const [showConfirm, setShowConfirm] = useState(false);
   const [toast, setToast] = useState(null);
+  const toastTimeoutRef = useRef(null);
 
   const workerLoc = useWorkerLocation();
   const workerLocRef = useRef(workerLoc);
@@ -53,8 +54,13 @@ export default function ActiveStatusButton({ onStatusChange }) {
 
   const showToast = (msg, type = '') => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   };
+
+  useEffect(() => {
+    return () => clearTimeout(toastTimeoutRef.current);
+  }, []);
 
   const handleActivate = useCallback(() => {
     const ts = Date.now();

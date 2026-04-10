@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { auth, db } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -17,6 +17,7 @@ export default function OpenWork() {
   const [selectedJob, setSelectedJob] = useState(null);
   const [sortBy, setSortBy] = useState('recent');
   const [toast, setToast] = useState(null);
+  const toastTimeoutRef = useRef(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -36,8 +37,13 @@ export default function OpenWork() {
 
   const showToast = (msg, type = '') => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   };
+
+  useEffect(() => {
+    return () => clearTimeout(toastTimeoutRef.current);
+  }, []);
 
   const handleSendQuote = async () => {
     await new Promise(r => setTimeout(r, 500));

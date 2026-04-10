@@ -87,18 +87,23 @@ export default function Profile() {
 
   // Sync detected location into profile when it changes
   useEffect(() => {
-    if (detectedLocation && (userDetectRef.current || !profileData.locationCity)) {
-      setProfileData((prev) => ({
-        ...prev,
-        locationCity: detectedLocation.city || prev.locationCity,
-        locationLat: detectedLocation.lat ?? prev.locationLat,
-        locationLng: detectedLocation.lng ?? prev.locationLng,
-        // Auto-fill address with full display name if address is empty
-        address: prev.address || detectedLocation.displayName || detectedLocation.city || prev.address,
-      }));
-      userDetectRef.current = false;
+    if (detectedLocation) {
+      setProfileData((prev) => {
+        if (userDetectRef.current || !prev.locationCity) {
+          userDetectRef.current = false;
+          return {
+            ...prev,
+            locationCity: detectedLocation.city || prev.locationCity,
+            locationLat: detectedLocation.lat ?? prev.locationLat,
+            locationLng: detectedLocation.lng ?? prev.locationLng,
+            // Auto-fill address with full display name if address is empty
+            address: prev.address || detectedLocation.displayName || detectedLocation.city || '',
+          };
+        }
+        return prev;
+      });
     }
-  }, [detectedLocation, profileData.locationCity]);
+  }, [detectedLocation]);
 
   const handleSave = async () => {
     setError("");

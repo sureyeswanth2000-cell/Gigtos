@@ -257,7 +257,7 @@ export default function ConsumerAiAssistant({
                 marginBottom: '10px',
               }}>
                 <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '6px' }}>
-                  🤖 Confirm booking for {pendingBooking.name}?
+                  <span role="img" aria-label="AI">🤖</span> Confirm booking for {pendingBooking.name}?
                 </div>
                 <div style={{ fontSize: '11px', opacity: 0.85, marginBottom: '8px' }}>
                   AI will never auto-book. Your explicit confirmation is required.

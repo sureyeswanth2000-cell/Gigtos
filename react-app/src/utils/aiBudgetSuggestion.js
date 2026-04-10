@@ -78,8 +78,8 @@ export function suggestBudget({ serviceType, description = '', estimatedDays = 1
   let baseMax;
 
   if (insight && Number(insight.minQuote) > 0 && Number(insight.maxQuote) > 0) {
-    baseMin = Number(insight.minQuote);
-    baseMax = Number(insight.maxQuote);
+    baseMin = Math.min(Number(insight.minQuote), Number(insight.maxQuote));
+    baseMax = Math.max(Number(insight.minQuote), Number(insight.maxQuote));
   } else {
     const rates = BASE_RATE_RANGES[serviceName] || DEFAULT_RATE;
     baseMin = rates.min;

@@ -5,15 +5,21 @@ import './AiActivityMonitor.css';
 /**
  * Simulated AI activity feed — shows auto-created jobs, work tracking, and budget suggestions.
  * In production these would come from the ai_recommendations_log / user_behavior_events tables.
+ * Timestamps are relative offsets from render time; timeAgo() always shows fresh labels.
  */
-const AI_ACTIVITY_FEED = [
-  { id: 'a1', type: 'auto_job', service: 'Plumber', area: 'Kukatpally', status: 'created',  ts: Date.now() - 120000, description: 'Pipe leak repair' },
-  { id: 'a2', type: 'auto_job', service: 'Electrician', area: 'Miyapur', status: 'matched', ts: Date.now() - 90000, description: 'Switchboard wiring repair' },
-  { id: 'a3', type: 'tracking', service: 'Painter', area: 'Gachibowli', status: 'in_progress', ts: Date.now() - 60000, worker: 'FreshCoat Painters', progress: 65, description: 'Interior painting 2BHK' },
-  { id: 'a4', type: 'tracking', service: 'Carpenter', area: 'Madhapur', status: 'completed', ts: Date.now() - 30000, worker: 'WoodCraft Studio', progress: 100, description: 'Door frame repair' },
-  { id: 'a5', type: 'budget', service: 'Plumber', description: 'Full bathroom renovation', estimatedDays: 3 },
-  { id: 'a6', type: 'budget', service: 'Electrician', description: 'Emergency switchboard fix', estimatedDays: 1 },
-];
+const ACTIVITY_OFFSETS_MS = [120000, 90000, 60000, 30000];
+
+function buildActivityFeed() {
+  const now = Date.now();
+  return [
+    { id: 'a1', type: 'auto_job', service: 'Plumber', area: 'Kukatpally', status: 'created',  ts: now - ACTIVITY_OFFSETS_MS[0], description: 'Pipe leak repair' },
+    { id: 'a2', type: 'auto_job', service: 'Electrician', area: 'Miyapur', status: 'matched', ts: now - ACTIVITY_OFFSETS_MS[1], description: 'Switchboard wiring repair' },
+    { id: 'a3', type: 'tracking', service: 'Painter', area: 'Gachibowli', status: 'in_progress', ts: now - ACTIVITY_OFFSETS_MS[2], worker: 'FreshCoat Painters', progress: 65, description: 'Interior painting 2BHK' },
+    { id: 'a4', type: 'tracking', service: 'Carpenter', area: 'Madhapur', status: 'completed', ts: now - ACTIVITY_OFFSETS_MS[3], worker: 'WoodCraft Studio', progress: 100, description: 'Door frame repair' },
+    { id: 'a5', type: 'budget', service: 'Plumber', description: 'Full bathroom renovation', estimatedDays: 3 },
+    { id: 'a6', type: 'budget', service: 'Electrician', description: 'Emergency switchboard fix', estimatedDays: 1 },
+  ];
+}
 
 const STATUS_LABELS = {
   created: '🆕 Created',
@@ -133,25 +139,29 @@ export default function AiActivityMonitor() {
   const [visibleCount, setVisibleCount] = useState(3);
   const [activeTab, setActiveTab] = useState('all');
 
-  // Simulate live ticker animation
+  // Rebuild feed each tick so timeAgo labels stay fresh.
+  // Re-key the LIVE badge animation every 8 seconds to create a subtle visual
+  // heartbeat that signals the monitor is actively receiving updates.
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setTick((t) => t + 1), 8000);
     return () => clearInterval(timer);
   }, []);
 
+  const activityFeed = useMemo(() => buildActivityFeed(), [tick]);
+
   const filteredFeed = useMemo(() => {
-    if (activeTab === 'all') return AI_ACTIVITY_FEED;
-    return AI_ACTIVITY_FEED.filter((item) => item.type === activeTab);
-  }, [activeTab]);
+    if (activeTab === 'all') return activityFeed;
+    return activityFeed.filter((item) => item.type === activeTab);
+  }, [activeTab, activityFeed]);
 
   const displayedItems = filteredFeed.slice(0, visibleCount);
 
   const counts = useMemo(() => ({
-    auto_job: AI_ACTIVITY_FEED.filter((i) => i.type === 'auto_job').length,
-    tracking: AI_ACTIVITY_FEED.filter((i) => i.type === 'tracking').length,
-    budget: AI_ACTIVITY_FEED.filter((i) => i.type === 'budget').length,
-  }), []);
+    auto_job: activityFeed.filter((i) => i.type === 'auto_job').length,
+    tracking: activityFeed.filter((i) => i.type === 'tracking').length,
+    budget: activityFeed.filter((i) => i.type === 'budget').length,
+  }), [activityFeed]);
 
   return (
     <section className="ai-monitor" aria-label="AI Activity Monitor">

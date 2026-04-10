@@ -5,14 +5,15 @@ import './AiHeroCarousel.css';
 const CYCLE_INTERVAL_MS = 6000;
 
 /**
- * Merges the "Ask Gito AI" prompt panel and the "AI Activity Monitor" into a
+ * Merges the "Ask Gito AI" prompt panel and the "Nearby Workers" display into a
  * single location that alternates between the two views with a slide animation.
  *
  * Props:
  *  - onQuerySelect: (query: string) => void  — called when a prompt suggestion is clicked
+ *  - onBookWorker:  (worker: object) => void  — called when a worker "Book Now" is clicked
  */
-export default function AiHeroCarousel({ onQuerySelect }) {
-  const [activeView, setActiveView] = useState(0); // 0 = Ask AI, 1 = Activity
+export default function AiHeroCarousel({ onQuerySelect, onBookWorker }) {
+  const [activeView, setActiveView] = useState(0); // 0 = Ask AI, 1 = Nearby Workers
   const [paused, setPaused] = useState(false);
 
   // Auto-cycle between views
@@ -61,7 +62,7 @@ export default function AiHeroCarousel({ onQuerySelect }) {
           className={activeView === 1 ? 'active' : ''}
           onClick={() => handleToggle(1)}
         >
-          📡 AI Activity
+          📍 Nearby Workers
         </button>
       </div>
 
@@ -96,9 +97,9 @@ export default function AiHeroCarousel({ onQuerySelect }) {
             </div>
           </div>
 
-          {/* Panel 1: AI Activity Monitor */}
+          {/* Panel 1: Nearby Workers */}
           <div className="ai-carousel__panel" aria-hidden={activeView !== 1}>
-            <AiActivityMonitor />
+            <AiActivityMonitor onBookWorker={onBookWorker} />
           </div>
         </div>
       </div>
@@ -110,7 +111,7 @@ export default function AiHeroCarousel({ onQuerySelect }) {
             key={i}
             className={`ai-carousel__dot${activeView === i ? ' active' : ''}`}
             onClick={() => handleToggle(i)}
-            aria-label={i === 0 ? 'Show Ask Gito AI' : 'Show AI Activity'}
+            aria-label={i === 0 ? 'Show Ask Gito AI' : 'Show Nearby Workers'}
           />
         ))}
       </div>

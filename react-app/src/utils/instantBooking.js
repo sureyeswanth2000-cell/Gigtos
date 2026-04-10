@@ -80,10 +80,10 @@ function haversineKm(lat1, lng1, lat2, lng2) {
  * @param {string}   params.serviceType – service the user needs
  * @param {number}   params.lat         – user latitude
  * @param {number}   params.lng         – user longitude
- * @param {number}   [params.radiusKm=20] – max distance in km
+ * @param {number}   [params.radiusKm=10] – max distance in km
  * @returns {object[]} matched workers sorted by distance (nearest first), each with `distanceKm`
  */
-export function matchNearbyWorkers(workers, { serviceType, lat, lng, radiusKm = 20 }) {
+export function matchNearbyWorkers(workers, { serviceType, lat, lng, radiusKm = 10 }) {
   if (!Array.isArray(workers)) return [];
   if (!serviceType) return [];
 

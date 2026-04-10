@@ -24,6 +24,7 @@ export default function ConsumerAiAssistant({
   const [insights, setInsights] = useState([]);
   const [selectedService, setSelectedService] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [pendingBooking, setPendingBooking] = useState(null);
   const messagesRef = useRef(null);
 
   useEffect(() => {
@@ -172,9 +173,18 @@ export default function ConsumerAiAssistant({
               <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Quick booking help</div>
             </div>
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              {matchedService && (
+              {matchedService && !pendingBooking && (
                 <button
-                  onClick={() => onBookService?.(matchedService)}
+                  onClick={() => {
+                    setPendingBooking(matchedService);
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        role: 'assistant',
+                        text: `I found a match: ${matchedService.name}. Would you like me to proceed with booking? Please confirm below.`,
+                      },
+                    ]);
+                  }}
                   style={{
                     padding: '7px 10px',
                     borderRadius: '8px',
@@ -238,6 +248,70 @@ export default function ConsumerAiAssistant({
           </div>
 
           <div style={{ marginTop: 'auto', padding: '12px', borderTop: '1px solid rgba(255,255,255,0.12)', background: 'rgba(17,24,39,0.22)' }}>
+            {pendingBooking && (
+              <div style={{
+                background: 'rgba(249, 115, 22, 0.15)',
+                border: '1px solid rgba(249, 115, 22, 0.4)',
+                borderRadius: '10px',
+                padding: '10px 12px',
+                marginBottom: '10px',
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '6px' }}>
+                  <span role="img" aria-label="AI">🤖</span> Confirm booking for {pendingBooking.name}?
+                </div>
+                <div style={{ fontSize: '11px', opacity: 0.85, marginBottom: '8px' }}>
+                  AI will never auto-book. Your explicit confirmation is required.
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => {
+                      onBookService?.(pendingBooking);
+                      setMessages((prev) => [
+                        ...prev,
+                        { role: 'assistant', text: `Great! Opening the booking flow for ${pendingBooking.name}. You can review all details before final submission.` },
+                      ]);
+                      setPendingBooking(null);
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '7px 10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#22c55e',
+                      color: '#fff',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                    }}
+                  >
+                    ✓ Yes, Proceed
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMessages((prev) => [
+                        ...prev,
+                        { role: 'assistant', text: 'No problem! Booking cancelled. Ask me anything else.' },
+                      ]);
+                      setPendingBooking(null);
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '7px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      background: 'rgba(255,255,255,0.1)',
+                      color: '#fff',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                    }}
+                  >
+                    ✕ Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
               {promptSuggestions.map((prompt) => (
                 <button

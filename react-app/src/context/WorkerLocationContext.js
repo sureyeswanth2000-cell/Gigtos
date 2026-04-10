@@ -5,7 +5,7 @@ import { doc, setDoc, updateDoc, collection, addDoc, serverTimestamp } from 'fir
 const WorkerLocationContext = createContext(null);
 
 /**
- * Radius (in metres) within which the worker is considered "at the work location".
+ * Radius (in meters) within which the worker is considered "at the work location".
  */
 const PROXIMITY_RADIUS_M = 200;
 
@@ -16,10 +16,10 @@ const PERSIST_INTERVAL_MS = 60_000;
 
 /**
  * Calculate distance between two lat/lng points using the Haversine formula.
- * Returns distance in metres.
+ * Returns distance in meters.
  */
 function haversineDistance(lat1, lng1, lat2, lng2) {
-  const R = 6371000; // Earth radius in metres
+  const R = 6371000; // Earth radius in meters
   const toRad = (deg) => (deg * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);

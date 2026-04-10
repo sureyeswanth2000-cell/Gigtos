@@ -103,8 +103,8 @@ export default function Service() {
         if (!data.phone || !data.name || !data.address) {
           setProfileIncomplete(true);
         }
-      } catch (err) {
-        console.error('Error loading profile:', err);
+      } catch {
+        /* profile load error */
       }
     };
 
@@ -122,8 +122,7 @@ export default function Service() {
       const snap = await uploadBytes(storageRef(storage, path), file);
       const url = await getDownloadURL(snap.ref);
       setRequestedPhoto(url);
-    } catch (err) {
-      console.error('Photo upload failed:', err);
+    } catch {
       setError('Photo upload failed. Please try again.');
     } finally {
       setUploadingPhoto(false);

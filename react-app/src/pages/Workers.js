@@ -70,7 +70,7 @@ export default function Workers() {
             setChildAdmins(children);
             setChildAdminIds(children.map(d => d.id));
           },
-          err => console.error(err)
+          err => { /* error loading child admins */ }
         );
       } else {
         setChildAdminIds([]);
@@ -78,7 +78,7 @@ export default function Workers() {
       }
     };
 
-    loadRole().catch(console.error);
+    loadRole().catch(() => { /* error loading role */ });
     return () => unsubChildren();
   }, [user]);
 
@@ -93,14 +93,12 @@ export default function Workers() {
     if (!user) return;
     const syncPhoneIndex = (items) => {
       items.forEach(w => {
-        upsertWorkerPhoneIndex(w.id, w).catch(err => console.error('Phone index sync failed:', err));
+        upsertWorkerPhoneIndex(w.id, w).catch(() => { /* phone index sync failed */ });
       });
     };
 
-    const handleError = (err) => {
-      console.error('❌ Firestore error:', err);
-      console.error('Error code:', err.code);
-      console.error('Error message:', err.message);
+    const handleError = () => {
+      /* Firestore error handled silently */
     };
 
     if (adminRole === 'superadmin') {
@@ -175,8 +173,6 @@ export default function Workers() {
         syncPhoneIndex(allWorkers);
 
         const approved = allWorkers.filter(w => !w.approvalStatus || w.approvalStatus === 'approved' || w.approvalStatus !== 'pending');
-        console.log('✅ Admin/Mason: showing', approved.length, 'workers for uid:', user.uid);
-        console.log('Worker details:', approved.map(w => ({ name: w.name, adminId: w.adminId })));
         setWorkers(approved);
         setPendingGigs([]);
       },
@@ -220,7 +216,6 @@ export default function Workers() {
       setTotalEarnings('0');
       alert('✅ Worker created successfully!');
     } catch (e) { 
-      console.error(e); 
       alert('Error: ' + e.message); 
     }
   }
@@ -256,7 +251,6 @@ export default function Workers() {
       setEditWorkerData({ certifications: '', bankDetails: '', totalEarnings: '0' });
       alert('✅ Worker details updated');
     } catch (e) {
-      console.error(e);
       alert('Error updating worker: ' + e.message);
     }
   }
@@ -283,7 +277,6 @@ export default function Workers() {
         await upsertWorkerPhoneIndex(id, updatedSnap.data());
       }
     } catch (e) { 
-      console.error(e); 
       alert(e.message); 
     }
   }
@@ -296,7 +289,6 @@ export default function Workers() {
       const workersToMigrate = snapshot.docs.filter(d => !d.data().adminId);
       
       if (workersToMigrate.length === 0) {
-        console.log('✅ No workers need migration');
         return;
       }
       
@@ -307,9 +299,8 @@ export default function Workers() {
           migratedAt: new Date()
         });
       }
-      console.log(`✅ Migrated ${workersToMigrate.length} workers - set adminId to ${user.uid}`);
-    } catch (e) {
-      console.error('Migration error:', e);
+    } catch {
+      /* migration error */
     }
   }
 
@@ -333,7 +324,6 @@ export default function Workers() {
 
       alert('✅ Gig approved successfully!');
     } catch (e) {
-      console.error(e);
       alert('Error approving worker: ' + e.message);
     }
   }
@@ -352,7 +342,6 @@ export default function Workers() {
 
       alert('Worker application rejected.');
     } catch (e) {
-      console.error(e);
       alert('Error rejecting worker: ' + e.message);
     }
   }
@@ -378,7 +367,6 @@ export default function Workers() {
       setNewAdminEmail('');
       setNewAdminPassword('');
     } catch (e) {
-      console.error(e);
       alert('Error creating mason: ' + e.message);
     }
   }

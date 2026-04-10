@@ -430,7 +430,7 @@ export default function Service() {
                   <div className="row-icon">👤</div>
                   <div className="row-text">
                     <span className="row-label">Customer</span>
-                    <span className="row-value">{name} · {userPhone}</span>
+                    <span className="row-value">{name || 'Not provided'}{userPhone ? ` · ${userPhone}` : ''}</span>
                   </div>
                 </div>
                 <div className="confirm-row">
@@ -445,7 +445,9 @@ export default function Service() {
                   <div className="row-text">
                     <span className="row-label">Booking</span>
                     <span className="row-value">
-                      {isScheduled ? `${scheduledDate} · ${timeSlot}` : 'Immediate'} · {estimatedDays} day{estimatedDays > 1 ? 's' : ''}
+                      {isScheduled ? `${scheduledDate || 'TBD'}` : 'Immediate'}
+                      {isScheduled && timeSlot ? ` · ${timeSlot}` : ''}
+                      {` · ${estimatedDays} day${estimatedDays > 1 ? 's' : ''}`}
                     </span>
                   </div>
                 </div>

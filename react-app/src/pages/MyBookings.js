@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { acceptQuote as applyAcceptedQuote } from '../utils/bookingWorkflow';
+import LiveServiceTracker from '../components/LiveServiceTracker';
 
 // UI CONFIG: Color mapping for visual differentiation of booking states
 const statusColors = {
@@ -461,6 +462,11 @@ export default function MyBookings() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* LIVE WORKER TRACKING — shown for assigned/in_progress immediate bookings */}
+          {['assigned', 'in_progress'].includes(booking.status) && booking.assignedWorker && (
+            <LiveServiceTracker bookingId={booking.id} />
           )}
 
           {/* Multi-day progress tracking */}

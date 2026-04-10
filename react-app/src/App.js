@@ -26,6 +26,7 @@ import UserDashboard from './pages/UserDashboard';
 import WorkerJobSelection from './pages/WorkerJobSelection';
 import MasonDashboardPage from './pages/MasonDashboardPage';
 import NotFound from './pages/NotFound';
+import LiveTrackingBanner from './components/LiveTrackingBanner';
 import WorkerMapPage from './pages/worker/WorkerMap';
 import OpenWork from './pages/worker/OpenWork';
 import WorkHistory from './pages/worker/WorkHistory';
@@ -155,6 +156,7 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+      <LiveTrackingBanner />
       <Footer />
     </BrowserRouter>
     </LocationProvider>

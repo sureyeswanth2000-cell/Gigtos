@@ -228,7 +228,7 @@ export default function Service() {
             <span aria-hidden="true">{serviceIcons[type] || '🛠️'}</span> Book {type} in {cityName}
           </h1>
           <p>
-            A guided 3-step journey with verified professionals, transparent quotes, and clear next steps.
+            Guided booking with verified pros and transparent quotes.
           </p>
           <div className="trust-signals">
             <span>Verified Pros</span>
@@ -256,32 +256,52 @@ export default function Service() {
         <section className="step-content">
           {currentStep === 1 && (
             <div className="step-layout">
-              <h2>1. Your Details</h2>
-              <p className="step-note">Review your profile information. To make changes, visit your profile page.</p>
+              <h2>Your Details</h2>
+              <p className="step-note">Tap your profile card to make changes.</p>
 
               <div className="summary-card" onClick={() => navigate('/profile')} style={{ cursor: 'pointer' }} title="Click to edit your profile">
-                <div><strong>Name:</strong> {name || <span style={{ color: '#9ca3af' }}>Not set</span>}</div>
-                <div><strong>Phone:</strong> {userPhone || <span style={{ color: '#9ca3af' }}>Not set</span>}</div>
-                <div><strong>Address:</strong> {address || <span style={{ color: '#9ca3af' }}>Not set</span>}</div>
-                <div><strong>Location:</strong> {userLocationCity || cityName || <span style={{ color: '#9ca3af' }}>Not set</span>}</div>
+                <div className="detail-chip">
+                  <div className="chip-icon">👤</div>
+                  <div className="chip-text">
+                    <span className="chip-label">Name</span>
+                    <span className="chip-value">{name || <span className="not-set">Not set</span>}</span>
+                  </div>
+                </div>
+                <div className="detail-chip">
+                  <div className="chip-icon">📱</div>
+                  <div className="chip-text">
+                    <span className="chip-label">Phone</span>
+                    <span className="chip-value">{userPhone || <span className="not-set">Not set</span>}</span>
+                  </div>
+                </div>
+                <div className="detail-chip">
+                  <div className="chip-icon">🏠</div>
+                  <div className="chip-text">
+                    <span className="chip-label">Address</span>
+                    <span className="chip-value">{address || <span className="not-set">Not set</span>}</span>
+                  </div>
+                </div>
+                <div className="detail-chip">
+                  <div className="chip-icon">📍</div>
+                  <div className="chip-text">
+                    <span className="chip-label">Location</span>
+                    <span className="chip-value">{userLocationCity || cityName || <span className="not-set">Not set</span>}</span>
+                  </div>
+                </div>
               </div>
 
               {profileIncomplete && (
-                <div className="alert warning" style={{ marginTop: '12px' }}>
-                  Your profile is incomplete. Please update your profile before booking.
+                <div className="alert warning">
+                  Profile incomplete — please update before booking.
                   <button onClick={() => navigate('/profile')}>Edit Profile</button>
                 </div>
               )}
-
-              <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '12px' }}>
-                Click on the details above to update your profile.
-              </p>
             </div>
           )}
 
           {currentStep === 2 && (
             <div className="step-layout">
-              <h2>2. Service Selection & Details</h2>
+              <h2>Service Selection & Details</h2>
               <p className="step-note">Tell us what you need so professionals can quote accurately.</p>
 
               <div className="form-grid two-col">
@@ -314,7 +334,7 @@ export default function Service() {
 
           {currentStep === 3 && (
             <div className="step-layout">
-              <h2>3. Scheduling & Professional Selection</h2>
+              <h2>Scheduling & Professional</h2>
               <p className="step-note">Choose when you need service and optionally nominate a preferred verified professional.</p>
 
               <div className="mode-toggle">
@@ -388,24 +408,58 @@ export default function Service() {
 
           {currentStep === 4 && (
             <div className="step-layout">
-              <h2>4. Confirmation & Next Steps</h2>
-              <p className="step-note">Review details before final submission.</p>
+              <h2>Confirm & Book</h2>
+              <p className="step-note">Review your booking summary.</p>
 
-              <div className="summary-card">
-                <div><strong>Service:</strong> {type}</div>
-                <div><strong>Request:</strong> {issueTitle || 'Not provided'}</div>
-                <div><strong>Customer:</strong> {name || 'Not provided'}</div>
-                <div><strong>Phone:</strong> {userPhone || 'Not provided'}</div>
-                <div><strong>Address:</strong> {address || 'Not provided'}</div>
-                <div><strong>Booking Mode:</strong> {isScheduled ? 'Scheduled' : 'Immediate'}</div>
-                {isScheduled && (
-                  <>
-                    <div><strong>Date:</strong> {scheduledDate}</div>
-                    <div><strong>Time Slot:</strong> {timeSlot}</div>
-                  </>
+              <div className="confirm-summary">
+                <div className="confirm-row">
+                  <div className="row-icon">🛠️</div>
+                  <div className="row-text">
+                    <span className="row-label">Service</span>
+                    <span className="row-value">{type}</span>
+                  </div>
+                </div>
+                <div className="confirm-row">
+                  <div className="row-icon">📝</div>
+                  <div className="row-text">
+                    <span className="row-label">Request</span>
+                    <span className="row-value">{issueTitle || 'Not provided'}</span>
+                  </div>
+                </div>
+                <div className="confirm-row">
+                  <div className="row-icon">👤</div>
+                  <div className="row-text">
+                    <span className="row-label">Customer</span>
+                    <span className="row-value">{name || 'Not provided'}{userPhone ? ` · ${userPhone}` : ''}</span>
+                  </div>
+                </div>
+                <div className="confirm-row">
+                  <div className="row-icon">🏠</div>
+                  <div className="row-text">
+                    <span className="row-label">Address</span>
+                    <span className="row-value">{address || 'Not provided'}</span>
+                  </div>
+                </div>
+                <div className="confirm-row">
+                  <div className="row-icon">📅</div>
+                  <div className="row-text">
+                    <span className="row-label">Booking</span>
+                    <span className="row-value">
+                      {isScheduled ? `${scheduledDate || 'TBD'}` : 'Immediate'}
+                      {isScheduled && timeSlot ? ` · ${timeSlot}` : ''}
+                      {` · ${estimatedDays} day${estimatedDays > 1 ? 's' : ''}`}
+                    </span>
+                  </div>
+                </div>
+                {selectedProfessional && (
+                  <div className="confirm-row">
+                    <div className="row-icon">⭐</div>
+                    <div className="row-text">
+                      <span className="row-label">Preferred Pro</span>
+                      <span className="row-value">{selectedProfessional.name}</span>
+                    </div>
+                  </div>
                 )}
-                <div><strong>Estimated Days:</strong> {estimatedDays}</div>
-                <div><strong>Preferred Pro:</strong> {selectedProfessional ? selectedProfessional.name : 'No preference'}</div>
               </div>
 
               {(() => {

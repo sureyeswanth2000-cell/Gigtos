@@ -14,7 +14,7 @@ function AiPulse() {
   );
 }
 
-export default function AiActivityMonitor({ embedded = false }) {
+export default function AiActivityMonitor() {
   // Re-key the LIVE badge animation every 8 seconds to create a subtle visual
   // heartbeat that signals the monitor is actively receiving updates.
   const [tick, setTick] = useState(0);

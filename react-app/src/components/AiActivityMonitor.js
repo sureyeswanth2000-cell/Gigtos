@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useLocation as useGigLocation } from '../context/LocationContext';
@@ -48,6 +49,7 @@ export default function AiActivityMonitor({ onBookWorker }) {
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const { location } = useGigLocation() || {};
+  const navigate = useNavigate();
 
   // Fetch real nearby workers from Firestore
   useEffect(() => {
@@ -86,7 +88,9 @@ export default function AiActivityMonitor({ onBookWorker }) {
         }
 
         if (!cancelled) setWorkers(matched);
-      } catch {
+      } catch (err) {
+        // Log for debugging; UI falls back to empty state
+        console.warn('Failed to fetch nearby workers:', err);
         if (!cancelled) setWorkers([]);
       } finally {
         if (!cancelled) setLoading(false);
@@ -99,10 +103,13 @@ export default function AiActivityMonitor({ onBookWorker }) {
 
   const handleBook = useCallback(
     (worker) => {
-      if (!auth.currentUser) return;
+      if (!auth.currentUser) {
+        navigate('/auth?mode=user');
+        return;
+      }
       if (onBookWorker) onBookWorker(worker);
     },
-    [onBookWorker],
+    [onBookWorker, navigate],
   );
 
   const cityName = location?.city || 'your area';

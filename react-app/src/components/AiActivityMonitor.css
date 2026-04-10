@@ -173,6 +173,54 @@
 .status-progress  { background: #fef3c7; color: #92400e; }
 .status-completed { background: #d1fae5; color: #065f46; }
 .status-pending   { background: #f3f4f6; color: #6b7280; }
+.status-pending-confirmation { background: #fef3c7; color: #92400e; }
+.status-confirmed { background: #d1fae5; color: #065f46; }
+.status-dismissed { background: #fee2e2; color: #991b1b; }
+
+/* ── Confirmation action buttons ────────────────────────── */
+
+.ai-card__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.ai-confirm-btn,
+.ai-dismiss-btn {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+}
+
+.ai-confirm-btn {
+  background: var(--color-action-600);
+  color: #fff;
+}
+
+.ai-confirm-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(5, 122, 49, 0.25);
+}
+
+.ai-dismiss-btn {
+  background: #f3f4f6;
+  color: var(--color-text-700);
+  border: 1px solid var(--color-border-200);
+}
+
+.ai-dismiss-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.ai-card--dismissed {
+  opacity: 0.55;
+}
 
 /* ── Pulse dot (GIF-like animated indicator) ────────────── */
 

@@ -6,14 +6,17 @@ import './AiActivityMonitor.css';
  * Simulated AI activity feed — shows auto-created jobs, work tracking, and budget suggestions.
  * In production these would come from the ai_recommendations_log / user_behavior_events tables.
  * Timestamps are relative offsets from render time; timeAgo() always shows fresh labels.
+ *
+ * Auto-created jobs start as 'pending_confirmation' — the user must explicitly
+ * confirm or dismiss before any booking is placed. AI never auto-books.
  */
 const ACTIVITY_OFFSETS_MS = [120000, 90000, 60000, 30000];
 
 function buildActivityFeed() {
   const now = Date.now();
   return [
-    { id: 'a1', type: 'auto_job', service: 'Plumber', area: 'Kukatpally', status: 'created',  ts: now - ACTIVITY_OFFSETS_MS[0], description: 'Pipe leak repair' },
-    { id: 'a2', type: 'auto_job', service: 'Electrician', area: 'Miyapur', status: 'matched', ts: now - ACTIVITY_OFFSETS_MS[1], description: 'Switchboard wiring repair' },
+    { id: 'a1', type: 'auto_job', service: 'Plumber', area: 'Kukatpally', status: 'pending_confirmation', ts: now - ACTIVITY_OFFSETS_MS[0], description: 'Pipe leak repair' },
+    { id: 'a2', type: 'auto_job', service: 'Electrician', area: 'Miyapur', status: 'pending_confirmation', ts: now - ACTIVITY_OFFSETS_MS[1], description: 'Switchboard wiring repair' },
     { id: 'a3', type: 'tracking', service: 'Painter', area: 'Gachibowli', status: 'in_progress', ts: now - ACTIVITY_OFFSETS_MS[2], worker: 'FreshCoat Painters', progress: 65, description: 'Interior painting 2BHK' },
     { id: 'a4', type: 'tracking', service: 'Carpenter', area: 'Madhapur', status: 'completed', ts: now - ACTIVITY_OFFSETS_MS[3], worker: 'WoodCraft Studio', progress: 100, description: 'Door frame repair' },
     { id: 'a5', type: 'budget', service: 'Plumber', description: 'Full bathroom renovation', estimatedDays: 3 },
@@ -22,6 +25,9 @@ function buildActivityFeed() {
 }
 
 const STATUS_LABELS = {
+  pending_confirmation: '⏳ Awaiting Your Confirmation',
+  confirmed: '✅ Confirmed',
+  dismissed: '❌ Dismissed',
   created: '🆕 Created',
   matched: '🤝 Worker Matched',
   in_progress: '🔄 In Progress',
@@ -30,6 +36,9 @@ const STATUS_LABELS = {
 };
 
 const STATUS_CLASSES = {
+  pending_confirmation: 'status-pending-confirmation',
+  confirmed: 'status-confirmed',
+  dismissed: 'status-dismissed',
   created: 'status-created',
   matched: 'status-matched',
   in_progress: 'status-progress',
@@ -54,15 +63,18 @@ function AiPulse() {
   );
 }
 
-function AutoJobCard({ item }) {
+function AutoJobCard({ item, onConfirm, onDismiss }) {
+  const isPending = item.status === 'pending_confirmation';
+  const isDismissed = item.status === 'dismissed';
+
   return (
-    <div className="ai-card ai-card--job">
+    <div className={`ai-card ai-card--job${isDismissed ? ' ai-card--dismissed' : ''}`}>
       <div className="ai-card__icon">
         <AiPulse />
       </div>
       <div className="ai-card__body">
         <div className="ai-card__title">
-          AI created <strong>{item.service}</strong> job in {item.area}
+          AI suggests <strong>{item.service}</strong> job in {item.area}
         </div>
         <div className="ai-card__desc">{item.description}</div>
         <div className="ai-card__meta">
@@ -71,6 +83,16 @@ function AutoJobCard({ item }) {
           </span>
           <span className="ai-card__time">{timeAgo(item.ts)}</span>
         </div>
+        {isPending && (
+          <div className="ai-card__actions">
+            <button className="ai-confirm-btn" onClick={() => onConfirm?.(item.id)} aria-label={`Confirm ${item.service} booking`}>
+              ✓ Confirm Booking
+            </button>
+            <button className="ai-dismiss-btn" onClick={() => onDismiss?.(item.id)} aria-label={`Dismiss ${item.service} suggestion`}>
+              ✕ Dismiss
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -139,6 +161,17 @@ export default function AiActivityMonitor() {
   const [visibleCount, setVisibleCount] = useState(3);
   const [activeTab, setActiveTab] = useState('all');
 
+  // Track user decisions on AI-suggested jobs (confirm / dismiss)
+  const [jobDecisions, setJobDecisions] = useState({});
+
+  const handleConfirmJob = (jobId) => {
+    setJobDecisions((prev) => ({ ...prev, [jobId]: 'confirmed' }));
+  };
+
+  const handleDismissJob = (jobId) => {
+    setJobDecisions((prev) => ({ ...prev, [jobId]: 'dismissed' }));
+  };
+
   // Rebuild feed each tick so timeAgo labels stay fresh.
   // Re-key the LIVE badge animation every 8 seconds to create a subtle visual
   // heartbeat that signals the monitor is actively receiving updates.
@@ -148,7 +181,16 @@ export default function AiActivityMonitor() {
     return () => clearInterval(timer);
   }, []);
 
-  const activityFeed = useMemo(() => buildActivityFeed(), [tick]);
+  const activityFeed = useMemo(() => {
+    const feed = buildActivityFeed();
+    // Apply user confirm/dismiss decisions to auto_job items
+    return feed.map((item) => {
+      if (item.type === 'auto_job' && jobDecisions[item.id]) {
+        return { ...item, status: jobDecisions[item.id] };
+      }
+      return item;
+    });
+  }, [tick, jobDecisions]);
 
   const filteredFeed = useMemo(() => {
     if (activeTab === 'all') return activityFeed;
@@ -172,7 +214,7 @@ export default function AiActivityMonitor() {
           <span className="ai-live-badge" key={tick}>LIVE</span>
         </div>
         <p className="ai-monitor__subtitle">
-          AI auto-creates jobs, tracks work, and suggests budgets in real time.
+          AI suggests jobs, tracks work, and recommends budgets — always with your confirmation first.
         </p>
       </div>
 
@@ -193,7 +235,7 @@ export default function AiActivityMonitor() {
 
       <div className="ai-monitor__feed">
         {displayedItems.map((item) => {
-          if (item.type === 'auto_job') return <AutoJobCard key={item.id} item={item} />;
+          if (item.type === 'auto_job') return <AutoJobCard key={item.id} item={item} onConfirm={handleConfirmJob} onDismiss={handleDismissJob} />;
           if (item.type === 'tracking') return <TrackingCard key={item.id} item={item} />;
           if (item.type === 'budget') return <BudgetCard key={item.id} item={item} />;
           return null;

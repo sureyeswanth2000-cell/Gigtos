@@ -115,7 +115,6 @@ export default function WorkHistory() {
                   </div>
                 )}
               </div>
-
               {item.review && (
                 <div style={{ fontSize: 13, color: '#6B7280', fontStyle: 'italic' }}>"{item.review}"</div>
               )}

@@ -12,6 +12,7 @@ npm-debug.log*
 # Environment files
 .env
 .env.local
+functions/.env
 
 # IDE
 .vscode

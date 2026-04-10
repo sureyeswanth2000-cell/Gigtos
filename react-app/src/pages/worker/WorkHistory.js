@@ -39,10 +39,18 @@ export default function WorkHistory() {
 
   const totalEarned = history.reduce((s, h) => s + (h.earned || 0), 0);
 
-  // Weekly average rating logic:
-  // Ratings from the current week (Mon-Sun) are averaged on Sunday and reflected from the following Monday.
+  // Finalized average rating logic:
+  // Ratings from the current week (Mon-Sun) are not yet included in the average.
+  // They are averaged on Sunday and reflected from the following Monday.
   // Non-rated works are ignored in the calculation.
-  const getWeeklyAvgRating = (items) => {
+  const parseDate = (d) => d && typeof d.toDate === 'function' ? d.toDate() : new Date(d);
+
+  const computeAvgRating = (items) => {
+    if (items.length === 0) return 0;
+    return (items.reduce((s, h) => s + h.rating, 0) / items.length).toFixed(1);
+  };
+
+  const getFinalizedAvgRating = (items) => {
     const now = new Date();
     const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ...
     // Find the most recent Monday (start of the display week)
@@ -50,21 +58,17 @@ export default function WorkHistory() {
     monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
     monday.setHours(0, 0, 0, 0);
 
-    // Items completed before this Monday have their ratings finalized
+    // Only include rated items completed before this Monday (finalized weeks)
     const finalizedItems = items.filter(h => {
       if (!h.rating) return false;
-      const completed = new Date(h.completedAt);
-      return completed < monday;
+      return parseDate(h.completedAt) < monday;
     });
 
-    // Items from the current week (Monday onwards) are not yet included in the average
-    // They will be averaged on Sunday and reflected from next Monday
-    if (finalizedItems.length === 0) return 0;
-    return (finalizedItems.reduce((s, h) => s + h.rating, 0) / finalizedItems.length).toFixed(1);
+    return computeAvgRating(finalizedItems);
   };
 
-  // Use weekly average (finalized ratings only) for the displayed average
-  const avgRating = getWeeklyAvgRating(history);
+  // Display only finalized ratings (current week excluded until next Monday)
+  const avgRating = getFinalizedAvgRating(history);
 
   return (
     <div className="worker-page">

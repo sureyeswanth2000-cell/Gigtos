@@ -134,19 +134,22 @@ export function suggestBudget({ serviceType, description = '', estimatedDays = 1
 export function suggestBudgetForUser(params) {
   const base = suggestBudget(params);
   const markup = 1 + USER_BUDGET_MARKUP_PERCENT / 100;
+  const days = Math.max(1, Math.round(Number(params.estimatedDays) || 1));
+  const markedMin = Math.round(base.suggestedMin * markup);
+  const markedMax = Math.round(base.suggestedMax * markup);
 
   return {
     ...base,
-    suggestedMin: Math.round(base.suggestedMin * markup),
-    suggestedMax: Math.round(base.suggestedMax * markup),
+    suggestedMin: markedMin,
+    suggestedMax: markedMax,
     perDay: {
       min: Math.round(base.perDay.min * markup),
       max: Math.round(base.perDay.max * markup),
     },
     explanation:
       `Based on ${params.serviceType || 'Service'} rates${params.insight ? ' from recent quotes' : ' (market estimates)'}, ` +
-      `${base.complexity} complexity work for ${Math.max(1, Math.round(Number(params.estimatedDays) || 1))} day${(Math.max(1, Math.round(Number(params.estimatedDays) || 1))) > 1 ? 's' : ''}: ` +
-      `₹${Math.round(base.suggestedMin * markup).toLocaleString('en-IN')} – ₹${Math.round(base.suggestedMax * markup).toLocaleString('en-IN')}.`,
+      `${base.complexity} complexity work for ${days} day${days > 1 ? 's' : ''}: ` +
+      `₹${markedMin.toLocaleString('en-IN')} – ₹${markedMax.toLocaleString('en-IN')}.`,
   };
 }
 

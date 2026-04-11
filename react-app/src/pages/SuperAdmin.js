@@ -270,11 +270,11 @@ export default function SuperAdmin() {
     /* ── Filtering helpers ── */
     const matchesDateRange = (item) => {
         if (!filterDateFrom && !filterDateTo) return true;
-        const ts = item.createdAt?.toDate?.() || item.createdAt;
-        if (!ts) return true;
-        const d = new Date(ts);
-        if (filterDateFrom && d < new Date(filterDateFrom)) return false;
-        if (filterDateTo && d > new Date(filterDateTo + 'T23:59:59')) return false;
+        const raw = item.createdAt;
+        const ts = raw?.toDate ? raw.toDate() : (raw ? new Date(raw) : null);
+        if (!ts || isNaN(ts.getTime())) return true;
+        if (filterDateFrom && ts < new Date(filterDateFrom)) return false;
+        if (filterDateTo && ts > new Date(filterDateTo + 'T23:59:59')) return false;
         return true;
     };
 
@@ -292,7 +292,7 @@ export default function SuperAdmin() {
         if (filterRegion === 'all') return true;
         const adminInfo = admins.find(a => a.id === item.adminId);
         if (!adminInfo) return false;
-        const regionLeadId = adminInfo.role === 'regionLead' ? adminInfo.id : adminInfo.parentAdminId;
+        const regionLeadId = adminInfo.role === 'regionLead' ? adminInfo.id : (adminInfo.parentAdminId || null);
         return regionLeadId === filterRegion;
     };
 

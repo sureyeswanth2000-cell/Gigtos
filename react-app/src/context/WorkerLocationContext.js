@@ -55,6 +55,7 @@ export function WorkerLocationProvider({ children }) {
   const watchIdRef = useRef(null);
   const persistIntervalRef = useRef(null);
   const wasAtLocationRef = useRef(false);
+  const trackingUidRef = useRef(null);
 
   /**
    * Start continuous GPS tracking for the worker.
@@ -80,6 +81,7 @@ export function WorkerLocationProvider({ children }) {
     setLeftTime(null);
     setIsAtWorkLocation(false);
     wasAtLocationRef.current = false;
+    trackingUidRef.current = uid;
     setError(null);
 
     // Create a new session document in Firestore
@@ -279,8 +281,8 @@ export function WorkerLocationProvider({ children }) {
       if (persistIntervalRef.current) {
         clearInterval(persistIntervalRef.current);
       }
-      // Delete live location on unmount if was tracking
-      const uid = auth.currentUser?.uid;
+      // Delete live location on unmount if was tracking (use captured UID)
+      const uid = trackingUidRef.current;
       if (uid) {
         deleteDoc(doc(db, 'worker_live_locations', uid)).catch(() => {});
       }

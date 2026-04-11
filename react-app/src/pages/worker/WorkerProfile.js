@@ -116,7 +116,7 @@ export default function WorkerProfile() {
             <div style={{ marginTop: 10 }}>
               <div style={{ color: '#6B7280', fontSize: 13, marginBottom: 6 }}>Skills/Job Types</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {(worker.gigTypes || [worker.gigType]).map(t => (
+                {(worker.gigTypes?.length > 0 ? worker.gigTypes : [worker.gigType]).filter(Boolean).map(t => (
                   <span key={t} style={{ background: '#EDE9FE', color: '#7C3AED', padding: '4px 10px', borderRadius: 20, fontSize: 13, fontWeight: 600 }}>
                     {t.charAt(0).toUpperCase() + t.slice(1).replace(/-/g, ' ')}
                   </span>

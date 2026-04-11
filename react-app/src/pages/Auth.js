@@ -5,6 +5,13 @@ import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { getAdminRedirectPath, isRegionSuspended } from '../utils/authRouting';
 import { detectCurrentLocation } from '../context/LocationContext';
+import { SPECIAL_JOBS } from '../config/specialJobs';
+
+// Build signup job type options from SPECIAL_JOBS config for consistency
+const SIGNUP_JOB_TYPES = [
+  ...SPECIAL_JOBS.map(sj => sj.id),
+  'carpentry', 'masonry', 'landscaping', 'other'
+].filter((v, i, a) => a.indexOf(v) === i);
 
 function Auth() {
   const navigate = useNavigate();
@@ -1191,7 +1198,7 @@ function Auth() {
               }}
             >
               <option value="">{workerGigTypes.length >= 3 ? 'Maximum 3 selected' : 'Select service type...'}</option>
-              {['plumbing', 'electrical', 'carpentry', 'painting', 'masonry', 'cleaning', 'landscaping', 'driver', 'kitchen-work', 'garden-work', 'security', 'delivery', 'other']
+              {SIGNUP_JOB_TYPES
                 .filter(t => !workerGigTypes.includes(t))
                 .map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1).replace(/-/g, ' ')}</option>)}
             </select>

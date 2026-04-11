@@ -61,14 +61,33 @@ export async function geocodeCity(query) {
 /**
  * Detect current GPS location with GeoIP fallback.
  * Returns a promise that resolves to { lat, lng, city, source } or rejects.
+ *
+ * When location permission is denied the promise rejects with a clear message
+ * instead of silently falling back to GeoIP, so callers can prompt the user to
+ * enable location access in their browser settings.
  */
-export function detectCurrentLocation() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error('Geolocation is not supported by your browser.'));
-      return;
-    }
+export async function detectCurrentLocation() {
+  if (!navigator.geolocation) {
+    throw new Error('Geolocation is not supported by your browser.');
+  }
 
+  // Check permission state so we can give a clear message when denied.
+  if (navigator.permissions) {
+    let permissionDenied = false;
+    try {
+      const status = await navigator.permissions.query({ name: 'geolocation' });
+      permissionDenied = status.state === 'denied';
+    } catch {
+      // Permissions API not supported for geolocation in this browser — proceed.
+    }
+    if (permissionDenied) {
+      throw new Error(
+        'Location permission is blocked. Please allow location access in your browser settings and try again.'
+      );
+    }
+  }
+
+  return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = pos.coords.latitude;
@@ -76,8 +95,19 @@ export function detectCurrentLocation() {
         const { city, displayName } = await reverseGeocode(lat, lng);
         resolve({ lat, lng, city, displayName, source: 'gps' });
       },
-      () => {
-        // Fallback: try GeoIP
+      (err) => {
+        // PERMISSION_DENIED (code 1) – do NOT fall back to GeoIP; let the
+        // user know they need to grant permission.
+        if (err && err.code === 1) {
+          reject(
+            new Error(
+              'Location permission was denied. Please allow location access in your browser settings and try again.'
+            )
+          );
+          return;
+        }
+
+        // Other errors (POSITION_UNAVAILABLE, TIMEOUT) – try GeoIP fallback.
         fetch('https://ipapi.co/json/')
           .then((res) => res.json())
           .then((data) => {

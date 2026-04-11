@@ -73,16 +73,17 @@ export async function detectCurrentLocation() {
 
   // Check permission state so we can give a clear message when denied.
   if (navigator.permissions) {
+    let permissionDenied = false;
     try {
       const status = await navigator.permissions.query({ name: 'geolocation' });
-      if (status.state === 'denied') {
-        throw new Error(
-          'Location permission is blocked. Please allow location access in your browser settings and try again.'
-        );
-      }
-    } catch (e) {
-      // Re-throw our own permission-denied error; swallow Permissions-API errors.
-      if (e.message && e.message.includes('Location permission')) throw e;
+      permissionDenied = status.state === 'denied';
+    } catch {
+      // Permissions API not supported for geolocation in this browser — proceed.
+    }
+    if (permissionDenied) {
+      throw new Error(
+        'Location permission is blocked. Please allow location access in your browser settings and try again.'
+      );
     }
   }
 

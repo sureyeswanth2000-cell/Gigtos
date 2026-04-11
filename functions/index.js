@@ -308,6 +308,10 @@ function buildFallbackAssistantReply({ message = '', selectedService = '', insig
  * Returns { systemInstruction, userMessage } — the caller sends
  * systemInstruction via the Gemini `system_instruction` field and
  * userMessage as `contents`.
+ *
+ * NOTE: Currently muted — messages are sent directly to Gemini without
+ * system instructions. This function will be re-enabled when custom
+ * instructions are connected.
  */
 function buildGeminiPrompt({ message = '', selectedService = '', insights = [] }) {
   const requestedService = canonicalServiceName(selectedService) || detectServiceFromMessage(message);

@@ -17,7 +17,6 @@ const NAV_CARDS = [
   { to: '/worker/history', icon: '🕐', label: 'History' },
   { to: '/worker/future-work', icon: '📅', label: 'Future Work' },
   { to: '/worker/profile', icon: '👤', label: 'My Profile' },
-  { to: '/worker/job-selection', icon: '✏️', label: 'Edit Jobs' },
   { to: '/worker/support', icon: '💬', label: 'Support' },
 ];
 

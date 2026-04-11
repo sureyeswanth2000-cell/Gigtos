@@ -23,7 +23,6 @@ import Jobs from './pages/Jobs';
 import JobDetail from './pages/JobDetail';
 import UserProfile from './pages/UserProfile';
 import UserDashboard from './pages/UserDashboard';
-import WorkerJobSelection from './pages/WorkerJobSelection';
 import MasonDashboardPage from './pages/MasonDashboardPage';
 import NotFound from './pages/NotFound';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -142,7 +141,6 @@ function App() {
           <Route path="/worker/profile" element={<ProtectedRoute><WorkerProfilePage /></ProtectedRoute>} />
           <Route path="/worker/future-work" element={<ProtectedRoute><FutureWork /></ProtectedRoute>} />
           <Route path="/worker/support" element={<ProtectedRoute><WorkerSupportPage /></ProtectedRoute>} />
-          <Route path="/worker/job-selection" element={<ProtectedRoute><WorkerJobSelection /></ProtectedRoute>} />
 
           {/* Mason Dashboard */}
           <Route path="/mason/dashboard" element={<ProtectedRoute requireAdmin><MasonDashboardPage /></ProtectedRoute>} />

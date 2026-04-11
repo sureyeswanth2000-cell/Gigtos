@@ -122,9 +122,7 @@ export default function WorkerProfile() {
                   </span>
                 ))}
               </div>
-              <Link to="/worker/job-selection" style={{ display: 'inline-block', marginTop: 8, fontSize: 12, color: '#7C3AED', textDecoration: 'none', fontWeight: 600 }}>
-                ✏️ Edit Job Types
-              </Link>
+
             </div>
           )}
         </div>

@@ -46,7 +46,7 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
+      setLoading(true);
       if (currentUser) {
         const adminDoc = await getDoc(doc(db, 'admins', currentUser.uid));
         const workerDoc = await getDoc(doc(db, 'worker_auth', currentUser.uid));
@@ -65,6 +65,7 @@ function App() {
         setIsWorker(false);
         setAdminRole(null);
       }
+      setUser(currentUser);
       setLoading(false);
     });
     return unsubscribe;

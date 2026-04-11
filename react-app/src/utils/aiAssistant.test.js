@@ -4,7 +4,6 @@ import {
   findRelevantService,
   formatPriceInsight,
   buildLocalAssistantFallback,
-  buildPromptSuggestions,
 } from './aiAssistant';
 
 describe('ai assistant helpers', () => {
@@ -178,22 +177,6 @@ describe('ai assistant helpers', () => {
     expect(categories).toContain('Event & Warehouse');
     expect(categories).toContain('Education');
     expect(categories).toContain('Outdoor & Garden');
-  });
-});
-
-describe('buildPromptSuggestions', () => {
-  it('returns general suggestions when no service is selected', () => {
-    const suggestions = buildPromptSuggestions('');
-    expect(suggestions.length).toBe(4);
-    expect(suggestions).toContain('What services do you offer?');
-    expect(suggestions).toContain('I need help choosing a service');
-  });
-
-  it('returns service-specific suggestions when a service is selected', () => {
-    const suggestions = buildPromptSuggestions('Plumber');
-    expect(suggestions.length).toBe(4);
-    expect(suggestions[0]).toContain('Plumber');
-    expect(suggestions.some((s) => s.includes('Book'))).toBe(true);
   });
 });
 

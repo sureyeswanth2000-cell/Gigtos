@@ -1,10 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { functionsInstance, db } from '../firebase';
 import {
   buildLocalAssistantFallback,
-  buildPromptSuggestions,
   checkServiceNearby,
   findRelevantService,
 } from '../utils/aiAssistant';
@@ -91,11 +90,6 @@ export default function ConsumerAiAssistant({
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
     }
   }, [messages, loading, isOpen]);
-
-  const promptSuggestions = useMemo(
-    () => buildPromptSuggestions(selectedService),
-    [selectedService]
-  );
 
   const sendQuestion = async (promptText) => {
     const text = (promptText || question).trim();
@@ -350,26 +344,6 @@ export default function ConsumerAiAssistant({
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
-              {promptSuggestions.map((prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => sendQuestion(prompt)}
-                  style={{
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    background: 'rgba(255,255,255,0.08)',
-                    color: 'white',
-                    borderRadius: '999px',
-                    padding: '6px 10px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                  }}
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
                 value={question}
@@ -380,7 +354,7 @@ export default function ConsumerAiAssistant({
                     sendQuestion();
                   }
                 }}
-                placeholder="Ask about service or price"
+                placeholder="Ask me anything..."
                 style={{
                   flex: 1,
                   padding: '10px 12px',

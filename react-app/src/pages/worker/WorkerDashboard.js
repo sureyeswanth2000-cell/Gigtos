@@ -2,13 +2,11 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth, db } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { WorkerLocationProvider } from '../../context/WorkerLocationContext';
 import { USER_BUDGET_MARKUP_PERCENT } from '../../utils/aiBudgetSuggestion';
 import ActiveStatusButton from '../../components/worker/ActiveStatusButton';
 import WorkerFixedRateForm from '../../components/worker/WorkerFixedRateForm';
-import WorkerStatsCard from '../../components/worker/WorkerStatsCard';
-import RatingDisplay from '../../components/worker/RatingDisplay';
 import WorkerBottomNav from '../../components/worker/WorkerBottomNav';
 import WorkerLocationTracker from '../../components/worker/WorkerLocationTracker';
 import QuoteModal from '../../components/worker/QuoteModal';
@@ -21,7 +19,6 @@ const NAV_CARDS = [
   { to: '/worker/profile', icon: '👤', label: 'My Profile' },
   { to: '/worker/job-selection', icon: '✏️', label: 'Edit Jobs' },
   { to: '/worker/support', icon: '💬', label: 'Support' },
-  { to: '/worker/map', icon: '🗺️', label: 'Map' },
 ];
 
 /**
@@ -50,6 +47,12 @@ function openDirections(job) {
   }
 }
 
+/** Workflow step config for live job action buttons */
+const WORKFLOW_STEPS = {
+  assigned: { next: 'in_progress', label: '▶ Start Work', style: 'btn-primary' },
+  in_progress: { next: 'completed', label: '✅ Mark Complete', style: 'btn-success' },
+};
+
 export default function WorkerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -60,6 +63,7 @@ export default function WorkerDashboard() {
   const [nearbyJobs, setNearbyJobs] = useState([]);
   const [jobsLoading, setJobsLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState(null);
+  const [updatingJobId, setUpdatingJobId] = useState(null);
   const [toast, setToast] = useState(null);
   const toastTimeoutRef = useRef(null);
   const navigate = useNavigate();
@@ -127,19 +131,37 @@ export default function WorkerDashboard() {
     showToast("✅ Quote sent! You'll be notified if accepted.", 'success');
   };
 
+  /** Update a live job's status (Start → In Progress → Complete) */
+  const handleJobStatusUpdate = useCallback(async (job, nextStatus) => {
+    setUpdatingJobId(job.id);
+    try {
+      await updateDoc(doc(db, 'bookings', job.id), { status: nextStatus });
+      if (nextStatus === 'completed') {
+        // Move from live to neither (completed)
+        setLiveJobs(prev => prev.filter(j => j.id !== job.id));
+        showToast('🎉 Job completed! Great work.', 'success');
+      } else {
+        // Update status in local state
+        setLiveJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: nextStatus } : j));
+        showToast('▶ Work started! Keep it up.', 'success');
+      }
+    } catch {
+      showToast('❌ Failed to update status. Try again.', 'error');
+    } finally {
+      setUpdatingJobId(null);
+    }
+  }, [showToast]);
+
   if (loading) {
     return (
       <div className="worker-page">
         <div className="worker-container">
           <div className="worker-header-section">
-            <div className="skeleton" style={{ width: 64, height: 64, borderRadius: '50%', marginBottom: 10 }} />
-            <div className="skeleton" style={{ width: 160, height: 20, marginBottom: 8 }} />
+            <div className="skeleton" style={{ width: 48, height: 48, borderRadius: '50%', marginBottom: 8 }} />
+            <div className="skeleton" style={{ width: 140, height: 20, marginBottom: 6 }} />
             <div className="skeleton" style={{ width: 100, height: 14 }} />
           </div>
-          <div className="skeleton" style={{ height: 60, borderRadius: 12, marginBottom: 10 }} />
-          <div className="stats-row">
-            {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{ height: 80, borderRadius: 12 }} />)}
-          </div>
+          {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 100, borderRadius: 14, marginBottom: 12 }} />)}
         </div>
       </div>
     );
@@ -161,38 +183,42 @@ export default function WorkerDashboard() {
   const initials = (worker?.name || 'W').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const isPending = worker?.approvalStatus !== 'approved';
 
-  const stats = {
-    completed: worker?.completedJobs || 0,
-    pending: worker?.pendingJobs || 0,
-    rating: worker?.rating || 0,
-    earnings: worker?.totalEarnings || 0,
-  };
-
   return (
     <WorkerLocationProvider>
     <div className="worker-page">
       <div className="worker-container">
-        {/* Header */}
-        <div className="worker-header-section">
-          <div className="worker-avatar">{initials}</div>
-          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{worker?.name || 'Worker'}</div>
-          <RatingDisplay rating={stats.rating} size="sm" />
-          <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
-            {(worker?.gigTypes && worker.gigTypes.length > 0)
-              ? worker.gigTypes.map(t => t.charAt(0).toUpperCase() + t.slice(1).replace(/-/g, ' ')).join(', ')
-              : (worker?.gigType || 'General Worker')
-            } · {worker?.area || 'Unknown Area'}
+
+        {/* ─── CLEAN HEADER ─── */}
+        <div className="worker-header-section" style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: 14, padding: '20px 20px 24px' }}>
+          <div className="worker-avatar" style={{ width: 48, height: 48, fontSize: 20, marginBottom: 0, flexShrink: 0 }}>{initials}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{worker?.name || 'Worker'}</div>
+            <div style={{ fontSize: 13, opacity: 0.85, marginTop: 2 }}>
+              📍 {worker?.area || 'Unknown Area'}
+            </div>
+            <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: isActive ? '#34D399' : '#FCD34D',
+                boxShadow: isActive ? '0 0 0 3px rgba(52,211,153,0.3)' : '0 0 0 3px rgba(252,211,77,0.3)'
+              }} />
+              <span style={{ fontSize: 12, opacity: 0.9 }}>
+                {isActive ? 'Active' : 'Offline'}
+              </span>
+            </div>
           </div>
-          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: isActive ? '#34D399' : '#FCD34D',
-              boxShadow: isActive ? '0 0 0 3px rgba(52,211,153,0.3)' : '0 0 0 3px rgba(252,211,77,0.3)'
-            }} />
-            <span style={{ fontSize: 13, opacity: 0.9 }}>
-              {isActive ? 'Active & visible to customers' : 'Offline'}
-            </span>
-          </div>
+          {/* Quick map access */}
+          <Link
+            to="/worker/map"
+            style={{
+              background: 'rgba(255,255,255,0.25)', borderRadius: 12, padding: '8px 12px',
+              color: '#fff', textDecoration: 'none', fontSize: 20, lineHeight: 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            title="Open Map"
+          >
+            🗺️
+          </Link>
         </div>
 
         {isPending && (
@@ -206,54 +232,80 @@ export default function WorkerDashboard() {
           </div>
         )}
 
-        {/* ═══ LIVE WORK — before active button ═══ */}
+        {/* ─── Active Status ─── */}
+        <ActiveStatusButton onStatusChange={handleStatusChange} />
+
+        {/* ═══ 1. IN-PROGRESS SERVICES — with workflow buttons ═══ */}
         {!jobsLoading && liveJobs.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <h3 className="section-title">🔴 Live Work</h3>
-            {liveJobs.map(job => (
-              <div key={job.id} className="worker-card" style={{ border: '2px solid #10B981', background: '#F0FDF4' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: '#1F1144' }}>
-                      {job.title || job.serviceType || 'Service'}
+          <div style={{ marginBottom: 18 }}>
+            <h3 className="section-title" style={{ fontSize: 16 }}>🔧 In-Progress Services</h3>
+            {liveJobs.map(job => {
+              const step = WORKFLOW_STEPS[job.status];
+              const isUpdating = updatingJobId === job.id;
+              return (
+                <div key={job.id} className="worker-card live-job-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: '#1F1144' }}>
+                        {job.title || job.serviceType || 'Service'}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6B7280', marginTop: 3 }}>
+                        {job.area && <span>📍 {job.area}</span>}
+                        {job.customerName && <span> · 👤 {job.customerName}</span>}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
-                      {job.area && <span>📍 {job.area}</span>}
-                      {job.customerName && <span> · 👤 {job.customerName}</span>}
+                    {/* Navigate icon */}
+                    {(job.lat || job.locationLat || job.area) && (
+                      <button
+                        onClick={() => openDirections(job)}
+                        title="Navigate"
+                        className="icon-btn-navigate"
+                      >
+                        🧭
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Workflow progress bar */}
+                  <div className="workflow-progress">
+                    <div className={`workflow-step ${job.status === 'assigned' || job.status === 'in_progress' ? 'done' : ''}`}>
+                      <div className="workflow-dot" />
+                      <span>Assigned</span>
+                    </div>
+                    <div className="workflow-line" />
+                    <div className={`workflow-step ${job.status === 'in_progress' ? 'done' : ''}`}>
+                      <div className="workflow-dot" />
+                      <span>In Progress</span>
+                    </div>
+                    <div className="workflow-line" />
+                    <div className="workflow-step">
+                      <div className="workflow-dot" />
+                      <span>Complete</span>
                     </div>
                   </div>
-                  <span style={{
-                    background: '#D1FAE5', color: '#065F46', padding: '3px 10px',
-                    borderRadius: 20, fontSize: 11, fontWeight: 700
-                  }}>
-                    {job.status === 'in_progress' ? '🔧 In Progress' : '📌 Assigned'}
-                  </span>
+
+                  {/* Action button */}
+                  {step && (
+                    <button
+                      className={step.style}
+                      disabled={isUpdating}
+                      onClick={() => handleJobStatusUpdate(job, step.next)}
+                      style={{ width: '100%', marginTop: 10, padding: 10, fontSize: 14 }}
+                    >
+                      {isUpdating ? 'Updating...' : step.label}
+                    </button>
+                  )}
                 </div>
-                {job.phone && (
-                  <div style={{ fontSize: 12, color: '#059669', marginTop: 6 }}>📞 {job.phone}</div>
-                )}
-                {(job.lat || job.locationLat || job.area) && (
-                  <button
-                    onClick={() => openDirections(job)}
-                    style={{
-                      marginTop: 8, padding: '6px 12px', background: '#EDE9FE', color: '#7C3AED',
-                      border: '1px solid #C4B5FD', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                      cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
-                    }}
-                  >
-                    🧭 Navigate to Location
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
-        {/* ═══ FUTURE SCHEDULED WORK — before active button ═══ */}
+        {/* ═══ 2. UPCOMING WORK ═══ */}
         {!jobsLoading && futureJobs.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
+          <div style={{ marginBottom: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h3 className="section-title" style={{ margin: 0 }}>📅 Upcoming Work</h3>
+              <h3 className="section-title" style={{ margin: 0, fontSize: 16 }}>📅 Upcoming</h3>
               <Link to="/worker/future-work" style={{ fontSize: 12, color: '#7C3AED', textDecoration: 'none', fontWeight: 600 }}>
                 View All →
               </Link>
@@ -261,15 +313,15 @@ export default function WorkerDashboard() {
             {futureJobs.slice(0, 3).map(job => {
               const schedDate = job.scheduledAt ? new Date(job.scheduledAt) : null;
               return (
-                <div key={job.id} className="worker-card" style={{ border: '1px solid #C4B5FD', padding: 12 }}>
+                <div key={job.id} className="worker-card" style={{ padding: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: '#1F1144' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: '#1F1144', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {job.title || job.serviceType || 'Service'}
                       </div>
                       <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
                         {schedDate
-                          ? `📅 ${schedDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} · 🕐 ${schedDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
+                          ? `${schedDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} · ${schedDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
                           : 'Date TBD'
                         }
                         {job.area && ` · 📍 ${job.area}`}
@@ -277,15 +329,7 @@ export default function WorkerDashboard() {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                       {(job.lat || job.locationLat || job.area) && (
-                        <button
-                          onClick={() => openDirections(job)}
-                          title="Get directions"
-                          style={{
-                            padding: '4px 8px', background: '#EDE9FE', color: '#7C3AED',
-                            border: '1px solid #C4B5FD', borderRadius: 8, fontSize: 14,
-                            cursor: 'pointer', lineHeight: 1
-                          }}
-                        >
+                        <button onClick={() => openDirections(job)} title="Navigate" className="icon-btn-navigate">
                           🧭
                         </button>
                       )}
@@ -294,7 +338,7 @@ export default function WorkerDashboard() {
                         color: job.status === 'confirmed' ? '#065F46' : '#92400E',
                         padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700
                       }}>
-                        {job.status === 'confirmed' ? '✅ Confirmed' : '⏳ Pending'}
+                        {job.status === 'confirmed' ? '✅' : '⏳'}
                       </span>
                     </div>
                   </div>
@@ -304,48 +348,42 @@ export default function WorkerDashboard() {
           </div>
         )}
 
-        {/* Active Status */}
-        <ActiveStatusButton onStatusChange={handleStatusChange} />
+        {/* ═══ 3. AVAILABLE SERVICES — nearby open jobs ═══ */}
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <h3 className="section-title" style={{ margin: 0, fontSize: 16 }}>💼 Available Services</h3>
+            <Link to="/worker/open-work" style={{ fontSize: 12, color: '#7C3AED', textDecoration: 'none', fontWeight: 600 }}>
+              See All →
+            </Link>
+          </div>
 
-        {/* ═══ NEARBY OPEN JOBS — after active button ═══ */}
-        {!jobsLoading && nearbyJobs.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h3 className="section-title" style={{ margin: 0 }}>💼 Jobs Around You</h3>
-              <Link to="/worker/open-work" style={{ fontSize: 12, color: '#7C3AED', textDecoration: 'none', fontWeight: 600 }}>
-                See All →
-              </Link>
-            </div>
-            {nearbyJobs.slice(0, 5).map(job => {
+          {jobsLoading ? (
+            [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 90, borderRadius: 14, marginBottom: 10 }} />)
+          ) : nearbyJobs.length > 0 ? (
+            nearbyJobs.slice(0, 5).map(job => {
               const aiAmount = getAiSuggestedAmount(job.budget || job.estimatedBudget || job.amount);
               return (
                 <div key={job.id} className="worker-card" style={{ padding: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 14, color: '#1F1144' }}>
                         {job.title || job.serviceType || 'Service'}
                       </div>
                       <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
-                        {job.area && <span>📍 {job.area} </span>}
-                        <span className="job-category-badge" style={{ fontSize: 10 }}>
-                          {job.category || job.gigType || job.serviceType || 'General'}
-                        </span>
+                        {job.area && <span>📍 {job.area}</span>}
                       </div>
                       {/* AI Suggested Amount — 25% less than user's budget */}
-                      {aiAmount ? (
-                        <div style={{
-                          fontSize: 13, color: '#7C3AED', fontWeight: 700, marginTop: 6,
-                          display: 'flex', alignItems: 'center', gap: 4
-                        }}>
-                          🤖 AI suggests ₹{aiAmount.toLocaleString('en-IN')}
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 6 }}>
-                          🤖 AI suggests: Quote on request
-                        </div>
-                      )}
+                      <div style={{ fontSize: 13, marginTop: 5 }}>
+                        {aiAmount ? (
+                          <span style={{ color: '#7C3AED', fontWeight: 700 }}>
+                            🤖 AI suggests ₹{aiAmount.toLocaleString('en-IN')}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#9CA3AF' }}>🤖 Quote on request</span>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, marginLeft: 10 }}>
                       <button
                         className="btn-primary"
                         style={{ padding: '8px 14px', fontSize: 12, minWidth: 'auto', width: 'auto', whiteSpace: 'nowrap' }}
@@ -354,43 +392,31 @@ export default function WorkerDashboard() {
                         Send Quote
                       </button>
                       {(job.lat || job.locationLat || job.area) && (
-                        <button
-                          onClick={() => openDirections(job)}
-                          style={{
-                            padding: '6px 12px', background: '#EDE9FE', color: '#7C3AED',
-                            border: '1px solid #C4B5FD', borderRadius: 8, fontSize: 11, fontWeight: 600,
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3
-                          }}
-                        >
-                          🧭 Directions
+                        <button onClick={() => openDirections(job)} className="icon-btn-navigate" style={{ alignSelf: 'center' }}>
+                          🧭
                         </button>
                       )}
                     </div>
                   </div>
                 </div>
               );
-            })}
-          </div>
-        )}
+            })
+          ) : (
+            <div style={{ textAlign: 'center', padding: '24px 16px', color: '#6B7280' }}>
+              <div style={{ fontSize: 32, marginBottom: 6 }}>📭</div>
+              <div style={{ fontSize: 13 }}>No open services around you right now</div>
+            </div>
+          )}
+        </div>
 
-        {!jobsLoading && nearbyJobs.length === 0 && (
-          <div className="worker-card" style={{ textAlign: 'center', padding: '20px 16px', marginBottom: 14 }}>
-            <div style={{ fontSize: 28, marginBottom: 6 }}>📭</div>
-            <div style={{ fontSize: 13, color: '#6B7280' }}>No open jobs around you right now. Check back soon!</div>
-          </div>
-        )}
+        {/* Worker Location Tracker */}
+        <WorkerLocationTracker />
 
         {/* Fixed Day Rate */}
         <WorkerFixedRateForm workerData={worker} />
 
-        {/* Worker Location Tracker — shown when worker is active */}
-        <WorkerLocationTracker />
-
-        {/* Stats */}
-        <WorkerStatsCard stats={stats} />
-
-        {/* Navigation Cards */}
-        <h3 className="section-title">Quick Access</h3>
+        {/* Quick Access */}
+        <h3 className="section-title" style={{ fontSize: 16 }}>⚡ Quick Access</h3>
         <div className="nav-cards-grid">
           {NAV_CARDS.map(card => (
             <Link key={card.to} to={card.to} className="nav-card">

@@ -35,6 +35,21 @@ function getAiSuggestedAmount(userBudget) {
   return Math.round(budget / (1 + USER_BUDGET_MARKUP_PERCENT / 100));
 }
 
+/**
+ * Open Google Maps directions to a job's location.
+ * Falls back to area-based search if lat/lng not available.
+ */
+function openDirections(job) {
+  if (job.lat && job.lng) {
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${job.lat},${job.lng}`, '_blank', 'noopener');
+  } else if (job.locationLat && job.locationLng) {
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${job.locationLat},${job.locationLng}`, '_blank', 'noopener');
+  } else if (job.area || job.address) {
+    const dest = encodeURIComponent(job.address || job.area);
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`, '_blank', 'noopener');
+  }
+}
+
 export default function WorkerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -217,6 +232,18 @@ export default function WorkerDashboard() {
                 {job.phone && (
                   <div style={{ fontSize: 12, color: '#059669', marginTop: 6 }}>📞 {job.phone}</div>
                 )}
+                {(job.lat || job.locationLat || job.area) && (
+                  <button
+                    onClick={() => openDirections(job)}
+                    style={{
+                      marginTop: 8, padding: '6px 12px', background: '#EDE9FE', color: '#7C3AED',
+                      border: '1px solid #C4B5FD', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                      cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
+                    }}
+                  >
+                    🧭 Navigate to Location
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -236,7 +263,7 @@ export default function WorkerDashboard() {
               return (
                 <div key={job.id} className="worker-card" style={{ border: '1px solid #C4B5FD', padding: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: 14, color: '#1F1144' }}>
                         {job.title || job.serviceType || 'Service'}
                       </div>
@@ -248,13 +275,28 @@ export default function WorkerDashboard() {
                         {job.area && ` · 📍 ${job.area}`}
                       </div>
                     </div>
-                    <span style={{
-                      background: job.status === 'confirmed' ? '#D1FAE5' : '#FEF3C7',
-                      color: job.status === 'confirmed' ? '#065F46' : '#92400E',
-                      padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700
-                    }}>
-                      {job.status === 'confirmed' ? '✅ Confirmed' : '⏳ Pending'}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                      {(job.lat || job.locationLat || job.area) && (
+                        <button
+                          onClick={() => openDirections(job)}
+                          title="Get directions"
+                          style={{
+                            padding: '4px 8px', background: '#EDE9FE', color: '#7C3AED',
+                            border: '1px solid #C4B5FD', borderRadius: 8, fontSize: 14,
+                            cursor: 'pointer', lineHeight: 1
+                          }}
+                        >
+                          🧭
+                        </button>
+                      )}
+                      <span style={{
+                        background: job.status === 'confirmed' ? '#D1FAE5' : '#FEF3C7',
+                        color: job.status === 'confirmed' ? '#065F46' : '#92400E',
+                        padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700
+                      }}>
+                        {job.status === 'confirmed' ? '✅ Confirmed' : '⏳ Pending'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               );
@@ -299,17 +341,31 @@ export default function WorkerDashboard() {
                         </div>
                       ) : (
                         <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 6 }}>
-                          🤖 AI suggest: Quote on request
+                          🤖 AI suggests: Quote on request
                         </div>
                       )}
                     </div>
-                    <button
-                      className="btn-primary"
-                      style={{ padding: '8px 14px', fontSize: 12, minWidth: 'auto', width: 'auto', whiteSpace: 'nowrap' }}
-                      onClick={() => setSelectedJob(job)}
-                    >
-                      Send Quote
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                      <button
+                        className="btn-primary"
+                        style={{ padding: '8px 14px', fontSize: 12, minWidth: 'auto', width: 'auto', whiteSpace: 'nowrap' }}
+                        onClick={() => setSelectedJob(job)}
+                      >
+                        Send Quote
+                      </button>
+                      {(job.lat || job.locationLat || job.area) && (
+                        <button
+                          onClick={() => openDirections(job)}
+                          style={{
+                            padding: '6px 12px', background: '#EDE9FE', color: '#7C3AED',
+                            border: '1px solid #C4B5FD', borderRadius: 8, fontSize: 11, fontWeight: 600,
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3
+                          }}
+                        >
+                          🧭 Directions
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

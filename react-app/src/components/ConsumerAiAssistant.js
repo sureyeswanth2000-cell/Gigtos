@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { functionsInstance } from '../firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { functionsInstance, db } from '../firebase';
 import {
   buildLocalAssistantFallback,
   buildPromptSuggestions,
+  checkServiceNearby,
   findRelevantService,
 } from '../utils/aiAssistant';
+import { useLocation as useGigLocation } from '../context/LocationContext';
 
 export default function ConsumerAiAssistant({
   services = [],
@@ -25,7 +28,9 @@ export default function ConsumerAiAssistant({
   const [selectedService, setSelectedService] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [pendingBooking, setPendingBooking] = useState(null);
+  const [availableWorkers, setAvailableWorkers] = useState([]);
   const messagesRef = useRef(null);
+  const { location } = useGigLocation() || {};
 
   useEffect(() => {
     let active = true;
@@ -60,6 +65,27 @@ export default function ConsumerAiAssistant({
     };
   }, [services]);
 
+  // Fetch available workers for proximity checks
+  useEffect(() => {
+    let active = true;
+
+    const fetchWorkers = async () => {
+      try {
+        const snap = await getDocs(
+          query(collection(db, 'worker_availability'), where('isAvailable', '==', true))
+        );
+        if (active) {
+          setAvailableWorkers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        }
+      } catch {
+        if (active) setAvailableWorkers([]);
+      }
+    };
+
+    fetchWorkers();
+    return () => { active = false; };
+  }, []);
+
   useEffect(() => {
     if (messagesRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
@@ -85,6 +111,16 @@ export default function ConsumerAiAssistant({
       setSelectedService(inferredService);
     }
 
+    // Run proximity check every time a message is processed
+    const nearbyCheck = inferredService
+      ? checkServiceNearby({
+          serviceName: inferredService,
+          workers: availableWorkers,
+          userLat: location?.lat,
+          userLng: location?.lng,
+        })
+      : null;
+
     try {
       const callable = httpsCallable(functionsInstance, 'aiBookingAssistant');
       const response = await callable({
@@ -96,6 +132,7 @@ export default function ConsumerAiAssistant({
         message: text,
         selectedService: inferredService,
         insights,
+        nearbyCheck,
       });
 
       setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
@@ -107,6 +144,7 @@ export default function ConsumerAiAssistant({
         message: text,
         selectedService: inferredService,
         insights,
+        nearbyCheck,
       });
       setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
     } finally {

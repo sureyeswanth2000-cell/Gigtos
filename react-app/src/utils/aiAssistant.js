@@ -461,6 +461,83 @@ export function findRelevantService(message = '') {
   ) || null;
 }
 
+/**
+ * Haversine distance between two lat/lng points in kilometres.
+ */
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Check if a service has workers available near the user's location.
+ *
+ * The AI calls this function every time a user message is processed to
+ * determine whether the requested service is available nearby. If no
+ * workers are within `radiusKm`, the AI informs the user that the
+ * service will come to their area soon.
+ *
+ * @param {object}   params
+ * @param {string}   params.serviceName   – the service the user is asking about
+ * @param {object[]} params.workers       – available worker records (each with lat, lng, serviceType, isAvailable)
+ * @param {number}   params.userLat       – user's latitude
+ * @param {number}   params.userLng       – user's longitude
+ * @param {number}   [params.radiusKm=20] – max search radius in km
+ * @returns {{ isNearby: boolean, nearbyCount: number, message: string }}
+ */
+export function checkServiceNearby({
+  serviceName = '',
+  workers = [],
+  userLat,
+  userLng,
+  radiusKm = 20,
+}) {
+  // If location is missing, we can't determine proximity
+  if (userLat == null || userLng == null || !Number.isFinite(userLat) || !Number.isFinite(userLng)) {
+    return {
+      isNearby: false,
+      nearbyCount: 0,
+      message: '',
+    };
+  }
+
+  if (!serviceName) {
+    return { isNearby: false, nearbyCount: 0, message: '' };
+  }
+
+  const normalizedService = normalizeServiceName(serviceName);
+
+  const nearbyWorkers = workers.filter((w) => {
+    if (!w.isAvailable) return false;
+    if (w.lat == null || w.lng == null) return false;
+    if (normalizeServiceName(w.serviceType || '') !== normalizedService) return false;
+    const dist = haversineKm(userLat, userLng, w.lat, w.lng);
+    return dist <= radiusKm;
+  });
+
+  const count = nearbyWorkers.length;
+
+  if (count > 0) {
+    return {
+      isNearby: true,
+      nearbyCount: count,
+      message: `✅ ${count} ${serviceName} worker${count !== 1 ? 's' : ''} available near you right now!`,
+    };
+  }
+
+  return {
+    isNearby: false,
+    nearbyCount: 0,
+    message: `📍 ${serviceName} service is not available in your area yet. Don't worry — the service will come to your area soon! We're expanding rapidly. You can still book and we'll connect you with the nearest available worker.`,
+  };
+}
+
 export function formatPriceInsight(insight = {}) {
   const minQuote = Number(insight.minQuote);
   const maxQuote = Number(insight.maxQuote);
@@ -503,12 +580,17 @@ export function buildPromptSuggestions(selectedService) {
   ];
 }
 
-export function buildLocalAssistantFallback({ message = '', selectedService = '', insights = [] }) {
+export function buildLocalAssistantFallback({ message = '', selectedService = '', insights = [], nearbyCheck = null }) {
   const relevantService = selectedService || findRelevantService(message)?.name || '';
   const serviceInsight = relevantService ? getInsightForService(insights, relevantService) : null;
   const lowerMessage = message.toLowerCase().trim();
   const activeServices = getActiveServices();
   const activeNames = activeServices.map((s) => s.name).join(', ');
+
+  // Build proximity notice when service is identified but not nearby
+  const proximityNotice = nearbyCheck && relevantService && !nearbyCheck.isNearby && nearbyCheck.message
+    ? `\n\n${nearbyCheck.message}`
+    : '';
 
   // ─── Greetings ─────────────────────────────────────────────────────────
   if (/^(hi|hello|hey|good\s*(morning|afternoon|evening)|namaste|howdy|sup)\b/i.test(lowerMessage)) {
@@ -533,7 +615,7 @@ export function buildLocalAssistantFallback({ message = '', selectedService = ''
       const workerInfo = insight?.availableWorkers
         ? ` There are ${insight.availableWorkers} ${matchedService.name} workers available right now.`
         : '';
-      return `I understand this is urgent! 🚨${workerInfo} Let me help you book a ${matchedService.name} right away — just confirm your address and I'll find the nearest available worker for you.`;
+      return `I understand this is urgent! 🚨${workerInfo} Let me help you book a ${matchedService.name} right away — just confirm your address and I'll find the nearest available worker for you.${proximityNotice}`;
     }
     return `I understand this is urgent! 🚨 Tell me what you need — a plumber for a leak, an electrician for a power issue, or something else — and I'll help you book the nearest available worker right away.`;
   }
@@ -593,7 +675,7 @@ export function buildLocalAssistantFallback({ message = '', selectedService = ''
   // ─── Availability with insight ─────────────────────────────────────────
   if (serviceInsight && /(available|availability|open|ready|free|nearby)/i.test(lowerMessage)) {
     const workerCount = serviceInsight.availableWorkers || 0;
-    return `Yes! ✅ ${relevantService} is available now with ${workerCount} worker${workerCount !== 1 ? 's' : ''} ready to help. Approximate pricing: ${formatPriceInsight(serviceInsight)}. Would you like me to help you book one right away?`;
+    return `Yes! ✅ ${relevantService} is available now with ${workerCount} worker${workerCount !== 1 ? 's' : ''} ready to help. Approximate pricing: ${formatPriceInsight(serviceInsight)}. Would you like me to help you book one right away?${proximityNotice}`;
   }
 
   // ─── Availability without insight ──────────────────────────────────────
@@ -610,7 +692,7 @@ export function buildLocalAssistantFallback({ message = '', selectedService = ''
   if (/(book|booking|hire|need|want|looking for|find|get|request)/i.test(lowerMessage)) {
     const matchedService = findRelevantService(message)?.name || relevantService;
     if (matchedService) {
-      return `Let's get you booked! 🎯 Here's what I need:\n\n1. ✅ Service: **${matchedService}** — great choice!\n2. 📍 Your address — so we can find workers nearby\n3. 📱 Your phone number — for the worker to reach you\n\nClick the **Book** button above or I can guide you through the process step by step. Ready?`;
+      return `Let's get you booked! 🎯 Here's what I need:\n\n1. ✅ Service: **${matchedService}** — great choice!\n2. 📍 Your address — so we can find workers nearby\n3. 📱 Your phone number — for the worker to reach you\n\nClick the **Book** button above or I can guide you through the process step by step. Ready?${proximityNotice}`;
     }
     return `I'd love to help you book! 🎯 What service do you need? Here are our most popular options:\n\n• 🧰 Plumber — pipe repairs, leaks, taps\n• ⚡ Electrician — wiring, switches, fans\n• 🪛 Carpenter — furniture, doors, shelves\n• 🎨 Painter — interior & exterior painting\n\nJust tell me what you need and I'll guide you through booking!`;
   }
@@ -639,7 +721,7 @@ export function buildLocalAssistantFallback({ message = '', selectedService = ''
   if (relevantService) {
     const matchedDetails = findRelevantService(message);
     if (matchedDetails) {
-      return `It sounds like you might need a **${matchedDetails.name}**! ${matchedDetails.desc}. Would you like me to help you book one, or would you like to know more about pricing and availability?`;
+      return `It sounds like you might need a **${matchedDetails.name}**! ${matchedDetails.desc}. Would you like me to help you book one, or would you like to know more about pricing and availability?${proximityNotice}`;
     }
   }
 

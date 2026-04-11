@@ -1,5 +1,6 @@
 import {
   SERVICE_CATALOG,
+  checkServiceNearby,
   findRelevantService,
   formatPriceInsight,
   buildLocalAssistantFallback,
@@ -193,5 +194,201 @@ describe('buildPromptSuggestions', () => {
     expect(suggestions.length).toBe(4);
     expect(suggestions[0]).toContain('Plumber');
     expect(suggestions.some((s) => s.includes('Book'))).toBe(true);
+  });
+});
+
+describe('checkServiceNearby', () => {
+  const userLat = 12.9716;
+  const userLng = 77.5946;
+
+  const nearbyWorker = {
+    serviceType: 'Plumber',
+    isAvailable: true,
+    lat: 12.9750,
+    lng: 77.5900,
+    workerName: 'Ravi',
+  };
+
+  const farWorker = {
+    serviceType: 'Plumber',
+    isAvailable: true,
+    lat: 14.0,
+    lng: 80.0,
+    workerName: 'Kiran',
+  };
+
+  const unavailableWorker = {
+    serviceType: 'Plumber',
+    isAvailable: false,
+    lat: 12.9750,
+    lng: 77.5900,
+    workerName: 'Ajay',
+  };
+
+  it('detects nearby workers within radius', () => {
+    const result = checkServiceNearby({
+      serviceName: 'Plumber',
+      workers: [nearbyWorker],
+      userLat,
+      userLng,
+    });
+    expect(result.isNearby).toBe(true);
+    expect(result.nearbyCount).toBe(1);
+    expect(result.message).toContain('Plumber');
+    expect(result.message).toContain('available near you');
+  });
+
+  it('reports not nearby when workers are out of range', () => {
+    const result = checkServiceNearby({
+      serviceName: 'Plumber',
+      workers: [farWorker],
+      userLat,
+      userLng,
+    });
+    expect(result.isNearby).toBe(false);
+    expect(result.nearbyCount).toBe(0);
+    expect(result.message).toContain('will come to your area soon');
+  });
+
+  it('ignores unavailable workers', () => {
+    const result = checkServiceNearby({
+      serviceName: 'Plumber',
+      workers: [unavailableWorker],
+      userLat,
+      userLng,
+    });
+    expect(result.isNearby).toBe(false);
+    expect(result.nearbyCount).toBe(0);
+  });
+
+  it('filters by service type correctly', () => {
+    const electrician = { ...nearbyWorker, serviceType: 'Electrician' };
+    const result = checkServiceNearby({
+      serviceName: 'Plumber',
+      workers: [electrician],
+      userLat,
+      userLng,
+    });
+    expect(result.isNearby).toBe(false);
+    expect(result.nearbyCount).toBe(0);
+  });
+
+  it('returns empty result when location is missing', () => {
+    const result = checkServiceNearby({
+      serviceName: 'Plumber',
+      workers: [nearbyWorker],
+      userLat: null,
+      userLng: null,
+    });
+    expect(result.isNearby).toBe(false);
+    expect(result.nearbyCount).toBe(0);
+    expect(result.message).toBe('');
+  });
+
+  it('returns empty result when service name is missing', () => {
+    const result = checkServiceNearby({
+      serviceName: '',
+      workers: [nearbyWorker],
+      userLat,
+      userLng,
+    });
+    expect(result.isNearby).toBe(false);
+    expect(result.nearbyCount).toBe(0);
+  });
+
+  it('handles empty workers array', () => {
+    const result = checkServiceNearby({
+      serviceName: 'Plumber',
+      workers: [],
+      userLat,
+      userLng,
+    });
+    expect(result.isNearby).toBe(false);
+    expect(result.nearbyCount).toBe(0);
+    expect(result.message).toContain('will come to your area soon');
+  });
+
+  it('counts multiple nearby workers', () => {
+    const worker2 = { ...nearbyWorker, workerName: 'Suresh', lat: 12.9720, lng: 77.5950 };
+    const result = checkServiceNearby({
+      serviceName: 'Plumber',
+      workers: [nearbyWorker, worker2, farWorker],
+      userLat,
+      userLng,
+    });
+    expect(result.isNearby).toBe(true);
+    expect(result.nearbyCount).toBe(2);
+    expect(result.message).toContain('2 Plumber workers');
+  });
+
+  it('respects custom radius', () => {
+    const result = checkServiceNearby({
+      serviceName: 'Plumber',
+      workers: [farWorker],
+      userLat,
+      userLng,
+      radiusKm: 500,
+    });
+    expect(result.isNearby).toBe(true);
+    expect(result.nearbyCount).toBe(1);
+  });
+});
+
+describe('buildLocalAssistantFallback with nearbyCheck', () => {
+  const notNearby = {
+    isNearby: false,
+    nearbyCount: 0,
+    message: '📍 Plumber service is not available in your area yet. Don\'t worry — the service will come to your area soon! We\'re expanding rapidly. You can still book and we\'ll connect you with the nearest available worker.',
+  };
+
+  const isNearby = {
+    isNearby: true,
+    nearbyCount: 3,
+    message: '✅ 3 Plumber workers available near you right now!',
+  };
+
+  it('appends proximity notice to booking response when service is not nearby', () => {
+    const reply = buildLocalAssistantFallback({
+      message: 'book a plumber',
+      nearbyCheck: notNearby,
+    });
+    expect(reply).toContain('Plumber');
+    expect(reply).toContain('will come to your area soon');
+  });
+
+  it('does not append proximity notice when service is nearby', () => {
+    const reply = buildLocalAssistantFallback({
+      message: 'book a plumber',
+      nearbyCheck: isNearby,
+    });
+    expect(reply).toContain('Plumber');
+    expect(reply).not.toContain('will come to your area soon');
+  });
+
+  it('appends proximity notice for urgent requests when not nearby', () => {
+    const reply = buildLocalAssistantFallback({
+      message: 'urgent plumber needed for water leak',
+      nearbyCheck: notNearby,
+    });
+    expect(reply).toContain('urgent');
+    expect(reply).toContain('Plumber');
+    expect(reply).toContain('will come to your area soon');
+  });
+
+  it('appends proximity notice to catch-all service match when not nearby', () => {
+    const reply = buildLocalAssistantFallback({
+      message: 'my kitchen sink is leaking badly',
+      nearbyCheck: notNearby,
+    });
+    expect(reply).toContain('Plumber');
+    expect(reply).toContain('will come to your area soon');
+  });
+
+  it('works normally without nearbyCheck (backwards compatible)', () => {
+    const reply = buildLocalAssistantFallback({
+      message: 'book a plumber',
+    });
+    expect(reply).toContain('Plumber');
+    expect(reply).not.toContain('will come to your area soon');
   });
 });

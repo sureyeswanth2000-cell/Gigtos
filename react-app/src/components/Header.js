@@ -86,7 +86,9 @@ export default function Header() {
             {/* Desktop Quick Nav */}
             <nav className="desktop-nav" style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
               <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '600' }}>Home</Link>
-              <Link to="/jobs" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '600' }}>Browse Jobs</Link>
+              {!isWorker && (
+                <Link to="/jobs" style={{ color: '#fff', textDecoration: 'none', fontSize: '14px', fontWeight: '600' }}>Browse Jobs</Link>
+              )}
 
               {/* Show Admin Dashboard instead of My Bookings for admins */}
               {isSuperAdmin ? (
@@ -141,9 +143,11 @@ export default function Header() {
                     <Link to="/" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
                       🏠 Home
                     </Link>
-                    <Link to="/jobs" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
-                      💼 Browse Jobs
-                    </Link>
+                    {!isWorker && (
+                      <Link to="/jobs" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
+                        💼 Browse Jobs
+                      </Link>
+                    )}
                     {(isAdmin || isSuperAdmin || isRegionLead) ? (
                       <>
                         <Link to="/my-bookings" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>

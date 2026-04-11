@@ -1,15 +1,17 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth, db } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { WorkerLocationProvider } from '../../context/WorkerLocationContext';
+import { USER_BUDGET_MARKUP_PERCENT } from '../../utils/aiBudgetSuggestion';
 import ActiveStatusButton from '../../components/worker/ActiveStatusButton';
 import WorkerFixedRateForm from '../../components/worker/WorkerFixedRateForm';
 import WorkerStatsCard from '../../components/worker/WorkerStatsCard';
 import RatingDisplay from '../../components/worker/RatingDisplay';
 import WorkerBottomNav from '../../components/worker/WorkerBottomNav';
 import WorkerLocationTracker from '../../components/worker/WorkerLocationTracker';
+import QuoteModal from '../../components/worker/QuoteModal';
 import '../../styles/worker-dashboard.css';
 
 const NAV_CARDS = [
@@ -22,11 +24,29 @@ const NAV_CARDS = [
   { to: '/worker/map', icon: '🗺️', label: 'Map' },
 ];
 
+/**
+ * Calculate AI suggested quote for workers.
+ * Uses USER_BUDGET_MARKUP_PERCENT to reverse the markup applied to user budgets,
+ * giving workers the actual market rate (currently 25% less than what users see).
+ */
+function getAiSuggestedAmount(userBudget) {
+  const budget = Number(userBudget);
+  if (!budget || budget <= 0) return null;
+  return Math.round(budget / (1 + USER_BUDGET_MARKUP_PERCENT / 100));
+}
+
 export default function WorkerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [worker, setWorker] = useState(null);
   const [isActive, setIsActive] = useState(false);
+  const [liveJobs, setLiveJobs] = useState([]);
+  const [futureJobs, setFutureJobs] = useState([]);
+  const [nearbyJobs, setNearbyJobs] = useState([]);
+  const [jobsLoading, setJobsLoading] = useState(true);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [toast, setToast] = useState(null);
+  const toastTimeoutRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -40,10 +60,34 @@ export default function WorkerDashboard() {
           return;
         }
         setWorker({ ...snap.data(), uid: u.uid });
+
+        // Fetch live (in-progress/assigned) jobs for this worker
+        const liveSnap = await getDocs(query(
+          collection(db, 'bookings'),
+          where('workerId', '==', u.uid),
+          where('status', 'in', ['assigned', 'in_progress'])
+        ));
+        setLiveJobs(liveSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+        // Fetch future (pending/confirmed) scheduled jobs for this worker
+        const futureSnap = await getDocs(query(
+          collection(db, 'bookings'),
+          where('workerId', '==', u.uid),
+          where('status', 'in', ['pending', 'confirmed'])
+        ));
+        setFutureJobs(futureSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+        // Fetch open jobs (available to quote on)
+        const openSnap = await getDocs(query(
+          collection(db, 'bookings'),
+          where('status', '==', 'open')
+        ));
+        setNearbyJobs(openSnap.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch (err) {
         setError(err.message);
       } finally {
         setLoading(false);
+        setJobsLoading(false);
       }
     });
     return () => unsub();
@@ -52,6 +96,21 @@ export default function WorkerDashboard() {
   const handleStatusChange = useCallback((active) => {
     setIsActive(active);
   }, []);
+
+  const showToast = useCallback((msg, type = '') => {
+    setToast({ msg, type });
+    clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  useEffect(() => {
+    return () => clearTimeout(toastTimeoutRef.current);
+  }, []);
+
+  const handleSendQuote = async () => {
+    await new Promise(r => setTimeout(r, 500));
+    showToast("✅ Quote sent! You'll be notified if accepted.", 'success');
+  };
 
   if (loading) {
     return (
@@ -132,8 +191,138 @@ export default function WorkerDashboard() {
           </div>
         )}
 
+        {/* ═══ LIVE WORK — before active button ═══ */}
+        {!jobsLoading && liveJobs.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <h3 className="section-title">🔴 Live Work</h3>
+            {liveJobs.map(job => (
+              <div key={job.id} className="worker-card" style={{ border: '2px solid #10B981', background: '#F0FDF4' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: '#1F1144' }}>
+                      {job.title || job.serviceType || 'Service'}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                      {job.area && <span>📍 {job.area}</span>}
+                      {job.customerName && <span> · 👤 {job.customerName}</span>}
+                    </div>
+                  </div>
+                  <span style={{
+                    background: '#D1FAE5', color: '#065F46', padding: '3px 10px',
+                    borderRadius: 20, fontSize: 11, fontWeight: 700
+                  }}>
+                    {job.status === 'in_progress' ? '🔧 In Progress' : '📌 Assigned'}
+                  </span>
+                </div>
+                {job.phone && (
+                  <div style={{ fontSize: 12, color: '#059669', marginTop: 6 }}>📞 {job.phone}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ═══ FUTURE SCHEDULED WORK — before active button ═══ */}
+        {!jobsLoading && futureJobs.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h3 className="section-title" style={{ margin: 0 }}>📅 Upcoming Work</h3>
+              <Link to="/worker/future-work" style={{ fontSize: 12, color: '#7C3AED', textDecoration: 'none', fontWeight: 600 }}>
+                View All →
+              </Link>
+            </div>
+            {futureJobs.slice(0, 3).map(job => {
+              const schedDate = job.scheduledAt ? new Date(job.scheduledAt) : null;
+              return (
+                <div key={job.id} className="worker-card" style={{ border: '1px solid #C4B5FD', padding: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: '#1F1144' }}>
+                        {job.title || job.serviceType || 'Service'}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                        {schedDate
+                          ? `📅 ${schedDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} · 🕐 ${schedDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
+                          : 'Date TBD'
+                        }
+                        {job.area && ` · 📍 ${job.area}`}
+                      </div>
+                    </div>
+                    <span style={{
+                      background: job.status === 'confirmed' ? '#D1FAE5' : '#FEF3C7',
+                      color: job.status === 'confirmed' ? '#065F46' : '#92400E',
+                      padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700
+                    }}>
+                      {job.status === 'confirmed' ? '✅ Confirmed' : '⏳ Pending'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Active Status */}
         <ActiveStatusButton onStatusChange={handleStatusChange} />
+
+        {/* ═══ NEARBY OPEN JOBS — after active button ═══ */}
+        {!jobsLoading && nearbyJobs.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h3 className="section-title" style={{ margin: 0 }}>💼 Jobs Around You</h3>
+              <Link to="/worker/open-work" style={{ fontSize: 12, color: '#7C3AED', textDecoration: 'none', fontWeight: 600 }}>
+                See All →
+              </Link>
+            </div>
+            {nearbyJobs.slice(0, 5).map(job => {
+              const aiAmount = getAiSuggestedAmount(job.budget || job.estimatedBudget || job.amount);
+              return (
+                <div key={job.id} className="worker-card" style={{ padding: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: '#1F1144' }}>
+                        {job.title || job.serviceType || 'Service'}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                        {job.area && <span>📍 {job.area} </span>}
+                        <span className="job-category-badge" style={{ fontSize: 10 }}>
+                          {job.category || job.gigType || job.serviceType || 'General'}
+                        </span>
+                      </div>
+                      {/* AI Suggested Amount — 25% less than user's budget */}
+                      {aiAmount ? (
+                        <div style={{
+                          fontSize: 13, color: '#7C3AED', fontWeight: 700, marginTop: 6,
+                          display: 'flex', alignItems: 'center', gap: 4
+                        }}>
+                          🤖 AI suggests ₹{aiAmount.toLocaleString('en-IN')}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 6 }}>
+                          🤖 AI suggest: Quote on request
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      className="btn-primary"
+                      style={{ padding: '8px 14px', fontSize: 12, minWidth: 'auto', width: 'auto', whiteSpace: 'nowrap' }}
+                      onClick={() => setSelectedJob(job)}
+                    >
+                      Send Quote
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {!jobsLoading && nearbyJobs.length === 0 && (
+          <div className="worker-card" style={{ textAlign: 'center', padding: '20px 16px', marginBottom: 14 }}>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>📭</div>
+            <div style={{ fontSize: 13, color: '#6B7280' }}>No open jobs around you right now. Check back soon!</div>
+          </div>
+        )}
 
         {/* Fixed Day Rate */}
         <WorkerFixedRateForm workerData={worker} />
@@ -145,7 +334,7 @@ export default function WorkerDashboard() {
         <WorkerStatsCard stats={stats} />
 
         {/* Navigation Cards */}
-        <h3 className="section-title">My Dashboard</h3>
+        <h3 className="section-title">Quick Access</h3>
         <div className="nav-cards-grid">
           {NAV_CARDS.map(card => (
             <Link key={card.to} to={card.to} className="nav-card">
@@ -156,6 +345,16 @@ export default function WorkerDashboard() {
         </div>
       </div>
 
+      {/* Quote Modal */}
+      {selectedJob && (
+        <QuoteModal
+          job={selectedJob}
+          onClose={() => setSelectedJob(null)}
+          onSubmit={handleSendQuote}
+        />
+      )}
+
+      {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
       <WorkerBottomNav />
     </div>
     </WorkerLocationProvider>

@@ -586,7 +586,7 @@ export function buildPromptSuggestions(selectedService) {
  * from this structured context — the same source of truth the Gemini
  * prompt receives on the server side.
  */
-const GIGTOS_WORKFLOW = {
+export const GIGTOS_WORKFLOW = {
   identity: 'Gito AI',
   tagline: 'your personal booking assistant',
   bookingSteps: [
@@ -599,6 +599,7 @@ const GIGTOS_WORKFLOW = {
   scheduling: 'Most workers are available 7 days a week, including weekends. After booking, workers typically respond within 1-2 hours. You can specify your preferred date and time during booking.',
   pricing: 'All services are quote-based. Post your job with details and workers will send you personalized quotes. You can compare prices before choosing.',
   quality: 'All workers on Gigtos are verified and rated by real customers. You can see each worker\'s ratings, number of completed jobs, and customer reviews before booking. Secure payments supported — you only pay after the work is done to your satisfaction.',
+  qualitySummary: 'All workers on Gigtos are verified and rated by real customers',
   cancellation: 'Cancel bookings from your dashboard. Our support team is always ready to help with any issues.',
 };
 
@@ -608,7 +609,7 @@ export function buildLocalAssistantFallback({ message = '', selectedService = ''
   const lowerMessage = message.toLowerCase().trim();
   const activeServices = getActiveServices();
   const activeNames = activeServices.map((s) => s.name).join(', ');
-  const { identity, tagline, bookingSteps, scheduling, pricing, quality, cancellation } = GIGTOS_WORKFLOW;
+  const { identity, tagline, bookingSteps, scheduling, pricing, quality, qualitySummary, cancellation } = GIGTOS_WORKFLOW;
 
   // Build proximity notice when service is identified but not nearby
   const proximityNotice = nearbyCheck && relevantService && !nearbyCheck.isNearby && nearbyCheck.message
@@ -649,7 +650,7 @@ export function buildLocalAssistantFallback({ message = '', selectedService = ''
     if (matchedService) {
       const insight = getInsightForService(insights, matchedService.name);
       if (insight && insight.availableWorkers > 0) {
-        return `For ${matchedService.name}, we have ${insight.availableWorkers} verified workers available. Typical quotes range ${formatPriceInsight(insight)}. ${quality.split('.')[0]}. Want me to start the booking?`;
+        return `For ${matchedService.name}, we have ${insight.availableWorkers} verified workers available. Typical quotes range ${formatPriceInsight(insight)}. ${qualitySummary}. Want me to start the booking?`;
       }
       return `${matchedService.name} is a great choice! ${matchedService.desc}. ${pricing} Ready to book?`;
     }
@@ -684,7 +685,7 @@ export function buildLocalAssistantFallback({ message = '', selectedService = ''
   if (serviceInsight && /(compare|cost|price|cheap|cheapest|worker|rate|charge|fee|budget|afford|expensive|quote)/i.test(lowerMessage)) {
     const workerCount = serviceInsight.availableWorkers || 0;
     const priceRange = formatPriceInsight(serviceInsight);
-    return `Great question! 💰 For ${relevantService}, we have ${workerCount} worker${workerCount !== 1 ? 's' : ''} available. Typical quotes range ${priceRange}. ${pricing.split('.')[0]}. Want me to help you book?`;
+    return `Great question! 💰 For ${relevantService}, we have ${workerCount} worker${workerCount !== 1 ? 's' : ''} available. Typical quotes range ${priceRange}. All services are quote-based. Want me to help you book?`;
   }
 
   // ─── Price / cost without insight ──────────────────────────────────────

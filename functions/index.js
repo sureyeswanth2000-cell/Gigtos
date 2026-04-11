@@ -270,21 +270,45 @@ function buildFallbackAssistantReply({ message = '', selectedService = '', insig
   const matchingInsight = insights.find((item) => item.service === requestedService);
 
   if (matchingInsight && /(compare|cost|price|cheap|worker)/i.test(lowerMessage)) {
-    return `${matchingInsight.service} has ${matchingInsight.availableWorkers} workers. Typical quotes: ${formatMarketPrice(matchingInsight)}. Book now for exact bids.`;
+    return `For ${matchingInsight.service}, we have ${matchingInsight.availableWorkers} workers available. Typical quotes range ${formatMarketPrice(matchingInsight)}. Post your job to get exact bids.`;
   }
 
   if (matchingInsight && /(available|availability|service)/i.test(lowerMessage)) {
-    return `${matchingInsight.service} is available now. Approx quote: ${formatMarketPrice(matchingInsight)}.`;
+    return `${matchingInsight.service} is available now with ${matchingInsight.availableWorkers} workers. Approximate pricing: ${formatMarketPrice(matchingInsight)}. Would you like to book?`;
   }
 
-  if (/(book|booking|help|how)/i.test(lowerMessage)) {
-    const serviceLabel = requestedService || 'the right home service';
-    return `Choose ${serviceLabel}, confirm your address and phone, and submit to receive quotes.`;
+  if (/\b(urgent|emergency|asap|immediately)\b/i.test(lowerMessage)) {
+    const serviceLabel = requestedService || 'service';
+    return `I understand this is urgent! Tell me what you need and I'll help you book a ${serviceLabel} right away.`;
   }
 
-  return 'Ask about plumber, electrician, carpenter, or painter and I’ll guide you.';
+  if (/(book|booking|hire|need|want|looking for)/i.test(lowerMessage)) {
+    const serviceLabel = requestedService || 'the right service';
+    return `To book ${serviceLabel}: describe your job, confirm your address and phone, and submit to receive quotes from verified workers.`;
+  }
+
+  if (/\b(hi|hello|hey|namaste)\b/i.test(lowerMessage)) {
+    return 'Hello! I\'m Gito AI, your booking assistant. Tell me what you need — a plumber, electrician, carpenter, or painter — and I\'ll help you book.';
+  }
+
+  if (/(how|process|steps|guide)/i.test(lowerMessage)) {
+    return 'Choose a service, describe your job, provide your address and phone, then compare quotes from verified workers and book the best one.';
+  }
+
+  if (requestedService) {
+    return `I can help you with ${requestedService}! Would you like to check pricing, see availability, or start booking?`;
+  }
+
+  return 'I can help you book a plumber, electrician, carpenter, or painter. Just tell me what you need!';
 }
 
+
+/**
+ * Build the system instruction and user message for the Gemini API.
+ * Returns { systemInstruction, userMessage } — the caller sends
+ * systemInstruction via the Gemini `system_instruction` field and
+ * userMessage as `contents`.
+ */
 function buildGeminiPrompt({ message = '', selectedService = '', insights = [] }) {
   const requestedService = canonicalServiceName(selectedService) || detectServiceFromMessage(message);
   const scopedInsights = requestedService
@@ -295,7 +319,7 @@ function buildGeminiPrompt({ message = '', selectedService = '', insights = [] }
     return `- ${item.service}: ${item.availableWorkers} available workers, average rating ${item.averageRating || 'N/A'}, recent price range ${formatMarketPrice(item)}.`;
   }).join('\n');
 
-  return [
+  const systemInstruction = [
     '=== IDENTITY ===',
     'You are Gito AI, the booking assistant for Gigtos — a home-services marketplace app operating across India.',
     '',
@@ -315,7 +339,7 @@ function buildGeminiPrompt({ message = '', selectedService = '', insights = [] }
     '=== PRICING MODEL ===',
     'All services are quote-based. Workers provide personalized quotes after seeing job details.',
     'Users can compare multiple quotes before choosing. Never promise a fixed price — always say it depends on job scope.',
-    'If past pricing data is available below, share it as an estimate range.',
+    'If past pricing data is available, share it as an estimate range.',
     '',
     '=== WORKER QUALITY & TRUST ===',
     'All workers are verified and rated by real customers.',
@@ -340,23 +364,28 @@ function buildGeminiPrompt({ message = '', selectedService = '', insights = [] }
     '- If unsure which service fits, ask a clarifying question.',
     '- If a service is coming soon (not yet active), mention it will be available soon.',
     '- Do not list all services unless the user specifically asks.',
-    '',
-    '=== CURRENT CONTEXT ===',
+  ].join('\n');
+
+  const userMessage = [
     `Selected service: ${selectedService || 'Not selected'}`,
-    `User message: ${message}`,
     '',
     'Live service data:',
     serviceSummary || '- No live service data available currently.',
+    '',
+    `User message: ${message}`,
   ].join('\n');
+
+  return { systemInstruction, userMessage };
 }
 
-function callGeminiAssistant({ apiKey, prompt }) {
+function callGeminiAssistant({ apiKey, systemInstruction, userMessage }) {
   return new Promise((resolve, reject) => {
     const requestBody = JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      system_instruction: { parts: [{ text: systemInstruction }] },
+      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
       generationConfig: {
         temperature: 0.4,
-        maxOutputTokens: 280,
+        maxOutputTokens: 512,
       },
     });
 
@@ -940,8 +969,8 @@ exports.aiBookingAssistant = functions.https.onCall(async (data) => {
   }
 
   try {
-    const prompt = buildGeminiPrompt({ message, selectedService, insights });
-    const reply = await callGeminiAssistant({ apiKey, prompt });
+    const { systemInstruction, userMessage } = buildGeminiPrompt({ message, selectedService, insights });
+    const reply = await callGeminiAssistant({ apiKey, systemInstruction, userMessage });
 
     return {
       reply: reply || fallbackReply,

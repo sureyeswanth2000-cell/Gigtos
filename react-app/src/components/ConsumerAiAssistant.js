@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { httpsCallable } from 'firebase/functions';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { functionsInstance, db } from '../firebase';
+import { functionsInstance, db, auth } from '../firebase';
 import {
   buildLocalAssistantFallback,
   checkServiceNearby,
@@ -15,6 +16,7 @@ export default function ConsumerAiAssistant({
   externalPrompt = '',
   onPromptConsumed,
 }) {
+  const navigate = useNavigate();
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState([
     {
@@ -208,6 +210,17 @@ export default function ConsumerAiAssistant({
               {matchedService && !pendingBooking && (
                 <button
                   onClick={() => {
+                    if (!auth.currentUser) {
+                      setMessages((prev) => [
+                        ...prev,
+                        {
+                          role: 'assistant',
+                          text: `Please log in first to book ${matchedService.name}. Redirecting you to the login page...`,
+                        },
+                      ]);
+                      setTimeout(() => navigate('/auth?mode=user'), 1200);
+                      return;
+                    }
                     setPendingBooking(matchedService);
                     setMessages((prev) => [
                       ...prev,
@@ -297,12 +310,13 @@ export default function ConsumerAiAssistant({
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     onClick={() => {
-                      onBookService?.(pendingBooking);
+                      const serviceName = pendingBooking.name;
                       setMessages((prev) => [
                         ...prev,
-                        { role: 'assistant', text: `Great! Opening the booking flow for ${pendingBooking.name}. You can review all details before final submission.` },
+                        { role: 'assistant', text: `Great! Opening the booking page for ${serviceName}. You can fill in the details there.` },
                       ]);
                       setPendingBooking(null);
+                      navigate(`/service?type=${encodeURIComponent(serviceName)}`);
                     }}
                     style={{
                       flex: 1,

@@ -308,10 +308,6 @@ function buildFallbackAssistantReply({ message = '', selectedService = '', insig
  * Returns { systemInstruction, userMessage } — the caller sends
  * systemInstruction via the Gemini `system_instruction` field and
  * userMessage as `contents`.
- *
- * NOTE: Currently muted — messages are sent directly to Gemini without
- * system instructions. This function will be re-enabled when custom
- * instructions are connected.
  */
 function buildGeminiPrompt({ message = '', selectedService = '', insights = [] }) {
   const requestedService = canonicalServiceName(selectedService) || detectServiceFromMessage(message);
@@ -382,15 +378,21 @@ function buildGeminiPrompt({ message = '', selectedService = '', insights = [] }
   return { systemInstruction, userMessage };
 }
 
-function callGeminiAssistant({ apiKey, userMessage }) {
+function callGeminiAssistant({ apiKey, userMessage, systemInstruction = '' }) {
   return new Promise((resolve, reject) => {
-    const requestBody = JSON.stringify({
+    const body = {
       contents: [{ role: 'user', parts: [{ text: userMessage }] }],
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 1024,
       },
-    });
+    };
+
+    if (systemInstruction) {
+      body.system_instruction = { parts: [{ text: systemInstruction }] };
+    }
+
+    const requestBody = JSON.stringify(body);
 
     const request = https.request({
       hostname: 'generativelanguage.googleapis.com',
@@ -972,7 +974,12 @@ exports.aiBookingAssistant = functions.https.onCall(async (data) => {
   }
 
   try {
-    const reply = await callGeminiAssistant({ apiKey, userMessage: message });
+    const { systemInstruction, userMessage } = buildGeminiPrompt({
+      message,
+      selectedService,
+      insights,
+    });
+    const reply = await callGeminiAssistant({ apiKey, userMessage, systemInstruction });
 
     return {
       reply: reply || fallbackReply,

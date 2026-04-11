@@ -378,14 +378,13 @@ function buildGeminiPrompt({ message = '', selectedService = '', insights = [] }
   return { systemInstruction, userMessage };
 }
 
-function callGeminiAssistant({ apiKey, systemInstruction, userMessage }) {
+function callGeminiAssistant({ apiKey, userMessage }) {
   return new Promise((resolve, reject) => {
     const requestBody = JSON.stringify({
-      system_instruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: 'user', parts: [{ text: userMessage }] }],
       generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 512,
+        temperature: 0.7,
+        maxOutputTokens: 1024,
       },
     });
 
@@ -969,8 +968,7 @@ exports.aiBookingAssistant = functions.https.onCall(async (data) => {
   }
 
   try {
-    const { systemInstruction, userMessage } = buildGeminiPrompt({ message, selectedService, insights });
-    const reply = await callGeminiAssistant({ apiKey, systemInstruction, userMessage });
+    const reply = await callGeminiAssistant({ apiKey, userMessage: message });
 
     return {
       reply: reply || fallbackReply,

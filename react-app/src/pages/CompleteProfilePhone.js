@@ -39,7 +39,7 @@ export default function CompleteProfilePhone() {
     e.preventDefault();
     
     if (!name || !locationCity) {
-      setError('Please fill in all fields');
+      setError('Please enter your name and location');
       return;
     }
 

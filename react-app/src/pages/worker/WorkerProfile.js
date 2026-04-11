@@ -70,7 +70,12 @@ export default function WorkerProfile() {
             {initials}
           </div>
           <h3 style={{ margin: '0 0 4px', fontSize: 20, color: '#1F1144' }}>{worker?.name || 'Worker'}</h3>
-          <div style={{ color: '#6B7280', fontSize: 14, marginBottom: 8 }}>{worker?.gigType || 'General Worker'}</div>
+          <div style={{ color: '#6B7280', fontSize: 14, marginBottom: 8 }}>
+            {(worker?.gigTypes && worker.gigTypes.length > 0)
+              ? worker.gigTypes.map(t => t.charAt(0).toUpperCase() + t.slice(1).replace(/-/g, ' ')).join(', ')
+              : (worker?.gigType || 'General Worker')
+            }
+          </div>
           <RatingDisplay rating={rating} size="md" />
           <div style={{ color: '#6B7280', fontSize: 13, marginTop: 4 }}>({totalReviews} reviews)</div>
           <Link
@@ -107,12 +112,19 @@ export default function WorkerProfile() {
               <span style={{ fontWeight: 600, color: '#1F1144' }}>{row.value}</span>
             </div>
           ) : null)}
-          {worker?.gigType && (
+          {(worker?.gigTypes?.length > 0 || worker?.gigType) && (
             <div style={{ marginTop: 10 }}>
               <div style={{ color: '#6B7280', fontSize: 13, marginBottom: 6 }}>Skills/Job Types</div>
-              <span style={{ background: '#EDE9FE', color: '#7C3AED', padding: '4px 10px', borderRadius: 20, fontSize: 13, fontWeight: 600 }}>
-                {worker.gigType}
-              </span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {(worker.gigTypes?.length > 0 ? worker.gigTypes : [worker.gigType]).filter(Boolean).map(t => (
+                  <span key={t} style={{ background: '#EDE9FE', color: '#7C3AED', padding: '4px 10px', borderRadius: 20, fontSize: 13, fontWeight: 600 }}>
+                    {t.charAt(0).toUpperCase() + t.slice(1).replace(/-/g, ' ')}
+                  </span>
+                ))}
+              </div>
+              <Link to="/worker/job-selection" style={{ display: 'inline-block', marginTop: 8, fontSize: 12, color: '#7C3AED', textDecoration: 'none', fontWeight: 600 }}>
+                ✏️ Edit Job Types
+              </Link>
             </div>
           )}
         </div>

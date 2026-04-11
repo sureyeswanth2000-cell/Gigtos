@@ -322,6 +322,73 @@
   margin-bottom: 10px;
 }
 
+/* Live Job Card */
+.live-job-card {
+  border: 2px solid var(--green-active) !important;
+  background: #F0FDF4 !important;
+}
+
+/* Navigate Icon Button */
+.icon-btn-navigate {
+  padding: 6px 10px;
+  background: var(--purple-light);
+  color: var(--purple-dark);
+  border: 1px solid var(--purple-mid);
+  border-radius: 10px;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.2s;
+}
+.icon-btn-navigate:hover {
+  background: var(--purple-mid);
+}
+
+/* Workflow Progress Bar */
+.workflow-progress {
+  display: flex;
+  align-items: center;
+  margin: 10px 0 0;
+  padding: 8px 0;
+}
+.workflow-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.workflow-step span {
+  font-size: 10px;
+  color: var(--text-sub);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.workflow-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #D1D5DB;
+  border: 2px solid #D1D5DB;
+  transition: all 0.3s;
+}
+.workflow-step.done .workflow-dot {
+  background: var(--green-active);
+  border-color: var(--green-active);
+  box-shadow: 0 0 0 3px rgba(16,185,129,0.2);
+}
+.workflow-step.done span {
+  color: var(--green-active);
+}
+.workflow-line {
+  flex: 1;
+  height: 3px;
+  background: #E5E7EB;
+  margin: 0 4px;
+  margin-bottom: 18px;
+  border-radius: 2px;
+}
+
 /* Rating Stars */
 .star-rating {
   display: flex;

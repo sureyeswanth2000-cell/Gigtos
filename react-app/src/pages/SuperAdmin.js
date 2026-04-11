@@ -13,6 +13,13 @@ export default function SuperAdmin() {
     const [allWorkers, setAllWorkers] = useState([]);
     const [activeTab, setActiveTab] = useState('escalations');
     
+    // ── Filter states ──
+    const [filterSearch, setFilterSearch] = useState('');
+    const [filterStatus, setFilterStatus] = useState('all');
+    const [filterDateFrom, setFilterDateFrom] = useState('');
+    const [filterDateTo, setFilterDateTo] = useState('');
+    const [filterRegion, setFilterRegion] = useState('all');
+    
     // Form states for creating new regionAdmin or admin
     const [createForm, setCreateForm] = useState({
         name: '',
@@ -259,6 +266,118 @@ export default function SuperAdmin() {
     const getUserInfo = (userId) => {
         return allUsers.find(u => u.id === userId) || { name: 'Unknown User', phone: 'N/A' };
     };
+
+    /* ── Filtering helpers ── */
+    const matchesDateRange = (item) => {
+        if (!filterDateFrom && !filterDateTo) return true;
+        const raw = item.createdAt;
+        const ts = raw?.toDate ? raw.toDate() : (raw ? new Date(raw) : null);
+        if (!ts || isNaN(ts.getTime())) return true;
+        if (filterDateFrom && ts < new Date(filterDateFrom)) return false;
+        if (filterDateTo && ts > new Date(filterDateTo + 'T23:59:59')) return false;
+        return true;
+    };
+
+    const matchesSearch = (item) => {
+        if (!filterSearch.trim()) return true;
+        const q = filterSearch.toLowerCase();
+        const fields = [
+            item.serviceType, item.customerName, item.name, item.contact,
+            item.email, item.phone, item.gigType, item.id
+        ].filter(Boolean);
+        return fields.some(f => f.toLowerCase().includes(q));
+    };
+
+    const matchesRegion = (item) => {
+        if (filterRegion === 'all') return true;
+        const adminInfo = admins.find(a => a.id === item.adminId);
+        if (!adminInfo) return false;
+        const regionLeadId = adminInfo.role === 'regionLead' ? adminInfo.id : (adminInfo.parentAdminId || null);
+        return regionLeadId === filterRegion;
+    };
+
+    const filteredBookings = allBookings.filter(b => {
+        if (!matchesDateRange(b)) return false;
+        if (!matchesSearch(b)) return false;
+        if (!matchesRegion(b)) return false;
+        if (filterStatus !== 'all' && b.status !== filterStatus) return false;
+        return true;
+    });
+
+    const filteredDisputes = allDisputes.filter(b => {
+        if (!matchesDateRange(b)) return false;
+        if (!matchesSearch(b)) return false;
+        if (filterStatus !== 'all') {
+            if (filterStatus === 'open' && b.dispute?.status !== 'open') return false;
+            if (filterStatus === 'resolved' && b.dispute?.status !== 'resolved') return false;
+            if (filterStatus === 'escalated' && b.dispute?.escalationStatus !== true) return false;
+        }
+        return true;
+    });
+
+    const filteredWorkers = allWorkers.filter(w => {
+        if (!matchesSearch(w)) return false;
+        if (filterStatus !== 'all') {
+            if (filterStatus === 'fraud' && !w.isFraud) return false;
+            if (filterStatus === 'active' && w.status !== 'active') return false;
+            if (filterStatus === 'inactive' && (w.status === 'active' || w.isFraud)) return false;
+        }
+        return true;
+    });
+
+    const resetFilters = () => {
+        setFilterSearch('');
+        setFilterStatus('all');
+        setFilterDateFrom('');
+        setFilterDateTo('');
+        setFilterRegion('all');
+    };
+
+    const filterBarStyle = {
+        display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center',
+        padding: '12px 16px', background: '#f8fafc', borderRadius: '10px',
+        border: '1px solid #e2e8f0', marginBottom: '16px'
+    };
+    const filterInputStyle = {
+        padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px',
+        fontSize: '12px', background: 'white', outline: 'none'
+    };
+
+    const renderFilterBar = (statusOptions) => (
+        <div style={filterBarStyle}>
+            <input
+                type="text"
+                placeholder="🔍 Search..."
+                value={filterSearch}
+                onChange={e => setFilterSearch(e.target.value)}
+                style={{ ...filterInputStyle, minWidth: '140px', flex: '1 1 140px' }}
+            />
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                style={{ ...filterInputStyle, minWidth: '100px' }}>
+                <option value="all">All Status</option>
+                {statusOptions.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+            </select>
+            {regionLeads.length > 0 && (
+                <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)}
+                    style={{ ...filterInputStyle, minWidth: '120px' }}>
+                    <option value="all">All Regions</option>
+                    {regionLeads.map(rl => (
+                        <option key={rl.id} value={rl.id}>{rl.name || rl.areaName || rl.email}</option>
+                    ))}
+                </select>
+            )}
+            <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+                style={filterInputStyle} title="From date" />
+            <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+                style={filterInputStyle} title="To date" />
+            <button onClick={resetFilters} style={{
+                padding: '7px 12px', background: '#e2e8f0', border: 'none',
+                borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 600, color: '#475569'
+            }}>Reset</button>
+        </div>
+    );
 
     return (
         <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '20px' }}>
@@ -760,9 +879,19 @@ export default function SuperAdmin() {
                 <div>
                     <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>⚠️ All Disputes</h3>
 
-                    {allDisputes.length === 0 && (
+                    {renderFilterBar([
+                        { value: 'open', label: 'Open' },
+                        { value: 'resolved', label: 'Resolved' },
+                        { value: 'escalated', label: 'Escalated' },
+                    ])}
+
+                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+                        Showing {filteredDisputes.length} of {allDisputes.length} disputes
+                    </div>
+
+                    {filteredDisputes.length === 0 && (
                         <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px' }}>
-                            ✅ No disputes found.
+                            No disputes match the current filters.
                         </div>
                     )}
 
@@ -779,7 +908,7 @@ export default function SuperAdmin() {
                             </tr>
                         </thead>
                         <tbody>
-                            {allDisputes.map(b => {
+                            {filteredDisputes.map(b => {
                                 const user = getUserInfo(b.userId);
                                 const isOpen = b.dispute?.status === 'open';
                                 const isEscalated = b.dispute?.escalationStatus === true;
@@ -824,9 +953,23 @@ export default function SuperAdmin() {
                 <div>
                     <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>📋 All Work Status</h3>
 
-                    {allBookings.length === 0 && (
+                    {renderFilterBar([
+                        { value: 'pending', label: 'Pending' },
+                        { value: 'quoted', label: 'Quoted' },
+                        { value: 'accepted', label: 'Accepted' },
+                        { value: 'assigned', label: 'Assigned' },
+                        { value: 'in_progress', label: 'In Progress' },
+                        { value: 'completed', label: 'Completed' },
+                        { value: 'cancelled', label: 'Cancelled' },
+                    ])}
+
+                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+                        Showing {filteredBookings.length} of {allBookings.length} bookings
+                    </div>
+
+                    {filteredBookings.length === 0 && (
                         <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px' }}>
-                            No bookings found.
+                            No bookings match the current filters.
                         </div>
                     )}
 
@@ -843,7 +986,7 @@ export default function SuperAdmin() {
                             </tr>
                         </thead>
                         <tbody>
-                            {allBookings.map(b => {
+                            {filteredBookings.map(b => {
                                 const admin = getAdminInfo(b.adminId);
                                 const worker = getWorkerInfo(b.assignedWorkerId);
                                 const user = getUserInfo(b.userId);
@@ -970,9 +1113,19 @@ export default function SuperAdmin() {
                 <div>
                     <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>👷 Worker Overview & Fraud Management</h3>
 
-                    {allWorkers.length === 0 && (
+                    {renderFilterBar([
+                        { value: 'active', label: 'Active' },
+                        { value: 'inactive', label: 'Inactive' },
+                        { value: 'fraud', label: 'Fraud' },
+                    ])}
+
+                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+                        Showing {filteredWorkers.length} of {allWorkers.length} workers
+                    </div>
+
+                    {filteredWorkers.length === 0 && (
                         <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px' }}>
-                            No workers found.
+                            No workers match the current filters.
                         </div>
                     )}
 
@@ -990,7 +1143,7 @@ export default function SuperAdmin() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {allWorkers.map(w => (
+                                {filteredWorkers.map(w => (
                                     <tr key={w.id} style={{
                                         borderBottom: '1px solid #f1f5f9',
                                         background: w.isFraud ? '#fef2f2' : 'white',

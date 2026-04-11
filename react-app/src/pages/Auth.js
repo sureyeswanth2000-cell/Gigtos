@@ -154,7 +154,6 @@ function Auth() {
         phone: phone,
         email: email,
         name: '',
-        address: '',
         ...locationData,
         createdAt: new Date()
       });

@@ -100,7 +100,7 @@ export default function Service() {
         if (!location.state?.prefillPhone) setUserPhone((prev) => prev || data.phone || '');
         setUserLocationCity(data.locationCity || '');
 
-        if (!data.phone || !data.name || !data.address) {
+        if (!data.phone || !data.name) {
           setProfileIncomplete(true);
         }
       } catch {

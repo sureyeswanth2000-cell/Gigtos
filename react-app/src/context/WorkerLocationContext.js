@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { auth, db } from '../firebase';
-import { doc, setDoc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, deleteDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const WorkerLocationContext = createContext(null);
 
@@ -104,6 +104,16 @@ export function WorkerLocationProvider({ children }) {
         // Firestore write failed — continue tracking locally
       });
 
+    // Create live location doc — deleted when worker goes inactive
+    setDoc(doc(db, 'worker_live_locations', uid), {
+      workerId: uid,
+      lat: null,
+      lng: null,
+      isActive: true,
+      activeSince: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }).catch(() => { /* noop */ });
+
     // Start watching position
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
@@ -116,6 +126,11 @@ export function WorkerLocationProvider({ children }) {
         setLocationStatus('closed');
         setError('Location sharing stopped.');
         setTracking(false);
+        // Clean up live location on location error
+        const currentUid = auth.currentUser?.uid;
+        if (currentUid) {
+          deleteDoc(doc(db, 'worker_live_locations', currentUid)).catch(() => {});
+        }
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
     );
@@ -123,6 +138,8 @@ export function WorkerLocationProvider({ children }) {
 
   /**
    * Stop tracking and finalise the session.
+   * Deletes live location data (worker_live_locations) but preserves
+   * work history sessions (worker_location_sessions) for historical records.
    */
   const stopTracking = useCallback(() => {
     if (watchIdRef.current !== null) {
@@ -155,6 +172,12 @@ export function WorkerLocationProvider({ children }) {
         locationStatus: locationStatus === 'closed' ? 'closed' : 'stopped',
         updatedAt: serverTimestamp(),
       }).catch(() => { /* noop */ });
+    }
+
+    // Delete live location data — only keep work history sessions
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      deleteDoc(doc(db, 'worker_live_locations', uid)).catch(() => { /* noop */ });
     }
 
     setTracking(false);
@@ -212,16 +235,30 @@ export function WorkerLocationProvider({ children }) {
     }
   }, [currentPosition, tracking, workLocation, sessionId, reachTime]);
 
-  // Periodic persist of current position
+  // Periodic persist of current position to session and live location
   useEffect(() => {
-    if (!tracking || !sessionId) return;
+    if (!tracking) return;
     persistIntervalRef.current = setInterval(() => {
-      if (currentPosition && sessionId) {
-        updateDoc(doc(db, 'worker_location_sessions', sessionId), {
-          lastLat: currentPosition.lat,
-          lastLng: currentPosition.lng,
-          updatedAt: serverTimestamp(),
-        }).catch(() => { /* noop */ });
+      if (currentPosition) {
+        const uid = auth.currentUser?.uid;
+        // Update session document
+        if (sessionId) {
+          updateDoc(doc(db, 'worker_location_sessions', sessionId), {
+            lastLat: currentPosition.lat,
+            lastLng: currentPosition.lng,
+            updatedAt: serverTimestamp(),
+          }).catch(() => { /* noop */ });
+        }
+        // Update live location (for nearby worker discovery)
+        if (uid) {
+          setDoc(doc(db, 'worker_live_locations', uid), {
+            workerId: uid,
+            lat: currentPosition.lat,
+            lng: currentPosition.lng,
+            isActive: true,
+            updatedAt: serverTimestamp(),
+          }, { merge: true }).catch(() => { /* noop */ });
+        }
       }
     }, PERSIST_INTERVAL_MS);
 
@@ -233,7 +270,7 @@ export function WorkerLocationProvider({ children }) {
     };
   }, [tracking, sessionId, currentPosition]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount — delete live location to avoid stale data
   useEffect(() => {
     return () => {
       if (watchIdRef.current !== null) {
@@ -241,6 +278,11 @@ export function WorkerLocationProvider({ children }) {
       }
       if (persistIntervalRef.current) {
         clearInterval(persistIntervalRef.current);
+      }
+      // Delete live location on unmount if was tracking
+      const uid = auth.currentUser?.uid;
+      if (uid) {
+        deleteDoc(doc(db, 'worker_live_locations', uid)).catch(() => {});
       }
     };
   }, []);

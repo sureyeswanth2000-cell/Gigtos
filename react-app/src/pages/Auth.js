@@ -28,7 +28,7 @@ function Auth() {
   const [workerEmail, setWorkerEmail] = useState('');
   const [workerPassword, setWorkerPassword] = useState('');
   const [workerConfirmPassword, setWorkerConfirmPassword] = useState('');
-  const [workerGigType, setWorkerGigType] = useState('');
+  const [workerGigTypes, setWorkerGigTypes] = useState([]);
   const [workerArea, setWorkerArea] = useState('');
   
   // UI States
@@ -48,7 +48,7 @@ function Auth() {
     setWorkerEmail('');
     setWorkerPassword('');
     setWorkerConfirmPassword('');
-    setWorkerGigType('');
+    setWorkerGigTypes([]);
     setWorkerArea('');
   };
 
@@ -201,8 +201,8 @@ function Auth() {
   // ============= WORKER REGISTRATION =============
   const handleWorkerSignup = async (e) => {
     e.preventDefault();
-    if (!workerName || !workerPhone || !workerEmail || !workerPassword || !workerConfirmPassword || !workerGigType || !workerArea) {
-      setError('Please fill in all fields');
+    if (!workerName || !workerPhone || !workerEmail || !workerPassword || !workerConfirmPassword || workerGigTypes.length === 0 || !workerArea) {
+      setError('Please fill in all fields and select at least one job type');
       return;
     }
 
@@ -253,7 +253,8 @@ function Auth() {
         name: workerName,
         contact: workerPhone,
         email: workerEmail,
-        gigType: workerGigType,
+        gigType: workerGigTypes[0],
+        gigTypes: workerGigTypes,
         area: workerArea,
         certifications: '',
         bankDetails: '',
@@ -275,7 +276,8 @@ function Auth() {
         email: workerEmail,
         uid,
         name: workerName,
-        gigType: workerGigType,
+        gigType: workerGigTypes[0],
+        gigTypes: workerGigTypes,
         area: workerArea,
         certifications: '',
         bankDetails: '',
@@ -292,7 +294,8 @@ function Auth() {
         phone: workerPhone,
         email: workerEmail,
         name: workerName,
-        gigType: workerGigType,
+        gigType: workerGigTypes[0],
+        gigTypes: workerGigTypes,
         area: workerArea,
         approvalStatus: 'pending',
         status: 'inactive',
@@ -1155,30 +1158,46 @@ function Auth() {
 
           <div style={{ marginBottom: '15px' }}>
             <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
-              Service Type:
+              Service Types (select up to 3):
             </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
+              {workerGigTypes.map(t => (
+                <span key={t} style={{
+                  background: '#10b981', color: 'white', padding: '4px 10px', borderRadius: '16px',
+                  fontSize: '12px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px'
+                }}>
+                  {t} <button type="button" onClick={() => setWorkerGigTypes(prev => prev.filter(g => g !== t))}
+                    style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '14px', padding: 0, lineHeight: 1 }}>✕</button>
+                </span>
+              ))}
+            </div>
             <select
-              value={workerGigType}
-              onChange={(e) => setWorkerGigType(e.target.value)}
+              value=""
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val && !workerGigTypes.includes(val) && workerGigTypes.length < 3) {
+                  setWorkerGigTypes(prev => [...prev, val]);
+                }
+              }}
+              disabled={workerGigTypes.length >= 3}
               style={{
                 width: '100%',
                 padding: '10px',
                 border: '1px solid #ddd',
                 borderRadius: '6px',
                 fontSize: '14px',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                opacity: workerGigTypes.length >= 3 ? 0.5 : 1,
               }}
             >
-              <option value="">Select service type...</option>
-              <option value="plumbing">Plumbing</option>
-              <option value="electrical">Electrical</option>
-              <option value="carpentry">Carpentry</option>
-              <option value="painting">Painting</option>
-              <option value="masonry">Masonry</option>
-              <option value="cleaning">Cleaning</option>
-              <option value="landscaping">Landscaping</option>
-              <option value="other">Other</option>
+              <option value="">{workerGigTypes.length >= 3 ? 'Maximum 3 selected' : 'Select service type...'}</option>
+              {['plumbing', 'electrical', 'carpentry', 'painting', 'masonry', 'cleaning', 'landscaping', 'driver', 'kitchen-work', 'garden-work', 'security', 'delivery', 'other']
+                .filter(t => !workerGigTypes.includes(t))
+                .map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1).replace(/-/g, ' ')}</option>)}
             </select>
+            <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+              {workerGigTypes.length}/3 selected. You can edit these later from your dashboard.
+            </div>
           </div>
 
           <div style={{ marginBottom: '15px' }}>

@@ -8,7 +8,6 @@ export default function Profile() {
     name: "",
     email: "",
     phone: "",
-    address: "",
     locationCity: "",
     locationLat: null,
     locationLng: null,
@@ -23,7 +22,7 @@ export default function Profile() {
 
   const userDetectRef = useRef(false);
 
-  const { location: detectedLocation, detectLocation, locationLoading } = useUserLocation() || {};
+  const { location: detectedLocation, detectLocation, locationLoading, locationError } = useUserLocation() || {};
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -43,7 +42,6 @@ export default function Profile() {
             name: data.name || "",
             email: user.email || "",
             phone: data.phone || "",
-            address: data.address || "",
             locationCity: data.locationCity || "",
             locationLat: data.locationLat || null,
             locationLng: data.locationLng || null,
@@ -53,7 +51,6 @@ export default function Profile() {
             name: "",
             email: user.email || "",
             phone: "",
-            address: "",
             locationCity: "",
             locationLat: null,
             locationLng: null,
@@ -96,8 +93,6 @@ export default function Profile() {
             locationCity: detectedLocation.city || prev.locationCity,
             locationLat: detectedLocation.lat ?? prev.locationLat,
             locationLng: detectedLocation.lng ?? prev.locationLng,
-            // Auto-fill address with full display name if address is empty
-            address: prev.address || detectedLocation.displayName || detectedLocation.city || '',
           };
         }
         return prev;
@@ -110,8 +105,8 @@ export default function Profile() {
     setSuccess("");
 
     // Validation
-    if (!profileData.name || !profileData.phone || !profileData.address) {
-      setError("All fields are required");
+    if (!profileData.name || !profileData.phone) {
+      setError("Name and phone number are required");
       return;
     }
 
@@ -128,7 +123,6 @@ export default function Profile() {
       await setDoc(doc(db, "users", user.uid), {
         name: profileData.name,
         phone: profileData.phone,
-        address: profileData.address,
         email: user.email,
         locationCity: profileData.locationCity || "",
         locationLat: profileData.locationLat || null,
@@ -266,29 +260,7 @@ export default function Profile() {
               />
             </div>
 
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
-                Address:
-              </label>
-              <textarea
-                value={profileData.address}
-                onChange={(e) => setProfileData({ ...profileData, address: e.target.value })}
-                placeholder="Enter your complete address"
-                rows="4"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  fontFamily: "Arial, sans-serif",
-                  boxSizing: "border-box",
-                  resize: "vertical"
-                }}
-              />
-            </div>
-
-            {/* Location section in edit mode – detect only */}
+            {/* Location section in edit mode – detect or manually enter */}
             <div style={{ marginBottom: "20px" }}>
               <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
                 Location:
@@ -298,9 +270,18 @@ export default function Profile() {
                 padding: '10px', background: '#f3e8ff', borderRadius: '8px',
                 border: '1px solid #c4b5fd'
               }}>
-                <span style={{ flex: 1, fontSize: '14px', color: profileData.locationCity ? '#1f2937' : '#9ca3af' }}>
-                  {profileData.locationCity ? `📍 ${profileData.locationCity}` : 'Not detected'}
-                </span>
+                <input
+                  type="text"
+                  value={profileData.locationCity}
+                  onChange={(e) => setProfileData({ ...profileData, locationCity: e.target.value })}
+                  placeholder="Enter your city"
+                  style={{
+                    flex: 1, fontSize: '14px', padding: '6px 8px',
+                    border: '1px solid #c4b5fd', borderRadius: '6px',
+                    background: '#fff', color: '#1f2937',
+                    boxSizing: 'border-box'
+                  }}
+                />
                 <button
                   onClick={handleDetectAndSetLocation}
                   disabled={locationLoading}
@@ -314,6 +295,11 @@ export default function Profile() {
                   {locationLoading ? '⏳ Detecting…' : '📍 Detect Location'}
                 </button>
               </div>
+              {locationError && (
+                <small style={{ color: '#c00', display: 'block', marginTop: '6px', fontSize: '12px' }}>
+                  ⚠️ {locationError}. Please enter your city manually or allow location access and try again.
+                </small>
+              )}
             </div>
 
             <div style={{ display: "flex", gap: "10px" }}>
@@ -368,22 +354,15 @@ export default function Profile() {
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <span style={{ fontWeight: "bold", color: "#666" }}>Address:</span>
-              <p style={{ margin: "5px 0 0 0", fontSize: "14px", whiteSpace: "pre-wrap" }}>
-                {profileData.address || "Not set"}
+              <span style={{ fontWeight: "bold", color: "#666" }}>Location:</span>
+              <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>
+                {profileData.locationCity || "Not set"}
               </p>
               {profileData.locationLat && profileData.locationLng && (
                 <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#7C3AED", fontWeight: 500 }}>
                   📍 {profileData.locationLat.toFixed(4)}, {profileData.locationLng.toFixed(4)}
                 </p>
               )}
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <span style={{ fontWeight: "bold", color: "#666" }}>Location:</span>
-              <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>
-                {profileData.locationCity || "Not set"}
-              </p>
             </div>
 
             <button

@@ -164,9 +164,7 @@ export default function Header() {
                             <Link to="/worker/dashboard" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
                               👷 Worker Dashboard
                             </Link>
-                            <Link to="/worker/job-selection" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>
-                              📋 Select Jobs
-                            </Link>
+
                           </>
                         ) : (
                           <Link to="/my-bookings" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '12px 16px', color: '#333', textDecoration: 'none', borderBottom: '1px solid #eee', fontSize: '14px' }}>

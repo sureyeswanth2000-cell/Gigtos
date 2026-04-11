@@ -17,6 +17,7 @@ const NAV_CARDS = [
   { to: '/worker/history', icon: '🕐', label: 'History' },
   { to: '/worker/future-work', icon: '📅', label: 'Future Work' },
   { to: '/worker/profile', icon: '👤', label: 'My Profile' },
+  { to: '/worker/job-selection', icon: '✏️', label: 'Edit Jobs' },
   { to: '/worker/support', icon: '💬', label: 'Support' },
   { to: '/worker/map', icon: '🗺️', label: 'Map' },
 ];
@@ -103,7 +104,10 @@ export default function WorkerDashboard() {
           <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{worker?.name || 'Worker'}</div>
           <RatingDisplay rating={stats.rating} size="sm" />
           <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
-            {worker?.gigType || 'General Worker'} · {worker?.area || 'Unknown Area'}
+            {(worker?.gigTypes && worker.gigTypes.length > 0)
+              ? worker.gigTypes.map(t => t.charAt(0).toUpperCase() + t.slice(1).replace(/-/g, ' ')).join(', ')
+              : (worker?.gigType || 'General Worker')
+            } · {worker?.area || 'Unknown Area'}
           </div>
           <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{

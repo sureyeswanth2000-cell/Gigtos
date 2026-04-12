@@ -28,15 +28,11 @@ export default function Admin() {
     const user = auth.currentUser;
     if (!user) return;
 
-    console.log('📊 Loading admin stats for UID:', user.uid);
-
     // Fetch admin profile for region performance + role check
     const adminDocRef = doc(db, 'admins', user.uid);
     const unsubAdmin = onSnapshot(adminDocRef, (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        console.log('🔐 Admin role:', data.role);
-        console.log('📍 Admin is region lead?', data.role === 'regionLead');
         setRegionPerf({
           regionScore: data.regionScore ?? 100,
           totalDisputes: data.totalDisputes ?? 0,
@@ -47,14 +43,13 @@ export default function Admin() {
         });
         setIsSuperAdmin(data.role === 'superadmin');
       } else {
-        console.error('❌ Admin document not found for UID:', user.uid);
+        /* admin document not found */
       }
     });
 
     // Workers count + top-listed
     const workersQuery = query(collection(db, 'gig_workers'), where('adminId', '==', user.uid));
     const unsubWorkers = onSnapshot(workersQuery, (snap) => {
-      console.log('👷 Workers found:', snap.size);
       const workers = snap.docs.map(d => d.data());
       setStats(prev => ({
         ...prev,
@@ -70,7 +65,6 @@ export default function Admin() {
       where('status', 'in', ['assigned', 'in_progress', 'awaiting_confirmation'])
     );
     const unsubActive = onSnapshot(activeBookingsQuery, (snap) => {
-      console.log('⚡ Active bookings:', snap.size);
       setStats(prev => ({ ...prev, activeBookings: snap.size }));
     });
 
@@ -81,7 +75,6 @@ export default function Admin() {
       where('status', '==', 'completed')
     );
     const unsubCompleted = onSnapshot(completedQuery, (snap) => {
-      console.log('✅ Completed bookings:', snap.size);
       const count = snap.size;
       setStats(prev => ({
         ...prev,
@@ -213,8 +206,8 @@ export default function Admin() {
               { label: 'Total Disputes', value: regionPerf.totalDisputes, color: regionPerf.totalDisputes > 5 ? '#ef4444' : '#475569' },
               { label: 'Fraud Cases', value: regionPerf.fraudCount, color: regionPerf.fraudCount > 0 ? '#ef4444' : '#475569' },
               { label: 'Avg Resolution', value: regionPerf.avgResolutionTime ? `${regionPerf.avgResolutionTime}h` : '—', color: regionPerf.avgResolutionTime > 24 ? '#ef4444' : '#475569' },
-            ].map((m, i) => (
-              <div key={i}>
+            ].map((m) => (
+              <div key={m.label}>
                 <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold' }}>{m.label}</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: m.color }}>{m.value}</div>
               </div>

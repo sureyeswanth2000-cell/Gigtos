@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, createUserWithEmailAndPassword } from 'firebase/auth';
 import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, getDoc, setDoc, getDocs } from 'firebase/firestore';
+import MasonDashboard from '../components/MasonDashboard';
 
 export default function Workers() {
   const [user, setUser] = useState(null);
@@ -69,7 +70,7 @@ export default function Workers() {
             setChildAdmins(children);
             setChildAdminIds(children.map(d => d.id));
           },
-          err => console.error(err)
+          err => { /* error loading child admins */ }
         );
       } else {
         setChildAdminIds([]);
@@ -77,7 +78,7 @@ export default function Workers() {
       }
     };
 
-    loadRole().catch(console.error);
+    loadRole().catch(() => { /* error loading role */ });
     return () => unsubChildren();
   }, [user]);
 
@@ -92,14 +93,12 @@ export default function Workers() {
     if (!user) return;
     const syncPhoneIndex = (items) => {
       items.forEach(w => {
-        upsertWorkerPhoneIndex(w.id, w).catch(err => console.error('Phone index sync failed:', err));
+        upsertWorkerPhoneIndex(w.id, w).catch(() => { /* phone index sync failed */ });
       });
     };
 
-    const handleError = (err) => {
-      console.error('❌ Firestore error:', err);
-      console.error('Error code:', err.code);
-      console.error('Error message:', err.message);
+    const handleError = () => {
+      /* Firestore error handled silently */
     };
 
     if (adminRole === 'superadmin') {
@@ -174,8 +173,6 @@ export default function Workers() {
         syncPhoneIndex(allWorkers);
 
         const approved = allWorkers.filter(w => !w.approvalStatus || w.approvalStatus === 'approved' || w.approvalStatus !== 'pending');
-        console.log('✅ Admin/Mason: showing', approved.length, 'workers for uid:', user.uid);
-        console.log('Worker details:', approved.map(w => ({ name: w.name, adminId: w.adminId })));
         setWorkers(approved);
         setPendingGigs([]);
       },
@@ -219,7 +216,6 @@ export default function Workers() {
       setTotalEarnings('0');
       alert('✅ Worker created successfully!');
     } catch (e) { 
-      console.error(e); 
       alert('Error: ' + e.message); 
     }
   }
@@ -255,7 +251,6 @@ export default function Workers() {
       setEditWorkerData({ certifications: '', bankDetails: '', totalEarnings: '0' });
       alert('✅ Worker details updated');
     } catch (e) {
-      console.error(e);
       alert('Error updating worker: ' + e.message);
     }
   }
@@ -282,7 +277,6 @@ export default function Workers() {
         await upsertWorkerPhoneIndex(id, updatedSnap.data());
       }
     } catch (e) { 
-      console.error(e); 
       alert(e.message); 
     }
   }
@@ -295,7 +289,6 @@ export default function Workers() {
       const workersToMigrate = snapshot.docs.filter(d => !d.data().adminId);
       
       if (workersToMigrate.length === 0) {
-        console.log('✅ No workers need migration');
         return;
       }
       
@@ -306,9 +299,8 @@ export default function Workers() {
           migratedAt: new Date()
         });
       }
-      console.log(`✅ Migrated ${workersToMigrate.length} workers - set adminId to ${user.uid}`);
-    } catch (e) {
-      console.error('Migration error:', e);
+    } catch {
+      /* migration error */
     }
   }
 
@@ -332,7 +324,6 @@ export default function Workers() {
 
       alert('✅ Gig approved successfully!');
     } catch (e) {
-      console.error(e);
       alert('Error approving worker: ' + e.message);
     }
   }
@@ -351,7 +342,6 @@ export default function Workers() {
 
       alert('Worker application rejected.');
     } catch (e) {
-      console.error(e);
       alert('Error rejecting worker: ' + e.message);
     }
   }
@@ -377,7 +367,6 @@ export default function Workers() {
       setNewAdminEmail('');
       setNewAdminPassword('');
     } catch (e) {
-      console.error(e);
       alert('Error creating mason: ' + e.message);
     }
   }
@@ -385,25 +374,27 @@ export default function Workers() {
   return (
     <div style={{ padding: 20 }}>
       <h2>Workers</h2>
-      
-      {/* DEBUG: Show current role */}
-      <div style={{ 
-        background: '#f0f9ff', 
-        border: '2px solid #3b82f6', 
-        color: '#1e40af', 
-        padding: 10, 
-        borderRadius: 8, 
-        marginBottom: 12,
-        fontSize: 12,
-        fontWeight: 'bold'
-      }}>
-        🔐 Current Role: {adminRole || 'loading...'} | UID: {user?.uid?.slice(0, 8)}...
-        {(adminRole === 'admin' || adminRole === 'mason') && (
-          <div style={{ marginTop: 4, fontSize: 11, fontWeight: 'normal' }}>
-            🔒 You can ONLY see and manage gigs that YOU created. Other {adminRole}s' gigs are hidden.
+
+      {/* Mason Dashboard — full job browser for mason/admin roles */}
+      {(adminRole === 'mason' || adminRole === 'admin' || adminRole === 'superadmin' || adminRole === 'regionLead') && (
+        <details style={{ marginBottom: 20 }}>
+          <summary style={{
+            cursor: 'pointer',
+            padding: '10px 14px',
+            background: 'var(--bg-light)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 10,
+            fontWeight: 700,
+            fontSize: 14,
+            color: 'var(--primary-purple)',
+          }}>
+            🧱 Mason Dashboard — Browse All Job Types &amp; Manage Workers
+          </summary>
+          <div style={{ marginTop: 12 }}>
+            <MasonDashboard />
           </div>
-        )}
-      </div>
+        </details>
+      )}
       
       {adminRole === 'regionLead' && (
         <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', padding: 10, borderRadius: 8, marginBottom: 12 }}>

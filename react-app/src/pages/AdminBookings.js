@@ -124,7 +124,6 @@ export default function AdminBookings() {
       const adminDoc = await getDoc(doc(db, 'admins', uid));
       if (adminDoc.exists()) {
         const role = adminDoc.data()?.role || 'admin';
-        console.log('🔐 Admin role detected:', role);
         setAdminRole(role);
         setIsSuperAdmin(role === 'superadmin');
 
@@ -135,21 +134,16 @@ export default function AdminBookings() {
             const workerData = workerDoc.data();
             const hasNoAdmin = !workerData.adminId || workerData.adminId === '' || workerData.adminId === null;
             setIsIndependentWorker(hasNoAdmin);
-            console.log('🔧 Worker independence check:', hasNoAdmin ? 'INDEPENDENT' : 'Under admin', workerData.adminId);
           }
         }
 
         if (role === 'regionLead') {
-          console.log('📍 Region Lead detected - loading child admins...');
           unsubChildren = onSnapshot(
             query(collection(db, 'admins'), where('parentAdminId', '==', uid)),
             snap => {
-              console.log('✅ Child admins found:', snap.size);
-              snap.docs.forEach(d => console.log('  - Admin:', d.data().name || d.data().email));
               setChildAdminIds(snap.docs.map(d => d.id));
             },
             (err) => {
-              console.error('❌ Error loading child admins:', err);
               setChildAdminIds([]);
             }
           );
@@ -157,10 +151,10 @@ export default function AdminBookings() {
           setChildAdminIds([]);
         }
       } else {
-        console.error('❌ Admin document not found for UID:', uid);
+        /* admin document not found */
       }
     };
-    checkRole().catch((err) => console.error('❌ checkRole error:', err));
+    checkRole().catch(() => { /* checkRole error */ });
     return () => unsubChildren();
   }, [uid]);
 
@@ -182,7 +176,6 @@ export default function AdminBookings() {
           setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         },
         (err) => {
-          console.error('Bookings read failed:', err);
           setReadError(err?.message || 'Unable to load bookings.');
         }
       );
@@ -198,7 +191,6 @@ export default function AdminBookings() {
       // GOVERNANCE RULE: Masons only see bookings matching their gig types
       if (adminRole === 'admin' || adminRole === 'mason') {
         const gigTypes = [...new Set(workers.map(w => w.gigType).filter(Boolean))];
-        console.log('🎯 Filtering bookings by mason gig types:', gigTypes);
         
         if (gigTypes.length > 0) {
           // Normalize both booking service types and gig types for comparison
@@ -211,7 +203,6 @@ export default function AdminBookings() {
           };
           
           const normalizedGigTypes = gigTypes.map(normalizeType);
-          console.log('🔧 Normalized gig types:', normalizedGigTypes);
           
           merged = merged.filter(b => {
             const isMyBooking = b.adminId === uid;
@@ -219,13 +210,12 @@ export default function AdminBookings() {
             const shouldShow = isMyBooking || matchesGigType;
             
             if (!shouldShow && b.status === 'pending') {
-              console.log('❌ Filtered out:', b.serviceType, '(not in mason gig types)');
+              // filtered out: not in mason gig types
             }
             
             return shouldShow;
           });
         } else {
-          console.warn('⚠️ Mason has no gig types - showing only assigned bookings');
           merged = merged.filter(b => b.adminId === uid);
         }
       }
@@ -246,11 +236,9 @@ export default function AdminBookings() {
       snap => {
         setReadError('');
         openDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        console.log('📂 Open bookings (pending/scheduled/quoted):', openDocs.length);
         mergeAndSet();
       },
       (err) => {
-        console.error('Open bookings read failed:', err);
         setReadError(err?.message || 'Unable to load open bookings.');
       }
     );
@@ -260,35 +248,31 @@ export default function AdminBookings() {
       snap => {
         setReadError('');
         myDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        console.log('📂 My assigned bookings (adminId matches):', myDocs.length);
         mergeAndSet();
       },
       (err) => {
-        console.error('My bookings read failed:', err);
         setReadError(err?.message || 'Unable to load your bookings.');
       }
     );
 
     const unsubsChildren = [];
     if (adminRole === 'regionLead' && childAdminIds.length > 0) {
-      console.log('📋 Loading bookings for', childAdminIds.length, 'child admins');
       childAdminIds.forEach((childId) => {
         const unsubChild = onSnapshot(
           query(collection(db, 'bookings'), where('adminId', '==', childId)),
           snap => {
-            console.log(`  ✓ Child admin ${childId}: ${snap.size} bookings`);
             const childDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             myDocs = [...myDocs.filter(b => b.adminId !== childId), ...childDocs];
             mergeAndSet();
           },
           (err) => {
-            console.error(`  ❌ Child admin ${childId} error:`, err);
+            /* error loading child admin bookings */
           }
         );
         unsubsChildren.push(unsubChild);
       });
     } else if (adminRole === 'regionLead') {
-      console.warn('⚠️ Region lead has NO child admins assigned!');
+      /* region lead has no child admins assigned */
     }
 
     return () => {
@@ -304,38 +288,20 @@ export default function AdminBookings() {
     const handleApprovedWorkers = (allWorkers) => {
       const approvedWorkers = allWorkers.filter(w => !w.approvalStatus || w.approvalStatus === 'approved');
 
-      console.log('🔧 Workers loading:', {
-        total: allWorkers.length,
-        approved: approvedWorkers.length,
-        currentUid: uid,
-        adminRole: adminRole,
-        allAdminIds: [...new Set(allWorkers.map(w => w.adminId))]
-      });
-
       setWorkers(approvedWorkers);
 
       if (isSuperAdmin) {
-        console.log('👑 SuperAdmin sees all workers:', approvedWorkers.length);
+        /* superadmin sees all workers */
       } else if (adminRole === 'regionLead') {
-        console.log('🌍 Region lead sees area workers:', approvedWorkers.length);
+        /* region lead sees area workers */
       } else {
-        console.log('👤 Mason/Admin workers:', {
-          count: approvedWorkers.length,
-          workers: approvedWorkers.map(w => ({ name: w.name, gigType: w.gigType, adminId: w.adminId, status: w.status }))
-        });
-
         const gigTypes = [...new Set(approvedWorkers.map(w => w.gigType).filter(Boolean))];
-        console.log('🎯 Mason gig types:', gigTypes);
+        /* mason gig types loaded */
       }
     };
 
-    const handleWorkerError = (err) => {
-      console.error('❌ Workers query error:', err);
-      console.error('   Error code:', err.code);
-      console.error('   Error message:', err.message);
-      if (err.code === 'permission-denied') {
-        console.error('   ⚠️ PERMISSION DENIED: Security rules blocking worker reads');
-      }
+    const handleWorkerError = () => {
+      /* workers query error handled silently */
     };
 
     if (isSuperAdmin) {
@@ -410,13 +376,11 @@ export default function AdminBookings() {
     if (!uid) throw new Error('Not authenticated');
 
     if (method === 'submitQuote') {
-      console.log('🟢 runSparkFallback: submitQuote called');
       const { bookingId, price } = data;
       const bookingRef = doc(db, 'bookings', bookingId);
       const snap = await getDoc(bookingRef);
       if (!snap.exists()) throw new Error('Booking not found');
       const booking = snap.data();
-      console.log('🟢 Current booking status:', booking.status, '| Existing quotes:', booking.quotes?.length || 0);
 
       const adminDoc = await getDoc(doc(db, 'admins', uid));
       const adminName = adminDoc.exists() ? (adminDoc.data().name || adminDoc.data().email || 'Admin') : 'Admin';
@@ -430,13 +394,11 @@ export default function AdminBookings() {
 
       // Don't change status to 'quoted' - keep it open for other masons to submit quotes
       // Status will only change when user accepts a quote
-      console.log('🟢 Updating booking - NOT changing status (keeping:', booking.status + ')');
       await updateDoc(bookingRef, {
         quotes: bookingWithQuote.quotes,
         // status remains 'pending' or 'scheduled' so other masons can still see and quote
         updatedAt: new Date(),
       });
-      console.log('🟢 Quote submitted successfully! Status should still be:', booking.status);
       return;
     }
 
@@ -578,7 +540,6 @@ export default function AdminBookings() {
       try {
         await runSparkFallback(method, data);
       } catch (fallbackErr) {
-        console.error('🔴 Free-plan fallback error:', fallbackErr);
         alert('Action failed: ' + fallbackErr.message);
       }
       return;
@@ -592,8 +553,6 @@ export default function AdminBookings() {
       try {
         await runSparkFallback(method, data);
       } catch (fallbackErr) {
-        console.error(e);
-        console.error(fallbackErr);
         alert('Action failed: ' + (fallbackErr.message || e.message));
       }
     }
@@ -635,7 +594,7 @@ export default function AdminBookings() {
 
       setAutoAssigningBookingIds((prev) => ({ ...prev, [b.id]: true }));
       assignWorker(b, pick.id)
-        .catch((err) => console.error('Auto-assignment failed:', err))
+        .catch(() => { /* auto-assignment failed */ })
         .finally(() => {
           setAutoAssigningBookingIds((prev) => {
             const next = { ...prev };
@@ -656,7 +615,6 @@ export default function AdminBookings() {
     
     if (!worker) {
       alert('Worker not found');
-      console.error('❌ Worker not found:', workerId);
       return;
     }
     
@@ -664,16 +622,8 @@ export default function AdminBookings() {
     
     if (!workerPhone) {
       alert('⚠️ Worker has no phone number. Please update worker details first.');
-      console.error('❌ Worker missing phone:', worker);
       return;
     }
-    
-    console.log('🔧 Assigning worker:', { 
-      workerId, 
-      workerName: worker.name, 
-      workerPhone,
-      bookingId: b.id 
-    });
     
     await callBackend('updateBookingStatus', {
       bookingId: b.id,
@@ -813,8 +763,6 @@ export default function AdminBookings() {
       return;
     }
 
-    console.log('🔵 Submitting quote:', { bookingId, basePrice, finalPrice: pricing.finalTotal, uid, adminRole });
-    
     // Store both base price and final price in quote
     await callBackend('submitQuote', { 
       bookingId, 
@@ -888,7 +836,6 @@ export default function AdminBookings() {
         </div>
       )}
 
-      {/* DEBUG INFO: Show what role and data is loaded */}
       {adminRole === 'regionLead' && (
         <div style={{
           background: '#f0f9ff', color: '#0369a1', border: '2px solid #0ea5e9',
@@ -956,44 +903,6 @@ export default function AdminBookings() {
           return isMatch;
         });
         
-        // Log worker matching info for accepted bookings
-        if (b.status === 'accepted') {
-          if (availableWorkers.length > 0) {
-            console.log('✅ Available workers for accepted booking:', {
-              bookingId: b.id,
-              bookingService: b.serviceType,
-              availableCount: availableWorkers.length,
-              workers: availableWorkers.map(w => ({
-                id: w.id,
-                name: w.name,
-                gigType: w.gigType,
-                contact: w.contact,
-                phone: w.phone,
-                status: w.status
-              }))
-            });
-          } else {
-            console.log('🚨 No workers available for accepted booking:', {
-              bookingId: b.id,
-              bookingService: b.serviceType,
-              normalizedBooking: bookingServiceType,
-              totalWorkers: workers.length,
-              myWorkers: workers.filter(w => w.adminId === uid).length,
-              myGigTypes: workers.filter(w => w.adminId === uid).map(w => w.gigType),
-              allWorkerDetails: workers.map(w => ({ 
-                name: w.name, 
-                gigType: w.gigType, 
-                normalized: normalizeServiceType(w.gigType), 
-                active: w.status === 'active',
-                status: w.status,
-                isFraud: w.isFraud,
-                adminId: w.adminId,
-                matchesService: normalizeServiceType(w.gigType) === bookingServiceType
-              }))
-            });
-          }
-        }
-
         const escalation = getEscalationInfo(b.dispute);
 
         return (
@@ -1055,8 +964,8 @@ export default function AdminBookings() {
                 <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>📸 User Requested Photos:</div>
                 <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
                   {b.requestedPhotos.map((p, i) => (
-                    <a key={i} href={p.url} target="_blank" rel="noreferrer">
-                      <img src={p.url} alt={`Request ${i}`} style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #cbd5e1' }} />
+                    <a key={p.url || i} href={p.url} target="_blank" rel="noreferrer">
+                      <img src={p.url} alt={`User request photo ${i + 1}`} style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #cbd5e1' }} />
                     </a>
                   ))}
                 </div>
@@ -1270,8 +1179,8 @@ export default function AdminBookings() {
                   {b.photos?.length > 0 && (
                     <div style={{ display: 'flex', gap: '8px', marginTop: '10px', overflowX: 'auto' }}>
                       {b.photos.map((p, i) => (
-                        <a key={i} href={p.url} target="_blank" rel="noreferrer">
-                          <img src={p.url} alt={`Work ${i}`} style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px' }} />
+                        <a key={p.url || i} href={p.url} target="_blank" rel="noreferrer">
+                          <img src={p.url} alt={`Work photo ${i + 1}`} style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px' }} />
                         </a>
                       ))}
                     </div>
@@ -1290,7 +1199,7 @@ export default function AdminBookings() {
             {openLog === b.id && logMap[b.id] && (
               <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid #eee', fontSize: '11px', color: '#555' }}>
                 {logMap[b.id].map((log, i) => (
-                  <div key={i} style={{ marginBottom: '4px' }}>
+                  <div key={log.timestamp?.toDate?.().getTime() || i} style={{ marginBottom: '4px' }}>
                     <span style={{ color: '#999' }}>{log.timestamp?.toDate?.().toLocaleTimeString()}</span> - <strong>{log.actorRole}</strong>: {log.action}
                   </div>
                 ))}

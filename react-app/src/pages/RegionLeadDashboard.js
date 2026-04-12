@@ -53,7 +53,8 @@ export default function RegionLeadDashboard() {
     const unsub = onSnapshot(doc(db, 'admins', uid), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (data.role !== 'regionLead') {
+        const role = data.role;
+        if (role !== 'regionLead' && role !== 'region-lead') {
           navigate('/admin');
           return;
         }
@@ -98,7 +99,7 @@ export default function RegionLeadDashboard() {
         setPendingGigs(pending);
         setStats(prev => ({ ...prev, pendingApprovals: pending.length }));
       },
-      (error) => console.error('❌ Error loading pending gigs:', error.message)
+      (error) => { /* error loading pending gigs */ }
     ));
 
     const childIds = childAdmins.map(a => a.id);
@@ -122,7 +123,7 @@ export default function RegionLeadDashboard() {
           gigsByAdmin[adminId] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           updateApprovedGigs();
         },
-        (error) => console.error(`❌ Error loading gigs for mason ${adminId}:`, error.message)
+        (error) => { /* error loading gigs */ }
       ));
     });
 
@@ -145,8 +146,6 @@ export default function RegionLeadDashboard() {
       const assignedBookings = Object.values(bookingsByAdmin).flat();
       const allBookings = [...assignedBookings, ...unassignedBookings];
       
-      console.log(`📊 Total bookings: ${allBookings.length} (${assignedBookings.length} assigned, ${unassignedBookings.length} unassigned)`);
-      
       const active = allBookings.filter(b =>
         ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status)
       );
@@ -154,8 +153,6 @@ export default function RegionLeadDashboard() {
       
       const disputeBookings = allBookings.filter(b => b.dispute?.status);
       const openDisputes = disputeBookings.filter(b => b.dispute?.status === 'open');
-      
-      console.log(`✅ Active: ${active.length}, Delayed: ${delayed.length}, Open disputes: ${openDisputes.length}`);
       
       setActiveBookings(active);
       setDelayedBookings(delayed);
@@ -168,7 +165,6 @@ export default function RegionLeadDashboard() {
       }));
     };
     
-    console.log('🔍 RegionLead loading bookings for masons:', childAdminIds);
     
     // Query 1: Listen to bookings assigned to child admins
     childAdminIds.forEach(adminId => {
@@ -176,11 +172,10 @@ export default function RegionLeadDashboard() {
         query(collection(db, 'bookings'), where('adminId', '==', adminId)),
         (snap) => {
           bookingsByAdmin[adminId] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          console.log(`📦 Loaded ${bookingsByAdmin[adminId].length} bookings for mason ${adminId}`);
           aggregateAndUpdate();
         },
-        (error) => {
-          console.error(`❌ Error loading bookings for mason ${adminId}:`, error.message);
+        () => {
+          /* error loading bookings for mason */
         }
       );
       unsubscribers.push(unsub);
@@ -194,11 +189,10 @@ export default function RegionLeadDashboard() {
       ),
       (snap) => {
         unassignedBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        console.log(`📦 Loaded ${unassignedBookings.length} unassigned bookings`);
         aggregateAndUpdate();
       },
-      (error) => {
-        console.error('❌ Error loading unassigned bookings:', error.message);
+      () => {
+        /* error loading unassigned bookings */
       }
     );
     unsubscribers.push(unsubUnassigned);
@@ -305,14 +299,41 @@ export default function RegionLeadDashboard() {
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '28px', marginBottom: '8px', color: '#111' }}>
-          🌐 Region Lead Dashboard
-        </h1>
-        <p style={{ color: '#666', fontSize: '14px' }}>
-          {regionLeadData.name || regionLeadData.email} • Area: {regionLeadData.areaName || 'Not Set'}
-        </p>
+      {/* Premium Header */}
+      <div style={{ 
+        marginBottom: '32px', 
+        padding: '30px', 
+        borderRadius: '24px', 
+        background: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
+        color: 'white',
+        boxShadow: '0 10px 25px -5px rgba(79, 70, 229, 0.4)',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <h1 style={{ fontSize: '32px', marginBottom: '8px', fontWeight: '800', letterSpacing: '-0.025em' }}>
+            🌐 Region Operations
+          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.9 }}>
+            <span style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>
+              {regionLeadData.areaName || 'Universal Access'}
+            </span>
+            <span style={{ fontSize: '14px', fontWeight: '500' }}>
+              {regionLeadData.name || regionLeadData.email}
+            </span>
+          </div>
+        </div>
+        {/* Decorative background circle */}
+        <div style={{ 
+          position: 'absolute', 
+          right: '-50px', 
+          top: '-50px', 
+          width: '200px', 
+          height: '200px', 
+          borderRadius: '50%', 
+          background: 'rgba(255,255,255,0.1)',
+          pointerEvents: 'none'
+        }} />
       </div>
 
       {/* Region Score Alert */}
@@ -364,57 +385,107 @@ export default function RegionLeadDashboard() {
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#eff6ff', padding: '16px', borderRadius: '12px', border: '2px solid #3b82f6' }}>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e40af' }}>{stats.totalMasons}</div>
-          <div style={{ fontSize: '13px', color: '#1e40af', marginTop: '4px' }}>Masons</div>
-        </div>
-        <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '12px', border: '2px solid #10b981' }}>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#065f46' }}>{stats.totalGigs}</div>
-          <div style={{ fontSize: '13px', color: '#065f46', marginTop: '4px' }}>Active Gigs</div>
-        </div>
-        <div style={{ background: '#fef3c7', padding: '16px', borderRadius: '12px', border: '2px solid #f59e0b' }}>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#92400e' }}>{stats.pendingApprovals}</div>
-          <div style={{ fontSize: '13px', color: '#92400e', marginTop: '4px' }}>Pending Approvals</div>
-        </div>
-        <div style={{ background: '#fce7f3', padding: '16px', borderRadius: '12px', border: '2px solid #ec4899' }}>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#9f1239' }}>{stats.activeBookings}</div>
-          <div style={{ fontSize: '13px', color: '#9f1239', marginTop: '4px' }}>Active Bookings</div>
-        </div>
-        <div style={{ background: '#fef2f2', padding: '16px', borderRadius: '12px', border: '2px solid #ef4444' }}>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#991b1b' }}>{stats.openDisputes}</div>
-          <div style={{ fontSize: '13px', color: '#991b1b', marginTop: '4px' }}>Open Disputes</div>
-        </div>
-        <div style={{ background: '#f5f3ff', padding: '16px', borderRadius: '12px', border: '2px solid #8b5cf6' }}>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#5b21b6' }}>{stats.regionScore}</div>
-          <div style={{ fontSize: '13px', color: '#5b21b6', marginTop: '4px' }}>Region Score</div>
-        </div>
+      {/* High-Impact Stats Grid */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', 
+        gap: '20px', 
+        marginBottom: '32px' 
+      }}>
+        {[
+          { label: 'Masons', value: stats.totalMasons, color: '#6366f1', bg: '#eef2ff', icon: '👷' },
+          { label: 'Active Gigs', value: stats.totalGigs, color: '#10b981', bg: '#ecfdf5', icon: '💼' },
+          { label: 'Waitlist', value: stats.pendingApprovals, color: '#f59e0b', bg: '#fffbeb', icon: '⏳' },
+          { label: 'Bookings', value: stats.activeBookings, color: '#ec4899', bg: '#fdf2f8', icon: '📅' },
+          { label: 'Disputes', value: stats.openDisputes, color: '#ef4444', bg: '#fef2f2', icon: '🚨' },
+          { label: 'Score', value: `${stats.regionScore}%`, color: '#8b5cf6', bg: '#f5f3ff', icon: '📈' },
+        ].map((stat, i) => (
+          <div key={i} style={{ 
+            background: 'white',
+            padding: '24px 20px', 
+            borderRadius: '20px', 
+            border: '1px solid #f3f4f6',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+            textAlign: 'center',
+            transition: 'transform 0.2s, box-shadow 0.2s',
+            cursor: 'pointer'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-5px)';
+            e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05)';
+          }}>
+            <div style={{ 
+              fontSize: '24px', 
+              marginBottom: '8px',
+              width: '48px',
+              height: '48px',
+              background: stat.bg,
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 12px'
+            }}>
+              {stat.icon}
+            </div>
+            <div style={{ fontSize: '28px', fontWeight: '800', color: '#111827', lineHeight: 1 }}>{stat.value}</div>
+            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '6px', fontWeight: '600' }}>{stat.label}</div>
+          </div>
+        ))}
       </div>
 
       {/* Tab Navigation */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #e5e7eb', paddingBottom: '8px' }}>
+      <div style={{ 
+        display: 'flex', 
+        gap: '4px', 
+        marginBottom: '32px', 
+        background: '#f3f4f6', 
+        padding: '6px', 
+        borderRadius: '14px',
+        width: 'fit-content'
+      }}>
         {[
           { key: 'overview', label: 'Overview', icon: '📊' },
-          { key: 'gigs', label: `Gig Approvals (${stats.pendingApprovals})`, icon: '⏳' },
+          { key: 'gigs', label: `Gig Approvals`, count: stats.pendingApprovals, icon: '⏳' },
           { key: 'admins', label: 'Manage Masons', icon: '👷' },
-          { key: 'disputes', label: `Disputes (${stats.openDisputes})`, icon: '🚨' },
+          { key: 'disputes', label: `Disputes`, count: stats.openDisputes, icon: '🚨' },
         ].map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             style={{
-              padding: '10px 16px',
-              background: activeTab === tab.key ? '#3b82f6' : 'transparent',
-              color: activeTab === tab.key ? 'white' : '#666',
+              padding: '10px 20px',
+              background: activeTab === tab.key ? 'white' : 'transparent',
+              color: activeTab === tab.key ? '#4f46e5' : '#6b7280',
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: '10px',
               cursor: 'pointer',
-              fontWeight: activeTab === tab.key ? 'bold' : 'normal',
-              fontSize: '14px'
+              fontWeight: '700',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: activeTab === tab.key ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none',
+              transition: 'all 0.2s'
             }}
           >
-            {tab.icon} {tab.label}
+            <span>{tab.icon}</span>
+            {tab.label}
+            {tab.count > 0 && (
+              <span style={{ 
+                background: activeTab === tab.key ? '#4f46e5' : '#9ca3af',
+                color: 'white',
+                padding: '2px 8px',
+                borderRadius: '10px',
+                fontSize: '11px'
+              }}>
+                {tab.count}
+              </span>
+            )}
           </button>
         ))}
       </div>

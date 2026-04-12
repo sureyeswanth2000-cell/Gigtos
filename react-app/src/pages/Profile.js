@@ -1,13 +1,16 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { auth, db } from "../firebase";
 import { doc, getDoc, setDoc, collection, query, where, onSnapshot } from "firebase/firestore";
+import { useLocation as useUserLocation } from "../context/LocationContext";
 
 export default function Profile() {
   const [profileData, setProfileData] = useState({
     name: "",
     email: "",
     phone: "",
-    address: ""
+    locationCity: "",
+    locationLat: null,
+    locationLng: null,
   });
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -16,6 +19,10 @@ export default function Profile() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [cashbacks, setCashbacks] = useState([]);
+
+  const userDetectRef = useRef(false);
+
+  const { location: detectedLocation, detectLocation, locationLoading, locationError } = useUserLocation() || {};
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -30,18 +37,23 @@ export default function Profile() {
         // Load user profile
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
+          const data = userDoc.data();
           setProfileData({
-            name: userDoc.data().name || "",
+            name: data.name || "",
             email: user.email || "",
-            phone: userDoc.data().phone || "",
-            address: userDoc.data().address || ""
+            phone: data.phone || "",
+            locationCity: data.locationCity || "",
+            locationLat: data.locationLat || null,
+            locationLng: data.locationLng || null,
           });
         } else {
           setProfileData({
             name: "",
             email: user.email || "",
             phone: "",
-            address: ""
+            locationCity: "",
+            locationLat: null,
+            locationLng: null,
           });
         }
       } catch (err) {
@@ -65,13 +77,36 @@ export default function Profile() {
     return unsub;
   }, []);
 
+  const handleDetectAndSetLocation = () => {
+    userDetectRef.current = true;
+    if (detectLocation) detectLocation();
+  };
+
+  // Sync detected location into profile when it changes
+  useEffect(() => {
+    if (detectedLocation) {
+      setProfileData((prev) => {
+        if (userDetectRef.current || !prev.locationCity) {
+          userDetectRef.current = false;
+          return {
+            ...prev,
+            locationCity: detectedLocation.city || prev.locationCity,
+            locationLat: detectedLocation.lat ?? prev.locationLat,
+            locationLng: detectedLocation.lng ?? prev.locationLng,
+          };
+        }
+        return prev;
+      });
+    }
+  }, [detectedLocation]);
+
   const handleSave = async () => {
     setError("");
     setSuccess("");
 
     // Validation
-    if (!profileData.name || !profileData.phone || !profileData.address) {
-      setError("All fields are required");
+    if (!profileData.name || !profileData.phone) {
+      setError("Name and phone number are required");
       return;
     }
 
@@ -88,8 +123,10 @@ export default function Profile() {
       await setDoc(doc(db, "users", user.uid), {
         name: profileData.name,
         phone: profileData.phone,
-        address: profileData.address,
         email: user.email,
+        locationCity: profileData.locationCity || "",
+        locationLat: profileData.locationLat || null,
+        locationLng: profileData.locationLng || null,
         updatedAt: new Date()
       }, { merge: true });
 
@@ -223,26 +260,46 @@ export default function Profile() {
               />
             </div>
 
+            {/* Location section in edit mode – detect or manually enter */}
             <div style={{ marginBottom: "20px" }}>
               <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
-                Address:
+                Location:
               </label>
-              <textarea
-                value={profileData.address}
-                onChange={(e) => setProfileData({ ...profileData, address: e.target.value })}
-                placeholder="Enter your complete address"
-                rows="4"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  fontFamily: "Arial, sans-serif",
-                  boxSizing: "border-box",
-                  resize: "vertical"
-                }}
-              />
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '10px', background: '#f3e8ff', borderRadius: '8px',
+                border: '1px solid #c4b5fd'
+              }}>
+                <input
+                  type="text"
+                  value={profileData.locationCity}
+                  onChange={(e) => setProfileData({ ...profileData, locationCity: e.target.value })}
+                  placeholder="Enter your city"
+                  style={{
+                    flex: 1, fontSize: '14px', padding: '6px 8px',
+                    border: '1px solid #c4b5fd', borderRadius: '6px',
+                    background: '#fff', color: '#1f2937',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                <button
+                  onClick={handleDetectAndSetLocation}
+                  disabled={locationLoading}
+                  style={{
+                    padding: '6px 14px', fontSize: '13px', fontWeight: 600,
+                    background: locationLoading ? '#c4b5fd' : '#A259FF', color: '#fff', border: 'none',
+                    borderRadius: '6px', cursor: locationLoading ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {locationLoading ? '⏳ Detecting…' : '📍 Detect Location'}
+                </button>
+              </div>
+              {locationError && (
+                <small style={{ color: '#c00', display: 'block', marginTop: '6px', fontSize: '12px' }}>
+                  ⚠️ {locationError}. Please enter your city manually or allow location access and try again.
+                </small>
+              )}
             </div>
 
             <div style={{ display: "flex", gap: "10px" }}>
@@ -297,10 +354,15 @@ export default function Profile() {
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <span style={{ fontWeight: "bold", color: "#666" }}>Address:</span>
-              <p style={{ margin: "5px 0 0 0", fontSize: "14px", whiteSpace: "pre-wrap" }}>
-                {profileData.address || "Not set"}
+              <span style={{ fontWeight: "bold", color: "#666" }}>Location:</span>
+              <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>
+                {profileData.locationCity || "Not set"}
               </p>
+              {profileData.locationLat && profileData.locationLng && (
+                <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#7C3AED", fontWeight: 500 }}>
+                  📍 {profileData.locationLat.toFixed(4)}, {profileData.locationLng.toFixed(4)}
+                </p>
+              )}
             </div>
 
             <button

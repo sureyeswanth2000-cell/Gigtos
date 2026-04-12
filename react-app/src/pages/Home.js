@@ -1,201 +1,371 @@
-import React, { useState } from 'react';
-import AIAssistantChatbot from '../components/AIAssistantChatbot';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
+import AiHeroCarousel from '../components/AiHeroCarousel';
+import NearbyWorkerNotification from '../components/NearbyWorkerNotification';
+import InstantBookingModal from '../components/InstantBookingModal';
+import { SERVICE_CATALOG } from '../utils/aiAssistant';
+import { getSpecialJob } from '../config/specialJobs';
+import { ALL_JOBS } from '../utils/jobListBuilder';
+import { useLocation } from '../context/LocationContext';
+import { getHeroCTAText } from '../utils/abTest';
+import './Home.css';
+
+const GEO_RADIUS_KM = 10;
 
 export default function Home() {
   const navigate = useNavigate();
   const [selectedService, setSelectedService] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [selectedSubtype, setSelectedSubtype] = useState(null);
+  const [assistantPrompt, setAssistantPrompt] = useState('');
+  const [serviceSearch, setServiceSearch] = useState('');
+  const { location } = useLocation() || {};
+  const cityName = location?.city || 'your area';
+  const [availableJobIds, setAvailableJobIds] = useState(null);
+  const [instantWorker, setInstantWorker] = useState(null);
+  const [userData, setUserData] = useState(null);
 
-  // Define available services with their metadata (icon, price, description)
-  const services = [
-    { id: 1, name: 'Plumber', icon: '🧰', price: 'Quote Based', desc: 'Pipe repairs, leak fixing, installation' },
-    { id: 2, name: 'Electrician', icon: '⚡', price: 'Quote Based', desc: 'Wiring, repairs, switch installation' },
-    { id: 3, name: 'Carpenter', icon: '🪛', price: 'Quote Based', desc: 'Furniture, doors, shelves, fixtures' },
-    { id: 4, name: 'Painter', icon: '🎨', price: 'Quote Based', desc: 'Interior & exterior painting' }
+  // Load user data for instant booking
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    getDoc(doc(db, 'users', auth.currentUser.uid))
+      .then((snap) => {
+        if (snap.exists()) setUserData(snap.data());
+      })
+      .catch(() => { /* Firestore read failed — user data not critical */ });
+  }, []);
+
+  useEffect(() => {
+    if (!location) return;
+
+    const { lat, lng } = location;
+    setAvailableJobIds(null);
+
+    fetch(`/api/available-jobs?lat=${lat}&lng=${lng}&radius=${GEO_RADIUS_KM}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch available jobs');
+        return res.json();
+      })
+      .then((data) => {
+        const ids = Array.isArray(data) ? data : data.jobs || data.jobIds || [];
+        setAvailableJobIds(new Set(ids.map(String)));
+      })
+      .catch(() => {
+        // If API is unavailable, show all jobs as available (graceful degradation)
+        setAvailableJobIds(new Set(ALL_JOBS.map((j) => j.id)));
+      });
+  }, [location]);
+
+  const trustPillars = [
+    'Verified professionals with identity checks',
+    'Transparent quote-based pricing before approval',
+    'Fast support and on-time service updates',
+  ];
+  const steps = [
+    {
+      title: 'Tell us your problem',
+      description: 'Describe the job in plain language and add photos if needed.',
+    },
+    {
+      title: 'Compare quotes',
+      description: `Receive quotes from local, verified workers near you.`,
+    },
+    {
+      title: 'Book with confidence',
+      description: 'Confirm your preferred worker and track updates in one place.',
+    },
+  ];
+  const testimonials = [
+    {
+      name: 'Sravani M.',
+      text: 'Gigtos found me a plumber in under an hour. The quote was clear and fair.',
+    },
+    {
+      name: 'Ravi Kumar',
+      text: 'I loved comparing options before booking. The process felt safe and simple.',
+    },
   ];
 
   // Handle service selection and login check
-  const handleBookService = (service) => {
+  const handleBookService = (job) => {
+    // Block booking for services not available in the user's area
+    const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
+    if (!isAvailable) return;
+
     // If not logged in, redirect to auth with user mode
     if (!auth.currentUser) {
       navigate('/auth?mode=user');
       return;
     }
-    // Set selected service and show confirmation modal
-    setSelectedService(service);
+    // Set selected job and show confirmation/subtype modal
+    setSelectedService(job);
+    setSelectedSubtype(null);
     setShowModal(true);
   };
 
   // Confirm selection and navigate to the detailed booking page
   const confirmBooking = () => {
     if (selectedService) {
-      // Pass service type as a query parameter
-      navigate(`/service?type=${selectedService.name}`);
+      if (selectedService.isSpecial && selectedSubtype) {
+        navigate(`/service?type=${encodeURIComponent(selectedSubtype.label)}`);
+      } else if (!selectedService.isSpecial) {
+        navigate(`/service?type=${encodeURIComponent(selectedService.name)}`);
+      }
       setShowModal(false);
     }
   };
 
+  const scrollToSection = (sectionId) => {
+    const target = document.getElementById(sectionId);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const visibleServices = ALL_JOBS.filter((job) => {
+    const query = serviceSearch.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      job.name.toLowerCase().includes(query)
+      || job.desc.toLowerCase().includes(query)
+      || (job.category || '').toLowerCase().includes(query)
+      || (job.keywords || []).some((kw) => kw.toLowerCase().includes(query))
+    );
+  });
+
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '20px' }}>
-      {/* AI Assistant Chatbot */}
-      <div style={{ marginBottom: '32px' }}>
-        <AIAssistantChatbot />
-      </div>
-      {/* Visual Header Section */}
-      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '28px', marginBottom: '10px', color: '#333' }}>
-          🏠 Home Services in Kavali
-        </h1>
-        <p style={{ fontSize: '16px', color: '#666', marginBottom: '5px' }}>
-          Book trusted professionals instantly
-        </p>
-        {/* Global visiting charge announcement */}
-        <p style={{ fontSize: '14px', color: '#0284c7', fontWeight: 'bold' }}>
-          ✨ Transparent Pricing | Pay only after approval
-        </p>
-      </div>
-
-      {/* Services Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-        gap: '20px',
-        marginBottom: '30px'
-      }}>
-        {services.map(service => (
-          <div
-            key={service.id}
-            style={{
-              padding: '20px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              borderRadius: '12px',
-              cursor: 'pointer',
-              transition: 'transform 0.2s, box-shadow 0.2s',
-              boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-              color: 'white'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-5px)';
-              e.currentTarget.style.boxShadow = '0 8px 12px rgba(0,0,0,0.2)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
-            }}
-          >
-            <div style={{ fontSize: '40px', marginBottom: '10px' }}>{service.icon}</div>
-            <h3 style={{ margin: '10px 0', fontSize: '20px', fontWeight: 'bold' }}>
-              {service.name}
-            </h3>
-            <p style={{ fontSize: '13px', marginBottom: '12px', opacity: 0.9 }}>
-              {service.desc}
-            </p>
-            {/* Price removed as per user feedback */}
-            <button
-              onClick={() => handleBookService(service)}
-              style={{
-                width: '100%',
-                padding: '10px',
-                backgroundColor: 'rgba(255,255,255,0.3)',
-                color: 'white',
-                border: '2px solid white',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '14px',
-                transition: 'background 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = 'rgba(255,255,255,0.5)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = 'rgba(255,255,255,0.3)';
-              }}
-            >
-              Book Now
-            </button>
+    <div className="home-page">
+      <section className="hero-shell" id="discover">
+        <div className="hero-intro">
+          <p className="eyebrow">{cityName} local network</p>
+          <h1>Trusted home services, booked in minutes.</h1>
+          <p className="hero-subtext">
+            From urgent repairs to planned upgrades, Gigtos helps you find verified professionals with transparent quotes.
+          </p>
+          <div className="hero-actions">
+            <button className="primary-btn" onClick={() => scrollToSection('services')} aria-label="Get started with Gigtos">{getHeroCTAText()}</button>
+            <button className="secondary-btn" onClick={() => scrollToSection('how-it-works')}>How It Works</button>
           </div>
-        ))}
-      </div>
+          <div className="trust-row">
+            {trustPillars.map((pillar) => (
+              <span key={pillar} className="trust-pill">{pillar}</span>
+            ))}
+          </div>
+        </div>
 
-      {/* Booking Confirmation Modal */}
+      </section>
+
+      <AiHeroCarousel
+        onQuerySelect={(query) => setAssistantPrompt(query)}
+        onBookWorker={(w) => setInstantWorker(w)}
+      />
+
+      <section className="services-section" id="services">
+        <div className="section-header-row">
+          <div>
+            <p className="eyebrow">Popular in {cityName}</p>
+            <h2>Popular Services in {cityName}</h2>
+          </div>
+          <p className="section-caption">Verified pro availability updates daily</p>
+        </div>
+
+        <div className="services-tools">
+          <input
+            type="text"
+            value={serviceSearch}
+            onChange={(event) => setServiceSearch(event.target.value)}
+            placeholder="Search services (plumber, electrician, painting...)"
+            aria-label="Search services"
+          />
+        </div>
+
+        <div className="services-scroll-wrapper">
+          <div className="services-grid">
+            {visibleServices.map((job) => {
+              const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
+              const isCheckingAvailability = availableJobIds === null && location;
+
+              return (
+                <article key={job.id} className={`service-card${!isAvailable ? ' service-card--disabled' : ''}`}>
+                  <div className="service-top">
+                    <span className="service-icon" role="img" aria-label={job.name}>{job.icon || '🔧'}</span>
+                    {!isAvailable ? (
+                      <span className="coming-soon-chip">Coming Soon</span>
+                    ) : (
+                      <span className="verified-chip">{job.isUpcoming ? 'Coming Soon' : 'Verified Pro'}</span>
+                    )}
+                  </div>
+                  <h3>{job.name}</h3>
+                  <p>{job.desc}</p>
+                  {!isAvailable && (
+                    <span className="coming-soon-area-label">🚀 Coming soon in your area</span>
+                  )}
+                  <div className="service-card-actions">
+                    {!isAvailable ? (
+                      <button className="primary-btn" disabled>
+                        Coming Soon
+                      </button>
+                    ) : (
+                      <button className="primary-btn" onClick={() => handleBookService(job)} disabled={isCheckingAvailability}>
+                        {isCheckingAvailability ? 'Checking…' : job.isSpecial ? 'View Options' : 'Book Service'}
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+
+        {visibleServices.length > 2 && (
+          <div className="scroll-hint">
+            <span>Swipe to see more services</span>
+            <span className="scroll-hint-arrow">→</span>
+          </div>
+        )}
+
+        {visibleServices.length === 0 && (
+          <div className="no-services-note">
+            No services found for "{serviceSearch}". Try another keyword or ask Gito AI.
+          </div>
+        )}
+      </section>
+
+      <section className="steps-section" id="how-it-works">
+        <div className="section-header-row">
+          <h2>Seamless in 3 steps</h2>
+          <p className="section-caption">Built for quick decisions and safer bookings</p>
+        </div>
+        <div className="steps-grid">
+          {steps.map((step, index) => (
+            <div key={step.title} className="step-card">
+              <span className="step-number">0{index + 1}</span>
+              <h3>{step.title}</h3>
+              <p>{step.description}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="testimonials-section" id="trust">
+        <div className="section-header-row">
+          <h2>Customer confidence, every booking</h2>
+          <p className="section-caption">Real reviews from local households</p>
+        </div>
+        <div className="testimonial-grid">
+          {testimonials.map((testimonial) => (
+            <blockquote key={testimonial.name} className="testimonial-card">
+              <p>“{testimonial.text}”</p>
+              <footer>{testimonial.name}</footer>
+            </blockquote>
+          ))}
+        </div>
+      </section>
+
+      <section className="why-section">
+        <h2>Why choose Gigtos?</h2>
+        <div className="why-grid">
+          <div>
+            <h3>Local-first matching</h3>
+            <p>We prioritize professionals who actively service your neighborhood in {cityName}.</p>
+          </div>
+          <div>
+            <h3>Transparent quotes</h3>
+            <p>Approve only when the quote, timeline, and worker details look right for your job.</p>
+          </div>
+          <div>
+            <h3>Reliable support</h3>
+            <p>Need help with re-scheduling or follow-up? Our support flow is built into your booking journey.</p>
+          </div>
+        </div>
+      </section>
+
+      <ConsumerAiAssistant
+        services={SERVICE_CATALOG}
+        onBookService={handleBookService}
+        externalPrompt={assistantPrompt}
+        onPromptConsumed={() => setAssistantPrompt('')}
+      />
+
+      {/* Nearby Worker Notification + Instant Booking Modal */}
+      <NearbyWorkerNotification onBookWorker={(w) => setInstantWorker(w)} />
+
+      {instantWorker && (
+        <InstantBookingModal
+          worker={instantWorker}
+          userData={userData}
+          onClose={() => {
+            setInstantWorker(null);
+          }}
+          onBooked={({ bookingId }) => {
+            setInstantWorker(null);
+            navigate('/my-bookings');
+          }}
+        />
+      )}
+
+      {/* Booking / Subtype Selection Modal */}
       {showModal && selectedService && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: 'white',
-            padding: '30px',
-            borderRadius: '12px',
-            maxWidth: '400px',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
-          }}>
-            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-              <div style={{ fontSize: '60px', marginBottom: '15px' }}>
-                {selectedService.icon}
-              </div>
-              <h2 style={{ margin: '0 0 10px 0', fontSize: '24px', color: '#333' }}>
-                Book {selectedService.name}
-              </h2>
-              <p style={{ color: '#666', margin: '10px 0' }}>
-                {selectedService.desc}
-              </p>
-              {/* Price removed as per user feedback */}
+        <div className="booking-modal-overlay">
+          <div className="booking-modal-card">
+            <div className="booking-modal-head">
+              <span className="service-icon" role="img" aria-label={selectedService.name}
+                style={{ fontSize: '38px', width: 'auto', height: 'auto' }}>{selectedService.icon || '🔧'}</span>
+              <h2>{selectedService.isSpecial ? selectedService.name : `Book ${selectedService.name}`}</h2>
+              <p>{selectedService.desc}</p>
             </div>
 
-            <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f0f4ff', borderRadius: '8px' }}>
-              <p style={{ margin: '0', color: '#333', fontSize: '14px' }}>
-                ✓ Quick booking process<br />
-                ✓ Professional & verified workers<br />
-                ✓ Easy payment options (coming soon)<br />
-                ✓ Real-time tracking
-              </p>
-            </div>
+            {selectedService.isSpecial ? (
+              <>
+                <div className="query-list">
+                  {(getSpecialJob(selectedService.id)?.subtypes || []).map((subtype) => (
+                    <button
+                      key={subtype.id}
+                      onClick={() => setSelectedSubtype(subtype)}
+                      style={selectedSubtype?.id === subtype.id ? { borderColor: 'var(--color-brand-600)', borderStyle: 'solid', background: '#fff' } : {}}
+                    >
+                      {subtype.icon} {subtype.label} — {subtype.desc}
+                    </button>
+                  ))}
+                </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  backgroundColor: '#e0e0e0',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                  fontSize: '14px'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmBooking}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  backgroundColor: '#667eea',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                  fontSize: '14px'
-                }}
-              >
-                Proceed to Book
-              </button>
-            </div>
+                <div className="modal-actions">
+                  <button onClick={() => setShowModal(false)} className="cancel-btn">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmBooking}
+                    className="primary-btn"
+                    disabled={!selectedSubtype}
+                  >
+                    {selectedSubtype ? `Book ${selectedSubtype.label} →` : 'Select an option'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="modal-benefits">
+                  <p>
+                    ✓ Verified worker profiles<br />
+                    ✓ Quote-based approval flow<br />
+                    ✓ Flexible time-slot booking<br />
+                    ✓ Real-time update tracking
+                  </p>
+                </div>
+
+                <div className="modal-actions">
+                  <button onClick={() => setShowModal(false)} className="cancel-btn">
+                    Cancel
+                  </button>
+                  <button onClick={confirmBooking} className="primary-btn">
+                    Proceed to Book
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

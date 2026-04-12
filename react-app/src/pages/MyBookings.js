@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { acceptQuote as applyAcceptedQuote } from '../utils/bookingWorkflow';
+import LiveServiceTracker from '../components/LiveServiceTracker';
 
 // UI CONFIG: Color mapping for visual differentiation of booking states
 const statusColors = {
@@ -91,7 +92,6 @@ export default function MyBookings() {
       items.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
       setBookings(items);
     }, err => {
-      console.error('snapshot error', err);
       setReadError(err?.message || 'Unable to load bookings');
     });
     return unsub;
@@ -103,7 +103,7 @@ export default function MyBookings() {
     const q = query(collection(db, 'cashbacks'), where('userId', '==', user.uid));
     const unsub = onSnapshot(q, snap => {
       setCashbacks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, err => console.error('cashback error', err));
+    }, () => { /* cashback error */ });
     return unsub;
   }, [user]);
 
@@ -178,7 +178,6 @@ export default function MyBookings() {
       try {
         await runSparkFallback(method, data);
       } catch (fallbackErr) {
-        console.error(fallbackErr);
         alert('Action failed: ' + fallbackErr.message);
         throw fallbackErr;
       }
@@ -193,8 +192,6 @@ export default function MyBookings() {
       try {
         await runSparkFallback(method, data);
       } catch (fallbackErr) {
-        console.error(e);
-        console.error(fallbackErr);
         alert('Action failed: ' + (fallbackErr.message || e.message));
         throw fallbackErr;
       }
@@ -463,12 +460,17 @@ export default function MyBookings() {
             </div>
           )}
 
+          {/* LIVE WORKER TRACKING — shown for assigned/in_progress immediate bookings */}
+          {['assigned', 'in_progress'].includes(booking.status) && booking.assignedWorker && (
+            <LiveServiceTracker bookingId={booking.id} />
+          )}
+
           {/* Multi-day progress tracking */}
           {booking.dailyNotes?.length > 0 && (
             <div style={{ marginTop: '8px' }}>
               <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#555', marginBottom: '4px' }}>📋 Work Progress Notes:</div>
               {booking.dailyNotes.map((n, i) => (
-                <div key={i} style={{ fontSize: '12px', color: '#555', padding: '4px 8px', background: '#f0f4ff', borderRadius: '4px', marginBottom: '4px' }}>
+                <div key={n.date || i} style={{ fontSize: '12px', color: '#555', padding: '4px 8px', background: '#f0f4ff', borderRadius: '4px', marginBottom: '4px' }}>
                   <strong>{n.date}</strong>: {n.note}
                 </div>
               ))}
@@ -481,7 +483,7 @@ export default function MyBookings() {
               <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#555', marginBottom: '4px' }}>📸 Photos:</div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {booking.photos.map((p, i) => (
-                  <a key={i} href={p.url} target="_blank" rel="noreferrer">
+                  <a key={p.url || i} href={p.url} target="_blank" rel="noreferrer">
                     <img src={p.url} alt={p.label} title={p.label}
                       style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ddd' }} />
                   </a>

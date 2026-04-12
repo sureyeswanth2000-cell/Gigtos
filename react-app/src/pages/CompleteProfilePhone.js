@@ -2,10 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { doc, updateDoc } from 'firebase/firestore';
+import { detectCurrentLocation } from '../context/LocationContext';
 
 export default function CompleteProfilePhone() {
   const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
+  const [locationCity, setLocationCity] = useState('');
+  const [locationLat, setLocationLat] = useState(null);
+  const [locationLng, setLocationLng] = useState(null);
+  const [detectingLocation, setDetectingLocation] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -16,11 +20,26 @@ export default function CompleteProfilePhone() {
     }
   }, [navigate]);
 
+  const handleDetectLocation = async () => {
+    setDetectingLocation(true);
+    setError('');
+    try {
+      const loc = await detectCurrentLocation();
+      setLocationCity(loc.city || '');
+      setLocationLat(loc.lat);
+      setLocationLng(loc.lng);
+    } catch {
+      setError('Could not detect location. Please enter your city manually or allow location access and try again.');
+    } finally {
+      setDetectingLocation(false);
+    }
+  };
+
   const handleComplete = async (e) => {
     e.preventDefault();
     
-    if (!name || !address) {
-      setError('Please fill in all fields');
+    if (!name || !locationCity) {
+      setError('Please enter your name and location');
       return;
     }
 
@@ -31,11 +50,16 @@ export default function CompleteProfilePhone() {
       const uid = auth.currentUser.uid;
       
       // Update user profile in Firestore
-      await updateDoc(doc(db, 'users', uid), {
+      const updateData = {
         name: name,
-        address: address,
+        locationCity: locationCity,
         updatedAt: new Date()
-      });
+      };
+      if (locationLat && locationLng) {
+        updateData.locationLat = locationLat;
+        updateData.locationLng = locationLng;
+      }
+      await updateDoc(doc(db, 'users', uid), updateData);
 
       // Navigate to my bookings
       navigate('/my-bookings');
@@ -101,24 +125,39 @@ export default function CompleteProfilePhone() {
 
         <div style={{marginBottom: '20px'}}>
           <label style={{display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px'}}>
-            Address:
+            Location:
           </label>
-          <textarea
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Enter your complete address"
-            rows="4"
-            style={{
-              width: '100%',
-              padding: '10px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              fontSize: '14px',
-              fontFamily: 'Arial, sans-serif',
-              boxSizing: 'border-box',
-              resize: 'vertical'
-            }}
-          />
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '10px', background: '#f3e8ff', borderRadius: '8px',
+            border: '1px solid #c4b5fd'
+          }}>
+            <input
+              type="text"
+              value={locationCity}
+              onChange={(e) => setLocationCity(e.target.value)}
+              placeholder="Enter your city"
+              style={{
+                flex: 1, fontSize: '14px', padding: '8px',
+                border: '1px solid #c4b5fd', borderRadius: '6px',
+                background: '#fff', color: '#1f2937',
+                boxSizing: 'border-box'
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleDetectLocation}
+              disabled={detectingLocation}
+              style={{
+                padding: '8px 14px', fontSize: '13px', fontWeight: 600,
+                background: detectingLocation ? '#c4b5fd' : '#A259FF', color: '#fff', border: 'none',
+                borderRadius: '6px', cursor: detectingLocation ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {detectingLocation ? '⏳ Detecting…' : '📍 Detect'}
+            </button>
+          </div>
         </div>
 
         <button

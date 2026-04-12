@@ -1,11 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { httpsCallable } from 'firebase/functions';
-import { functionsInstance } from '../firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { functionsInstance, db, auth } from '../firebase';
 import {
   buildLocalAssistantFallback,
-  buildPromptSuggestions,
+  checkServiceNearby,
   findRelevantService,
 } from '../utils/aiAssistant';
+import { useLocation as useGigLocation } from '../context/LocationContext';
 
 export default function ConsumerAiAssistant({
   services = [],
@@ -13,18 +16,22 @@ export default function ConsumerAiAssistant({
   externalPrompt = '',
   onPromptConsumed,
 }) {
+  const navigate = useNavigate();
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      text: 'Hi, I’m Gito AI. Ask about service choice, price, schedule, or booking steps.',
+      text: "Hi there! 👋 I'm Gito AI, your personal booking assistant. Tell me what you need \u2014 whether it's fixing a leak, installing a fan, or painting a room \u2014 and I'll find the right worker for you!",
     },
   ]);
   const [loading, setLoading] = useState(false);
   const [insights, setInsights] = useState([]);
   const [selectedService, setSelectedService] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [pendingBooking, setPendingBooking] = useState(null);
+  const [availableWorkers, setAvailableWorkers] = useState([]);
   const messagesRef = useRef(null);
+  const { location } = useGigLocation() || {};
 
   useEffect(() => {
     let active = true;
@@ -59,16 +66,32 @@ export default function ConsumerAiAssistant({
     };
   }, [services]);
 
+  // Fetch available workers for proximity checks
+  useEffect(() => {
+    let active = true;
+
+    const fetchWorkers = async () => {
+      try {
+        const snap = await getDocs(
+          query(collection(db, 'worker_availability'), where('isAvailable', '==', true))
+        );
+        if (active) {
+          setAvailableWorkers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        }
+      } catch {
+        if (active) setAvailableWorkers([]);
+      }
+    };
+
+    fetchWorkers();
+    return () => { active = false; };
+  }, []);
+
   useEffect(() => {
     if (messagesRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
     }
   }, [messages, loading, isOpen]);
-
-  const promptSuggestions = useMemo(
-    () => buildPromptSuggestions(selectedService || 'service').slice(0, 3),
-    [selectedService]
-  );
 
   const sendQuestion = async (promptText) => {
     const text = (promptText || question).trim();
@@ -84,6 +107,16 @@ export default function ConsumerAiAssistant({
       setSelectedService(inferredService);
     }
 
+    // Run proximity check every time a message is processed
+    const nearbyCheck = inferredService
+      ? checkServiceNearby({
+          serviceName: inferredService,
+          workers: availableWorkers,
+          userLat: location?.lat,
+          userLng: location?.lng,
+        })
+      : null;
+
     try {
       const callable = httpsCallable(functionsInstance, 'aiBookingAssistant');
       const response = await callable({
@@ -95,6 +128,7 @@ export default function ConsumerAiAssistant({
         message: text,
         selectedService: inferredService,
         insights,
+        nearbyCheck,
       });
 
       setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
@@ -106,6 +140,7 @@ export default function ConsumerAiAssistant({
         message: text,
         selectedService: inferredService,
         insights,
+        nearbyCheck,
       });
       setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
     } finally {
@@ -172,9 +207,29 @@ export default function ConsumerAiAssistant({
               <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Quick booking help</div>
             </div>
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              {matchedService && (
+              {matchedService && !pendingBooking && (
                 <button
-                  onClick={() => onBookService?.(matchedService)}
+                  onClick={() => {
+                    if (!auth.currentUser) {
+                      setMessages((prev) => [
+                        ...prev,
+                        {
+                          role: 'assistant',
+                          text: `Please log in first to book ${matchedService.name}. Redirecting you to the login page...`,
+                        },
+                      ]);
+                      setTimeout(() => navigate('/auth?mode=user'), 1200);
+                      return;
+                    }
+                    setPendingBooking(matchedService);
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        role: 'assistant',
+                        text: `I found a match: ${matchedService.name}. Would you like me to proceed with booking? Please confirm below.`,
+                      },
+                    ]);
+                  }}
                   style={{
                     padding: '7px 10px',
                     borderRadius: '8px',
@@ -238,25 +293,70 @@ export default function ConsumerAiAssistant({
           </div>
 
           <div style={{ marginTop: 'auto', padding: '12px', borderTop: '1px solid rgba(255,255,255,0.12)', background: 'rgba(17,24,39,0.22)' }}>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
-              {promptSuggestions.map((prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => sendQuestion(prompt)}
-                  style={{
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    background: 'rgba(255,255,255,0.08)',
-                    color: 'white',
-                    borderRadius: '999px',
-                    padding: '6px 10px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                  }}
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
+            {pendingBooking && (
+              <div style={{
+                background: 'rgba(249, 115, 22, 0.15)',
+                border: '1px solid rgba(249, 115, 22, 0.4)',
+                borderRadius: '10px',
+                padding: '10px 12px',
+                marginBottom: '10px',
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '6px' }}>
+                  <span role="img" aria-label="AI">🤖</span> Confirm booking for {pendingBooking.name}?
+                </div>
+                <div style={{ fontSize: '11px', opacity: 0.85, marginBottom: '8px' }}>
+                  AI will never auto-book. Your explicit confirmation is required.
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => {
+                      const serviceName = pendingBooking.name;
+                      setMessages((prev) => [
+                        ...prev,
+                        { role: 'assistant', text: `Great! Opening the booking page for ${serviceName}. You can fill in the details there.` },
+                      ]);
+                      setPendingBooking(null);
+                      navigate(`/service?type=${encodeURIComponent(serviceName)}`);
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '7px 10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#22c55e',
+                      color: '#fff',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                    }}
+                  >
+                    ✓ Yes, Proceed
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMessages((prev) => [
+                        ...prev,
+                        { role: 'assistant', text: 'No problem! Booking cancelled. Ask me anything else.' },
+                      ]);
+                      setPendingBooking(null);
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '7px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      background: 'rgba(255,255,255,0.1)',
+                      color: '#fff',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                    }}
+                  >
+                    ✕ Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
@@ -268,7 +368,7 @@ export default function ConsumerAiAssistant({
                     sendQuestion();
                   }
                 }}
-                placeholder="Ask about service or price"
+                placeholder="Ask me anything..."
                 style={{
                   flex: 1,
                   padding: '10px 12px',

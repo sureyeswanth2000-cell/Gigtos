@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { addDoc, collection, doc, getDoc } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { auth, db } from '../firebase';
+import { useLocation as useUserLocation } from '../context/LocationContext';
+import { suggestBudgetForUser, formatBudgetRange } from '../utils/aiBudgetSuggestion';
 import './Service.css';
 
 const serviceIcons = {
@@ -32,9 +34,10 @@ const professionalDirectory = {
 };
 
 const steps = [
-  { id: 1, label: 'Service Details' },
-  { id: 2, label: 'Schedule & Pro' },
-  { id: 3, label: 'Confirm & Next Steps' },
+  { id: 1, label: 'Your Details' },
+  { id: 2, label: 'Service Details' },
+  { id: 3, label: 'Schedule & Pro' },
+  { id: 4, label: 'Confirm & Next Steps' },
 ];
 
 export default function Service() {
@@ -42,12 +45,15 @@ export default function Service() {
   const navigate = useNavigate();
   const params = new URLSearchParams(location.search);
   const type = location.state?.serviceType || params.get('type') || 'Service';
+  const { location: userLoc } = useUserLocation() || {};
+  const cityName = userLoc?.city || 'your area';
 
   const [currentStep, setCurrentStep] = useState(1);
 
   const [name, setName] = useState('');
   const [address, setAddress] = useState(location.state?.prefillAddress || '');
   const [userPhone, setUserPhone] = useState(location.state?.prefillPhone || '');
+  const [userLocationCity, setUserLocationCity] = useState('');
 
   const [issueTitle, setIssueTitle] = useState('');
   const [jobDetails, setJobDetails] = useState('');
@@ -69,6 +75,16 @@ export default function Service() {
   const professionals = useMemo(() => professionalDirectory[type] || [], [type]);
   const selectedProfessional = professionals.find((pro) => pro.id === preferredProId);
 
+  /** AI budget suggestion for user display (marked-up range) */
+  const budgetSuggestion = useMemo(() => {
+    if (currentStep !== 4) return null;
+    return suggestBudgetForUser({
+      serviceType: type,
+      description: `${issueTitle} ${jobDetails}`.trim(),
+      estimatedDays,
+    });
+  }, [currentStep, type, issueTitle, jobDetails, estimatedDays]);
+
   useEffect(() => {
     const loadUserData = async () => {
       try {
@@ -82,12 +98,13 @@ export default function Service() {
         setName((prev) => prev || data.name || '');
         if (!location.state?.prefillAddress) setAddress((prev) => prev || data.address || '');
         if (!location.state?.prefillPhone) setUserPhone((prev) => prev || data.phone || '');
+        setUserLocationCity(data.locationCity || '');
 
-        if (!data.phone || !data.name || !data.address) {
+        if (!data.phone || !data.name) {
           setProfileIncomplete(true);
         }
-      } catch (err) {
-        console.error('Error loading profile:', err);
+      } catch {
+        /* profile load error */
       }
     };
 
@@ -105,8 +122,7 @@ export default function Service() {
       const snap = await uploadBytes(storageRef(storage, path), file);
       const url = await getDownloadURL(snap.ref);
       setRequestedPhoto(url);
-    } catch (err) {
-      console.error('Photo upload failed:', err);
+    } catch {
       setError('Photo upload failed. Please try again.');
     } finally {
       setUploadingPhoto(false);
@@ -114,11 +130,15 @@ export default function Service() {
   };
 
   const validateStepOne = () => {
+    // Step 1 is read-only profile display; only check if profile is filled
     if (!name.trim() || !address.trim() || !userPhone.trim()) {
-      setError('Please provide your name, phone, and service address.');
+      setError('Your profile is incomplete. Please update your profile first.');
       return false;
     }
+    return true;
+  };
 
+  const validateStepTwo = () => {
     if (!issueTitle.trim()) {
       setError('Please add a short service request title.');
       return false;
@@ -127,7 +147,7 @@ export default function Service() {
     return true;
   };
 
-  const validateStepTwo = () => {
+  const validateStepThree = () => {
     if (isScheduled && (!scheduledDate || !timeSlot)) {
       setError('Select a scheduled date and time slot to continue.');
       return false;
@@ -145,7 +165,8 @@ export default function Service() {
     setError('');
     if (currentStep === 1 && !validateStepOne()) return;
     if (currentStep === 2 && !validateStepTwo()) return;
-    setCurrentStep((prev) => Math.min(3, prev + 1));
+    if (currentStep === 3 && !validateStepThree()) return;
+    setCurrentStep((prev) => Math.min(4, prev + 1));
   };
 
   const goBack = () => {
@@ -156,7 +177,7 @@ export default function Service() {
   const handleBooking = async () => {
     setError('');
 
-    if (!validateStepOne() || !validateStepTwo()) {
+    if (!validateStepOne() || !validateStepTwo() || !validateStepThree()) {
       return;
     }
 
@@ -213,10 +234,10 @@ export default function Service() {
         <header className="service-header">
           <div className="service-badge">Editorial Concierge Booking</div>
           <h1>
-            <span aria-hidden="true">{serviceIcons[type] || '🛠️'}</span> Book {type} in Kavali
+            <span aria-hidden="true">{serviceIcons[type] || '🛠️'}</span> Book {type} in {cityName}
           </h1>
           <p>
-            A guided 3-step journey with verified professionals, transparent quotes, and clear next steps.
+            Guided booking with verified pros and transparent quotes.
           </p>
           <div className="trust-signals">
             <span>Verified Pros</span>
@@ -238,37 +259,59 @@ export default function Service() {
           ))}
         </div>
 
-        {profileIncomplete && (
-          <div className="alert warning">
-            Your profile appears incomplete. Update name, phone, and address for smoother booking.
-            <button onClick={() => navigate('/profile')}>Edit Profile</button>
-          </div>
-        )}
-
         {error && <div className="alert error">{error}</div>}
         {success && <div className="alert success">{success}</div>}
 
         <section className="step-content">
           {currentStep === 1 && (
             <div className="step-layout">
-              <h2>1. Service Selection & Details</h2>
-              <p className="step-note">Tell us what you need so professionals can quote accurately.</p>
+              <h2>Your Details</h2>
+              <p className="step-note">Tap your profile card to make changes.</p>
 
-              <div className="form-grid two-col">
-                <label>
-                  Full Name
-                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your full name" />
-                </label>
-                <label>
-                  Phone Number
-                  <input value={userPhone} onChange={(e) => setUserPhone(e.target.value)} placeholder="10-digit mobile number" />
-                </label>
+              <div className="summary-card" onClick={() => navigate('/profile')} style={{ cursor: 'pointer' }} title="Click to edit your profile">
+                <div className="detail-chip">
+                  <div className="chip-icon">👤</div>
+                  <div className="chip-text">
+                    <span className="chip-label">Name</span>
+                    <span className="chip-value">{name || <span className="not-set">Not set</span>}</span>
+                  </div>
+                </div>
+                <div className="detail-chip">
+                  <div className="chip-icon">📱</div>
+                  <div className="chip-text">
+                    <span className="chip-label">Phone</span>
+                    <span className="chip-value">{userPhone || <span className="not-set">Not set</span>}</span>
+                  </div>
+                </div>
+                <div className="detail-chip">
+                  <div className="chip-icon">🏠</div>
+                  <div className="chip-text">
+                    <span className="chip-label">Address</span>
+                    <span className="chip-value">{address || <span className="not-set">Not set</span>}</span>
+                  </div>
+                </div>
+                <div className="detail-chip">
+                  <div className="chip-icon">📍</div>
+                  <div className="chip-text">
+                    <span className="chip-label">Location</span>
+                    <span className="chip-value">{userLocationCity || cityName || <span className="not-set">Not set</span>}</span>
+                  </div>
+                </div>
               </div>
 
-              <label>
-                Service Address
-                <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} placeholder="House number, street, landmark" />
-              </label>
+              {profileIncomplete && (
+                <div className="alert warning">
+                  Profile incomplete — please update before booking.
+                  <button onClick={() => navigate('/profile')}>Edit Profile</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {currentStep === 2 && (
+            <div className="step-layout">
+              <h2>Service Selection & Details</h2>
+              <p className="step-note">Tell us what you need so professionals can quote accurately.</p>
 
               <div className="form-grid two-col">
                 <label>
@@ -298,9 +341,9 @@ export default function Service() {
             </div>
           )}
 
-          {currentStep === 2 && (
+          {currentStep === 3 && (
             <div className="step-layout">
-              <h2>2. Scheduling & Professional Selection</h2>
+              <h2>Scheduling & Professional</h2>
               <p className="step-note">Choose when you need service and optionally nominate a preferred verified professional.</p>
 
               <div className="mode-toggle">
@@ -372,27 +415,81 @@ export default function Service() {
             </div>
           )}
 
-          {currentStep === 3 && (
+          {currentStep === 4 && (
             <div className="step-layout">
-              <h2>3. Confirmation & Next Steps</h2>
-              <p className="step-note">Review details before final submission.</p>
+              <h2>Confirm & Book</h2>
+              <p className="step-note">Review your booking summary.</p>
 
-              <div className="summary-card">
-                <div><strong>Service:</strong> {type}</div>
-                <div><strong>Request:</strong> {issueTitle || 'Not provided'}</div>
-                <div><strong>Customer:</strong> {name || 'Not provided'}</div>
-                <div><strong>Phone:</strong> {userPhone || 'Not provided'}</div>
-                <div><strong>Address:</strong> {address || 'Not provided'}</div>
-                <div><strong>Booking Mode:</strong> {isScheduled ? 'Scheduled' : 'Immediate'}</div>
-                {isScheduled && (
-                  <>
-                    <div><strong>Date:</strong> {scheduledDate}</div>
-                    <div><strong>Time Slot:</strong> {timeSlot}</div>
-                  </>
+              <div className="confirm-summary">
+                <div className="confirm-row">
+                  <div className="row-icon">🛠️</div>
+                  <div className="row-text">
+                    <span className="row-label">Service</span>
+                    <span className="row-value">{type}</span>
+                  </div>
+                </div>
+                <div className="confirm-row">
+                  <div className="row-icon">📝</div>
+                  <div className="row-text">
+                    <span className="row-label">Request</span>
+                    <span className="row-value">{issueTitle || 'Not provided'}</span>
+                  </div>
+                </div>
+                <div className="confirm-row">
+                  <div className="row-icon">👤</div>
+                  <div className="row-text">
+                    <span className="row-label">Customer</span>
+                    <span className="row-value">{name || 'Not provided'}{userPhone ? ` · ${userPhone}` : ''}</span>
+                  </div>
+                </div>
+                <div className="confirm-row">
+                  <div className="row-icon">🏠</div>
+                  <div className="row-text">
+                    <span className="row-label">Address</span>
+                    <span className="row-value">{address || 'Not provided'}</span>
+                  </div>
+                </div>
+                <div className="confirm-row">
+                  <div className="row-icon">📅</div>
+                  <div className="row-text">
+                    <span className="row-label">Booking</span>
+                    <span className="row-value">
+                      {isScheduled ? `${scheduledDate || 'TBD'}` : 'Immediate'}
+                      {isScheduled && timeSlot ? ` · ${timeSlot}` : ''}
+                      {` · ${estimatedDays} day${estimatedDays > 1 ? 's' : ''}`}
+                    </span>
+                  </div>
+                </div>
+                {selectedProfessional && (
+                  <div className="confirm-row">
+                    <div className="row-icon">⭐</div>
+                    <div className="row-text">
+                      <span className="row-label">Preferred Pro</span>
+                      <span className="row-value">{selectedProfessional.name}</span>
+                    </div>
+                  </div>
                 )}
-                <div><strong>Estimated Days:</strong> {estimatedDays}</div>
-                <div><strong>Preferred Pro:</strong> {selectedProfessional ? selectedProfessional.name : 'No preference'}</div>
               </div>
+
+              {budgetSuggestion && (
+                <div className="budget-suggestion-card">
+                  <div className="budget-suggestion-header">
+                    <span className="budget-suggestion-title">🤖 Gito AI Budget Suggestion</span>
+                    <span className={`budget-confidence-badge ${budgetSuggestion.confidence}`}>
+                      📊 {budgetSuggestion.confidence}
+                    </span>
+                  </div>
+                  <div className="budget-suggestion-range">
+                    {formatBudgetRange(budgetSuggestion)}
+                  </div>
+                  <p className="budget-suggestion-explanation">
+                    {budgetSuggestion.explanation}
+                  </p>
+                  <p className="budget-suggestion-disclaimer">
+                    This is an AI-estimated range. Actual quotes from workers may vary based on materials and site conditions.
+                  </p>
+                </div>
+              )}
 
               <div className="next-steps">
                 <h3>What happens next</h3>
@@ -417,7 +514,7 @@ export default function Service() {
             </button>
           )}
 
-          {currentStep < 3 ? (
+          {currentStep < 4 ? (
             <button className="btn primary" onClick={goNext}>
               Continue
             </button>

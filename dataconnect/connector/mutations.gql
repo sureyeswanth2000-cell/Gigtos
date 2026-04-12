@@ -1,0 +1,610 @@
+# Firebase Data Connect — GraphQL Mutations
+# All write operations for Gigtos @ 1 Lakh Users
+# See: DATA_CONNECT_MIGRATION_PLAN.md, stored procedures handle atomic multi-step flows
+
+# ─── User Mutations ───────────────────────────────────────────────────────────
+
+mutation CreateUser(
+  $firebaseUid: String!
+  $name: String!
+  $phone: String!
+  $email: String
+  $address: String
+) @auth(level: USER_EMAIL_VERIFIED) {
+  user_insert(data: {
+    firebaseUid: $firebaseUid
+    name: $name
+    phone: $phone
+    email: $email
+    address: $address
+  })
+}
+
+mutation UpdateUserProfile(
+  $userId: UUID!
+  $name: String
+  $address: String
+  $email: String
+) @auth(level: USER_EMAIL_VERIFIED) {
+  user_update(
+    id: $userId
+    data: { name: $name, address: $address, email: $email }
+  )
+}
+
+# ─── Booking Mutations ────────────────────────────────────────────────────────
+
+# User creates a new service booking
+mutation CreateBooking(
+  $userId: UUID!
+  $serviceTypeId: Int!
+  $issueTitle: String!
+  $jobDetails: String
+  $scheduledDate: Date
+  $timeSlotId: Int
+  $estimatedDays: Int
+  $isMultiDay: Boolean
+) @auth(level: USER_EMAIL_VERIFIED) {
+  booking_insert(data: {
+    userId: $userId
+    serviceTypeId: $serviceTypeId
+    issueTitle: $issueTitle
+    jobDetails: $jobDetails
+    scheduledDate: $scheduledDate
+    timeSlotId: $timeSlotId
+    estimatedDays: $estimatedDays
+    isMultiDay: $isMultiDay
+    status: "pending"
+    escrowStatus: "pending"
+  })
+}
+
+# Admin/mason updates booking status
+mutation UpdateBookingStatus(
+  $bookingId: UUID!
+  $status: String!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  booking_update(
+    id: $bookingId
+    data: { status: $status }
+  )
+}
+
+# Admin assigns a worker to a booking
+mutation AssignWorkerToBooking(
+  $bookingId: UUID!
+  $workerId: UUID!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  booking_update(
+    id: $bookingId
+    data: {
+      assignedWorkerId: $workerId
+      status: "assigned"
+      escrowStatus: "pending_acceptance"
+    }
+  )
+}
+
+# User rates a completed booking
+mutation RateBooking(
+  $bookingId: UUID!
+  $rating: Int!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  booking_update(
+    id: $bookingId
+    data: { rating: $rating }
+  )
+}
+
+# Admin uploads photo evidence for a booking
+mutation AddBookingPhoto(
+  $bookingId: UUID!
+  $label: String
+  $url: String!
+  $photoType: String!
+  $uploadedBy: UUID!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  bookingPhoto_insert(data: {
+    bookingId: $bookingId
+    label: $label
+    url: $url
+    photoType: $photoType
+    uploadedBy: $uploadedBy
+  })
+}
+
+# Admin adds daily work note to a multi-day booking
+mutation AddBookingDailyNote(
+  $bookingId: UUID!
+  $noteDate: Date!
+  $note: String!
+  $addedBy: UUID!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  bookingDailyNote_insert(data: {
+    bookingId: $bookingId
+    noteDate: $noteDate
+    note: $note
+    addedBy: $addedBy
+  })
+}
+
+# ─── Quote Mutations ──────────────────────────────────────────────────────────
+
+# Mason submits a price quote for a booking
+mutation SubmitQuote(
+  $bookingId: UUID!
+  $adminId: UUID!
+  $price: Float!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  bookingQuote_insert(data: {
+    bookingId: $bookingId
+    adminId: $adminId
+    price: $price
+    isAccepted: false
+  })
+}
+
+# Mark a quote as accepted (remaining handled by sp_accept_quote stored procedure)
+mutation AcceptQuote(
+  $quoteId: UUID!
+  $bookingId: UUID!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  bookingQuote_update(
+    id: $quoteId
+    data: { isAccepted: true }
+  )
+}
+
+# ─── Chat Mutations ───────────────────────────────────────────────────────────
+
+# Send a chat message in a booking conversation
+mutation SendChatMessage(
+  $bookingId: UUID!
+  $senderId: UUID!
+  $senderRole: String!
+  $message: String!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  bookingChat_insert(data: {
+    bookingId: $bookingId
+    senderId: $senderId
+    senderRole: $senderRole
+    message: $message
+  })
+}
+
+# ─── Dispute Mutations ────────────────────────────────────────────────────────
+
+# User raises a dispute on a booking
+mutation RaiseDispute(
+  $bookingId: UUID!
+  $raisedBy: UUID!
+  $reason: String!
+  $autoTriggered: Boolean
+) @auth(level: USER_EMAIL_VERIFIED) {
+  dispute_insert(data: {
+    bookingId: $bookingId
+    raisedBy: $raisedBy
+    reason: $reason
+    autoTriggered: $autoTriggered
+    status: "open"
+    escalationStatus: false
+    superadminOverride: false
+  })
+}
+
+# Region lead records a call note on a dispute
+mutation UpdateDisputeCallNote(
+  $disputeId: UUID!
+  $callNotes: String!
+  $regionCallTime: Timestamp!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  dispute_update(
+    id: $disputeId
+    data: { callNotes: $callNotes, regionCallTime: $regionCallTime }
+  )
+}
+
+# Superadmin overrides a dispute decision
+mutation SuperadminOverrideDispute(
+  $disputeId: UUID!
+  $decision: String!
+  $resolvedBy: UUID!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  dispute_update(
+    id: $disputeId
+    data: {
+      decision: $decision
+      resolvedBy: $resolvedBy
+      status: "resolved"
+      superadminOverride: true
+    }
+  )
+}
+
+# ─── Worker Mutations ─────────────────────────────────────────────────────────
+
+# Worker self-registers (approval_status starts as "pending")
+mutation RegisterWorker(
+  $name: String!
+  $phone: String!
+  $email: String
+  $area: String!
+  $serviceTypeId: Int!
+  $adminId: UUID!
+  $certifications: String
+  $bankDetails: String
+) @auth(level: USER_EMAIL_VERIFIED) {
+  worker_insert(data: {
+    name: $name
+    phone: $phone
+    email: $email
+    area: $area
+    serviceTypeId: $serviceTypeId
+    adminId: $adminId
+    certifications: $certifications
+    bankDetails: $bankDetails
+    approvalStatus: "pending"
+    status: "active"
+    isAvailable: true
+    isFraud: false
+    rating: 0
+    completedJobs: 0
+    isTopListed: false
+    totalEarnings: 0
+  })
+}
+
+# Admin approves or rejects a worker registration
+mutation UpdateWorkerApprovalStatus(
+  $workerId: UUID!
+  $approvalStatus: String!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  worker_update(
+    id: $workerId
+    data: { approvalStatus: $approvalStatus }
+  )
+}
+
+# Admin suspends / activates a worker
+mutation UpdateWorkerStatus(
+  $workerId: UUID!
+  $status: String!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  worker_update(
+    id: $workerId
+    data: { status: $status }
+  )
+}
+
+# Mark worker as fraud
+mutation FlagWorkerFraud(
+  $workerId: UUID!
+  $isFraud: Boolean!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  worker_update(
+    id: $workerId
+    data: { isFraud: $isFraud, isAvailable: false }
+  )
+}
+
+# Update worker availability (worker marks themselves available/unavailable)
+mutation SetWorkerAvailability(
+  $workerId: UUID!
+  $isAvailable: Boolean!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  worker_update(
+    id: $workerId
+    data: { isAvailable: $isAvailable }
+  )
+}
+
+# ─── Admin Management Mutations ───────────────────────────────────────────────
+
+# SuperAdmin or RegionLead creates a new admin (mason / region lead)
+mutation CreateAdmin(
+  $firebaseUid: String!
+  $name: String!
+  $email: String!
+  $roleId: Int!
+  $parentAdminId: UUID
+  $areaName: String
+) @auth(level: USER_EMAIL_VERIFIED) {
+  admin_insert(data: {
+    firebaseUid: $firebaseUid
+    name: $name
+    email: $email
+    roleId: $roleId
+    parentAdminId: $parentAdminId
+    areaName: $areaName
+    regionScore: 100
+    regionStatus: "active"
+    probationStatus: false
+    fraudCount: 0
+    totalDisputes: 0
+    avgResolutionTime: 0
+    approvalStatus: "approved"
+    status: "active"
+  })
+}
+
+# Update admin region status (suspend/activate region)
+mutation UpdateAdminRegionStatus(
+  $adminId: UUID!
+  $regionStatus: String!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  admin_update(
+    id: $adminId
+    data: { regionStatus: $regionStatus }
+  )
+}
+
+# Update admin probation status (triggered by mv_region_dispute_rate)
+mutation SetAdminProbation(
+  $adminId: UUID!
+  $probationStatus: Boolean!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  admin_update(
+    id: $adminId
+    data: { probationStatus: $probationStatus }
+  )
+}
+
+# ─── Alert Mutations ──────────────────────────────────────────────────────────
+
+# Create a new admin alert (used by Cloud Functions and stored procedures)
+mutation CreateAdminAlert(
+  $adminId: UUID!
+  $bookingId: UUID
+  $type: String!
+  $title: String!
+  $message: String!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  adminAlert_insert(data: {
+    adminId: $adminId
+    bookingId: $bookingId
+    type: $type
+    title: $title
+    message: $message
+    status: "open"
+  })
+}
+
+# Mark an alert as resolved
+mutation ResolveAdminAlert($alertId: UUID!) @auth(level: USER_EMAIL_VERIFIED) {
+  adminAlert_update(
+    id: $alertId
+    data: { status: "resolved" }
+  )
+}
+
+# ─── Activity Log Mutations ───────────────────────────────────────────────────
+
+# Insert an activity log entry (called after every booking status change)
+mutation LogActivity(
+  $bookingId: UUID!
+  $actorId: UUID
+  $actorRole: String!
+  $action: String!
+  $fromStatus: String
+  $toStatus: String
+  $reason: String
+  $amount: Float
+  $workerId: UUID
+  $adminId: UUID
+  $price: Float
+  $decision: String
+) @auth(level: USER_EMAIL_VERIFIED) {
+  activityLog_insert(data: {
+    bookingId: $bookingId
+    actorId: $actorId
+    actorRole: $actorRole
+    action: $action
+    fromStatus: $fromStatus
+    toStatus: $toStatus
+    reason: $reason
+    amount: $amount
+    workerId: $workerId
+    adminId: $adminId
+    price: $price
+    decision: $decision
+  })
+}
+
+# ─── Service Category Mutations (Future) ──────────────────────────────────────
+
+# SuperAdmin creates a new service category
+mutation CreateServiceCategory(
+  $name: String!
+  $description: String
+  $icon: String
+  $sortOrder: Int!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  serviceCategory_insert(data: {
+    name: $name
+    description: $description
+    icon: $icon
+    sortOrder: $sortOrder
+    isActive: true
+  })
+}
+
+# SuperAdmin adds a new service type under a category
+mutation CreateServiceType(
+  $name: String!
+  $description: String
+  $categoryId: Int
+  $icon: String
+  $requiresAsset: Boolean
+  $sortOrder: Int!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  serviceType_insert(data: {
+    name: $name
+    description: $description
+    categoryId: $categoryId
+    icon: $icon
+    requiresAsset: $requiresAsset
+    sortOrder: $sortOrder
+    isActive: true
+  })
+}
+
+# Toggle service type active/inactive
+mutation ToggleServiceType(
+  $id: Int!
+  $isActive: Boolean!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  serviceType_update(
+    id: $id
+    data: { isActive: $isActive }
+  )
+}
+
+# ─── AI / User Behavior Mutations (Future) ───────────────────────────────────
+
+# Track a user's search query
+mutation TrackUserSearch(
+  $userId: UUID!
+  $queryText: String!
+  $matchedServiceTypeId: Int
+  $resultCount: Int
+  $clicked: Boolean!
+  $source: String!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  userSearchHistory_insert(data: {
+    userId: $userId
+    queryText: $queryText
+    matchedServiceTypeId: $matchedServiceTypeId
+    resultCount: $resultCount
+    clicked: $clicked
+    source: $source
+  })
+}
+
+# Track a user behavior event (page view, click, booking action, etc.)
+mutation TrackUserBehavior(
+  $userId: UUID!
+  $eventType: String!
+  $eventData: String
+  $serviceTypeId: Int
+  $bookingId: UUID
+  $sessionId: String
+  $deviceType: String
+  $appVersion: String
+  $screenName: String
+) @auth(level: USER_EMAIL_VERIFIED) {
+  userBehaviorEvent_insert(data: {
+    userId: $userId
+    eventType: $eventType
+    eventData: $eventData
+    serviceTypeId: $serviceTypeId
+    bookingId: $bookingId
+    sessionId: $sessionId
+    deviceType: $deviceType
+    appVersion: $appVersion
+    screenName: $screenName
+  })
+}
+
+# Log an AI recommendation made to a user
+mutation LogAiRecommendation(
+  $userId: UUID!
+  $recommendationType: String!
+  $recommendedItems: String!
+  $context: String
+  $modelVersion: String
+  $score: Float
+) @auth(level: USER_EMAIL_VERIFIED) {
+  aiRecommendationLog_insert(data: {
+    userId: $userId
+    recommendationType: $recommendationType
+    recommendedItems: $recommendedItems
+    context: $context
+    modelVersion: $modelVersion
+    score: $score
+    userAction: "pending"
+  })
+}
+
+# User acts on a recommendation (accepted/ignored/dismissed)
+mutation UpdateRecommendationAction(
+  $id: UUID!
+  $userAction: String!
+  $actedAt: Timestamp!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  aiRecommendationLog_update(
+    id: $id
+    data: { userAction: $userAction, actedAt: $actedAt }
+  )
+}
+
+# Create or update user preferences (upsert-like via insert, conflict on user_id)
+mutation UpsertUserPreferences(
+  $userId: UUID!
+  $preferredServices: String
+  $preferredTimeSlots: String
+  $preferredAreas: String
+  $priceSensitivity: String
+  $avgBookingFrequencyDays: Int
+  $lastActiveAt: Timestamp
+) @auth(level: USER_EMAIL_VERIFIED) {
+  userPreference_insert(data: {
+    userId: $userId
+    preferredServices: $preferredServices
+    preferredTimeSlots: $preferredTimeSlots
+    preferredAreas: $preferredAreas
+    priceSensitivity: $priceSensitivity
+    avgBookingFrequencyDays: $avgBookingFrequencyDays
+    lastActiveAt: $lastActiveAt
+  })
+}
+
+# ─── Worker Asset Mutations (Future) ─────────────────────────────────────────
+
+# Worker registers an asset (vehicle, tool, etc.)
+mutation RegisterWorkerAsset(
+  $workerId: UUID!
+  $assetType: String!
+  $assetName: String
+  $registrationNo: String
+  $documentUrl: String
+  $expiryDate: Date
+) @auth(level: USER_EMAIL_VERIFIED) {
+  workerAsset_insert(data: {
+    workerId: $workerId
+    assetType: $assetType
+    assetName: $assetName
+    registrationNo: $registrationNo
+    documentUrl: $documentUrl
+    expiryDate: $expiryDate
+    isVerified: false
+    status: "active"
+  })
+}
+
+# Admin verifies a worker's asset
+mutation VerifyWorkerAsset(
+  $id: UUID!
+  $verifiedBy: UUID!
+  $verifiedAt: Timestamp!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  workerAsset_update(
+    id: $id
+    data: { isVerified: true, verifiedBy: $verifiedBy, verifiedAt: $verifiedAt }
+  )
+}
+
+# Worker adds a service area
+mutation AddWorkerServiceArea(
+  $workerId: UUID!
+  $serviceTypeId: Int!
+  $area: String!
+  $isPrimary: Boolean!
+) @auth(level: USER_EMAIL_VERIFIED) {
+  workerServiceArea_insert(data: {
+    workerId: $workerId
+    serviceTypeId: $serviceTypeId
+    area: $area
+    isPrimary: $isPrimary
+    status: "active"
+  })
+}

@@ -10,18 +10,15 @@
 }
 
 .hero-shell {
-  display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
-  gap: var(--space-5);
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-5);
 }
 
 .hero-intro,
-.hero-assistant-panel,
 .services-section,
 .steps-section,
 .testimonials-section,
-.why-section {
+.why-section,
+.map-section {
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid var(--color-border-200);
   border-radius: var(--radius-xl);
@@ -116,20 +113,6 @@
   font-size: 12px;
 }
 
-.hero-assistant-panel {
-  padding: var(--space-6);
-  align-self: stretch;
-  background: linear-gradient(170deg, rgba(118, 75, 162, 0.08), rgba(5, 122, 49, 0.08));
-}
-
-.hero-assistant-panel h2 {
-  margin: 0 0 var(--space-2);
-}
-
-.hero-assistant-panel p {
-  margin: 0 0 var(--space-2);
-  color: var(--color-text-700);
-}
 
 .query-list {
   display: grid;
@@ -174,15 +157,70 @@
 .services-section,
 .steps-section,
 .testimonials-section,
-.why-section {
+.why-section,
+.map-section {
   padding: var(--space-6);
   margin-bottom: var(--space-6);
 }
 
 .services-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
   gap: var(--space-4);
+  padding-bottom: 8px;
+  scrollbar-width: none;
+  position: relative;
+}
+
+.services-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.services-grid .service-card {
+  flex: 0 0 46%;
+  max-width: 380px;
+  scroll-snap-align: start;
+}
+
+/* Scroll hint wrapper */
+.services-scroll-wrapper {
+  position: relative;
+}
+
+.services-scroll-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 48px;
+  height: calc(100% - 8px);
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.85));
+  pointer-events: none;
+  border-radius: 0 14px 14px 0;
+  z-index: 1;
+}
+
+.scroll-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  color: var(--color-text-500);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scroll-hint-arrow {
+  display: inline-block;
+  animation: nudge-right 1.5s ease-in-out infinite;
+}
+
+@keyframes nudge-right {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(6px); }
 }
 
 .services-tools {
@@ -252,6 +290,53 @@
 .service-card-actions {
   display: flex;
   gap: var(--space-2);
+}
+
+.service-card--disabled {
+  opacity: 0.65;
+}
+
+.service-card--disabled .service-top,
+.service-card--disabled h3,
+.service-card--disabled > p {
+  opacity: 0.8;
+}
+
+.service-card--disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.service-card--disabled .service-card-actions .primary-btn {
+  background: #9CA3AF;
+  border-color: #9CA3AF;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.service-card--disabled .service-card-actions .primary-btn:hover {
+  transform: none;
+  background: #9CA3AF;
+}
+
+.coming-soon-chip {
+  background: #FEF3C7;
+  color: #92400E;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 8px;
+}
+
+.coming-soon-area-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #92400E;
+  background: #FEF3C7;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 4px;
 }
 
 .service-card-actions button {
@@ -390,7 +475,6 @@
 }
 
 @media (max-width: 900px) {
-  .hero-shell,
   .steps-grid,
   .why-grid {
     grid-template-columns: 1fr;
@@ -412,11 +496,11 @@
   }
 
   .hero-intro,
-  .hero-assistant-panel,
   .services-section,
   .steps-section,
   .testimonials-section,
-  .why-section {
+  .why-section,
+  .map-section {
     border-radius: 14px;
   }
 
@@ -428,13 +512,10 @@
     font-size: clamp(26px, 8vw, 34px);
   }
 
-  .services-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .service-card {
-    padding: 12px;
+  .services-grid .service-card {
+    flex: 0 0 72vw;
+    max-width: 300px;
+    padding: 14px;
   }
 
   .service-card p {
@@ -444,5 +525,26 @@
 
   .service-card-actions {
     flex-direction: row;
+  }
+
+  /* Horizontal steps swipe on mobile */
+  .steps-grid {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+  }
+
+  .steps-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .steps-grid .step-card {
+    flex: 0 0 78vw;
+    max-width: 280px;
+    scroll-snap-align: start;
   }
 }

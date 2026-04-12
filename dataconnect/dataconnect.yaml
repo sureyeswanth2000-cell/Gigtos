@@ -1,0 +1,11 @@
+specVersion: "v1beta"
+serviceId: "gigtos-dataconnect"
+location: "asia-south1"          # Mumbai — closest to AP/Telangana, India
+schema:
+  datasource:
+    postgresql:
+      database: "gigtos"
+      cloudSql:
+        instanceId: "gigtos-pg-instance"
+connectorDirs:
+  - "connector"

@@ -4,13 +4,24 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } f
 import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { getAdminRedirectPath, isRegionSuspended } from '../utils/authRouting';
+import { detectCurrentLocation } from '../context/LocationContext';
+import { SPECIAL_JOBS } from '../config/specialJobs';
+
+// Build signup job type options from SPECIAL_JOBS config for consistency
+const SIGNUP_JOB_TYPES = [
+  ...SPECIAL_JOBS.map(sj => sj.id),
+  'carpentry', 'masonry', 'landscaping', 'other'
+].filter((v, i, a) => a.indexOf(v) === i);
 
 function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
   const [userType, setUserType] = useState(searchParams.get('mode') || 'user'); // 'user', 'admin', or 'worker'
-  const [phase, setPhase] = useState('typeSelect'); // 'typeSelect', 'login', 'signup'
+  const [phase, setPhase] = useState('login'); // Default to login
+  
+  // Unified Login Field
+  const [identifier, setIdentifier] = useState('');
   
   // User (Phone) Fields
   const [phone, setPhone] = useState('');
@@ -27,7 +38,7 @@ function Auth() {
   const [workerEmail, setWorkerEmail] = useState('');
   const [workerPassword, setWorkerPassword] = useState('');
   const [workerConfirmPassword, setWorkerConfirmPassword] = useState('');
-  const [workerGigType, setWorkerGigType] = useState('');
+  const [workerGigTypes, setWorkerGigTypes] = useState([]);
   const [workerArea, setWorkerArea] = useState('');
   
   // UI States
@@ -36,6 +47,7 @@ function Auth() {
   const [showPassword, setShowPassword] = useState(false);
 
   const resetAllFields = () => {
+    setIdentifier('');
     setError('');
     setOtp('');
     setPassword('');
@@ -47,8 +59,86 @@ function Auth() {
     setWorkerEmail('');
     setWorkerPassword('');
     setWorkerConfirmPassword('');
-    setWorkerGigType('');
+    setWorkerGigTypes([]);
     setWorkerArea('');
+  };
+
+  // ============= UNIFIED LOGIN (EMAIL/PHONE + PASSWORD) =============
+  const handleUnifiedLogin = async (e) => {
+    e.preventDefault();
+    if (!identifier || !password) {
+      setError('Please enter email/phone and password');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      let emailToUse = identifier;
+      const isPhone = /^\d+$/.test(identifier.replace(/[^\d]/g, ''));
+
+      if (isPhone) {
+        // Find email by phone lookup
+        const cleanPhone = identifier.replace(/[^\d]/g, '').slice(-10);
+        
+        // Search in workers_by_phone
+        const workerPhoneDoc = await getDoc(doc(db, 'workers_by_phone', cleanPhone));
+        if (workerPhoneDoc.exists()) {
+          emailToUse = workerPhoneDoc.data().email;
+        } else {
+          // Search in users_by_phone
+          const userPhoneDoc = await getDoc(doc(db, 'users_by_phone', cleanPhone));
+          if (userPhoneDoc.exists()) {
+            emailToUse = userPhoneDoc.data().email;
+          } else {
+            throw new Error('Phone number not found. If you are a new user, please sign up.');
+          }
+        }
+      }
+
+      // Authenticate with Firebase
+      const userCred = await signInWithEmailAndPassword(auth, emailToUse, password);
+      const uid = userCred.user.uid;
+
+      // 1. Check if Admin (includes SuperAdmin, RegionLead, Mason)
+      const adminDoc = await getDoc(doc(db, 'admins', uid));
+      if (adminDoc.exists()) {
+        const adminData = adminDoc.data();
+        if (isRegionSuspended(adminData)) {
+          await signOut(auth);
+          throw new Error('Your region is currently suspended.');
+        }
+        navigate(getAdminRedirectPath(adminData));
+        return;
+      }
+
+      // 2. Check if Worker
+      const workerDoc = await getDoc(doc(db, 'worker_auth', uid));
+      if (workerDoc.exists()) {
+        const workerData = workerDoc.data();
+        if (workerData.approvalStatus !== 'approved') {
+          await signOut(auth);
+          throw new Error('Your worker account is pending approval.');
+        }
+        navigate('/worker/dashboard');
+        return;
+      }
+
+      // 3. Default to User (if user record exists)
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      if (userDoc.exists()) {
+        navigate('/');
+        return;
+      }
+
+      // Fallback
+      navigate('/');
+    } catch (err) {
+      setError(err.message.includes('auth/invalid-credential') ? 'Invalid credentials' : err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ============= USER PHONE LOGIN =============
@@ -77,12 +167,9 @@ function Auth() {
         throw new Error('Please enter your password to login');
       }
       
-      console.log('🔐 Attempting login with phone:', phone);
       await signInWithEmailAndPassword(auth, storedEmail, userPassword);
-      console.log('✅ Login successful!');
       navigate('/');
     } catch (err) {
-      console.error('❌ Login error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -97,8 +184,9 @@ function Auth() {
       return;
     }
 
-    if (phone.length < 10) {
-      setError('Please enter a valid 10-digit phone number');
+    const digitsOnly = phone.replace(/\D/g, '');
+    if (digitsOnly.length < 10 || digitsOnly.length > 15) {
+      setError('Please enter a valid phone number (10–15 digits)');
       return;
     }
 
@@ -129,11 +217,26 @@ function Auth() {
         createdAt: new Date()
       });
 
+      // Detect location once at signup and save it
+      let locationData = {};
+      try {
+        const loc = await detectCurrentLocation();
+        locationData = {
+          locationLat: loc.lat,
+          locationLng: loc.lng,
+          locationCity: loc.city || '',
+          locationSource: loc.source || 'gps',
+          locationDetectedAt: new Date(),
+        };
+      } catch {
+        // Location detection failed — user can set it later from profile
+      }
+
       await setDoc(doc(db, 'users', uid), {
         phone: phone,
         email: email,
         name: '',
-        address: '',
+        ...locationData,
         createdAt: new Date()
       });
 
@@ -159,11 +262,8 @@ function Auth() {
     try {
       const userCred = await signInWithEmailAndPassword(auth, email, password);
       const uid = userCred.user.uid;
-      console.log('✅ Firebase Auth success, UID:', uid);
 
       const adminDoc = await getDoc(doc(db, 'admins', uid));
-      console.log('📋 Admin doc exists:', adminDoc.exists());
-      console.log('👤 Admin data:', adminDoc.data());
       
       if (!adminDoc.exists()) {
         await signOut(auth);
@@ -172,7 +272,6 @@ function Auth() {
 
       const adminData = adminDoc.data();
       const role = adminData?.role || 'unknown';
-      console.log('🔐 Admin role:', role);
 
       if (isRegionSuspended(adminData)) {
         await signOut(auth);
@@ -181,7 +280,6 @@ function Auth() {
 
       navigate(getAdminRedirectPath(adminData));
     } catch (err) {
-      console.error('❌ Admin login error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -191,8 +289,8 @@ function Auth() {
   // ============= WORKER REGISTRATION =============
   const handleWorkerSignup = async (e) => {
     e.preventDefault();
-    if (!workerName || !workerPhone || !workerEmail || !workerPassword || !workerConfirmPassword || !workerGigType || !workerArea) {
-      setError('Please fill in all fields');
+    if (!workerName || !workerPhone || !workerEmail || !workerPassword || !workerConfirmPassword || workerGigTypes.length === 0 || !workerArea) {
+      setError('Please fill in all fields and select at least one job type');
       return;
     }
 
@@ -223,12 +321,28 @@ function Auth() {
       // For now, workers are created with approvalStatus: 'pending'
       // In a real scenario, you'd match area to region lead
 
+      // Detect location once at signup and save it
+      let locationData = {};
+      try {
+        const loc = await detectCurrentLocation();
+        locationData = {
+          locationLat: loc.lat,
+          locationLng: loc.lng,
+          locationCity: loc.city || '',
+          locationSource: loc.source || 'gps',
+          locationDetectedAt: new Date(),
+        };
+      } catch {
+        // Location detection failed — worker can set it later
+      }
+
       // Step 3: Create worker document
       await setDoc(doc(db, 'gig_workers', uid), {
         name: workerName,
         contact: workerPhone,
         email: workerEmail,
-        gigType: workerGigType,
+        gigType: workerGigTypes[0],
+        gigTypes: workerGigTypes,
         area: workerArea,
         certifications: '',
         bankDetails: '',
@@ -240,6 +354,7 @@ function Auth() {
         rating: 0,
         isTopListed: false,
         isFraud: false,
+        ...locationData,
         createdAt: new Date()
       });
 
@@ -249,13 +364,15 @@ function Auth() {
         email: workerEmail,
         uid,
         name: workerName,
-        gigType: workerGigType,
+        gigType: workerGigTypes[0],
+        gigTypes: workerGigTypes,
         area: workerArea,
         certifications: '',
         bankDetails: '',
         totalEarnings: 0,
         approvalStatus: 'pending',
         status: 'inactive',
+        ...locationData,
         createdAt: new Date()
       }, { merge: true });
 
@@ -265,10 +382,12 @@ function Auth() {
         phone: workerPhone,
         email: workerEmail,
         name: workerName,
-        gigType: workerGigType,
+        gigType: workerGigTypes[0],
+        gigTypes: workerGigTypes,
         area: workerArea,
         approvalStatus: 'pending',
         status: 'inactive',
+        ...locationData,
         createdAt: new Date()
       }, { merge: true });
 
@@ -325,7 +444,6 @@ function Auth() {
 
       navigate('/worker/dashboard');
     } catch (err) {
-      console.error('❌ Worker login error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -392,202 +510,146 @@ function Auth() {
 
       navigate('/worker/dashboard');
     } catch (err) {
-      console.error('❌ Worker activation error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
-  if (phase === 'typeSelect') {
+  if (phase === 'login') {
     return (
-      <div style={{ maxWidth: '560px', margin: '50px auto', padding: '30px 20px 70px', textAlign: 'center', color: '#1f2937' }}>
-        <h1 style={{ fontSize: '40px', marginBottom: '8px', color: '#1f2937', fontFamily: 'Manrope, Inter, sans-serif' }}>
-          Welcome to Gigto
+      <div style={{ 
+        maxWidth: '450px', 
+        margin: '60px auto', 
+        padding: '40px 30px', 
+        borderRadius: '20px',
+        background: 'rgba(255, 255, 255, 0.9)',
+        backdropFilter: 'blur(10px)',
+        boxShadow: '0 8px 32px rgba(31, 38, 135, 0.15)',
+        border: '1px solid rgba(255, 255, 255, 0.18)',
+        textAlign: 'center',
+        color: '#1f2937'
+      }}>
+        <h1 style={{ fontSize: '32px', marginBottom: '8px', color: '#111827', fontWeight: '800' }}>
+          Gigtos Login
         </h1>
-        <p style={{ color: '#4b5563', marginBottom: '30px', fontSize: '16px' }}>
-          Choose how you'd like to access the platform
+        <p style={{ color: '#6b7280', marginBottom: '30px', fontSize: '15px' }}>
+          Welcome back! Access your dashboard.
         </p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <button
-            onClick={() => {
-              setUserType('user');
-              setPhase('login');
-              setError('');
-            }}
-            style={{
-              padding: '40px',
-              border: '2px solid #764ba2',
-              borderRadius: '12px',
-              backgroundColor: '#f8f7fb',
-              cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              color: '#333',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#e8f0ff';
-              e.target.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = '#f0f4ff';
-              e.target.style.boxShadow = 'none';
-            }}
-          >
-            <div style={{ fontSize: '34px', marginBottom: '10px' }}>User</div>
-            Book Services as a User
-            <div style={{ fontSize: '13px', color: '#666', marginTop: '10px', fontWeight: 'normal' }}>
-              Login with phone number & OTP
+        {error && (
+          <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '14px', fontWeight: '500' }}>
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleUnifiedLogin}>
+          <div style={{ marginBottom: '18px', textAlign: 'left' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '13px', color: '#374151' }}>
+              Email or Phone Number
+            </label>
+            <input
+              type="text"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="e.g. name@email.com or 1234567890"
+              style={{
+                width: '100%',
+                padding: '12px 15px',
+                border: '1.5px solid #e5e7eb',
+                borderRadius: '10px',
+                fontSize: '15px',
+                boxSizing: 'border-box',
+                outline: 'none',
+                transition: 'border-color 0.2s'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#7c3aed'}
+              onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+            />
+          </div>
+
+          <div style={{ marginBottom: '25px', textAlign: 'left' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '13px', color: '#374151' }}>
+              Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                style={{
+                  width: '100%',
+                  padding: '12px 15px',
+                  border: '1.5px solid #e5e7eb',
+                  borderRadius: '10px',
+                  fontSize: '15px',
+                  boxSizing: 'border-box',
+                  outline: 'none'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: '#9ca3af',
+                  cursor: 'pointer',
+                  fontSize: '12px'
+                }}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
             </div>
-          </button>
+          </div>
 
           <button
-            onClick={() => {
-              setUserType('admin');
-              setPhase('login');
-              setError('');
-            }}
+            type="submit"
+            disabled={loading}
             style={{
-              padding: '40px',
-              border: '2px solid #764ba2',
+              width: '100%',
+              padding: '14px',
+              background: loading ? '#9ca3af' : 'linear-gradient(135deg, #7c3aed 0%, #6366f1 100%)',
+              color: 'white',
+              border: 'none',
               borderRadius: '12px',
-              backgroundColor: '#f8f0ff',
-              cursor: 'pointer',
               fontSize: '16px',
-              fontWeight: 'bold',
-              color: '#333',
-              transition: 'all 0.2s'
+              fontWeight: '700',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 6px -1px rgba(124, 58, 237, 0.4)',
+              transition: 'transform 0.1s'
             }}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#faf0ff';
-              e.target.style.boxShadow = '0 4px 12px rgba(118, 75, 162, 0.3)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = '#f8f0ff';
-              e.target.style.boxShadow = 'none';
-            }}
+            onMouseDown={(e) => e.target.style.transform = 'scale(0.98)'}
+            onMouseUp={(e) => e.target.style.transform = 'scale(1)'}
           >
-            <div style={{ fontSize: '34px', marginBottom: '10px' }}>Admin</div>
-            Manage Services as Admin
-            <div style={{ fontSize: '13px', color: '#666', marginTop: '10px', fontWeight: 'normal' }}>
-              Login with email & password
-            </div>
+            {loading ? 'Authenticating...' : 'Login'}
           </button>
+        </form>
 
-          <button
-            onClick={() => {
-              setUserType('worker');
-              setPhase('workerSelect');
-              resetAllFields();
-            }}
-            style={{
-              padding: '40px',
-              border: '2px solid #10b981',
-              borderRadius: '12px',
-              backgroundColor: '#f0fdf4',
-              cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              color: '#333',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#e6fdf0';
-              e.target.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = '#f0fdf4';
-              e.target.style.boxShadow = 'none';
-            }}
-          >
-            <div style={{ fontSize: '34px', marginBottom: '10px' }}>Worker</div>
-            Register as Worker
-            <div style={{ fontSize: '13px', color: '#666', marginTop: '10px', fontWeight: 'normal' }}>
-              Get approved by region lead
-            </div>
-          </button>
+        <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
+          <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 10px' }}>Don't have an account?</p>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <button 
+              onClick={() => setPhase('signup')}
+              style={{ background: 'none', border: '1px solid #7c3aed', color: '#7c3aed', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              User Sign Up
+            </button>
+            <button 
+              onClick={() => {
+                setPhase('signup');
+                setUserType('worker');
+              }}
+              style={{ background: 'none', border: '1px solid #10b981', color: '#10b981', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              Become a Worker
+            </button>
+          </div>
         </div>
-      </div>
-    );
-  }
-
-  if (userType === 'worker' && phase === 'workerSelect') {
-    return (
-      <div style={{ maxWidth: '540px', margin: '50px auto', padding: '24px 16px 70px', textAlign: 'center', color: '#1f2937' }}>
-        <h2 style={{ marginBottom: '8px', fontSize: '32px', fontFamily: 'Manrope, Inter, sans-serif' }}>Worker Access</h2>
-        <p style={{ color: '#666', marginBottom: '24px' }}>Choose how you want to continue</p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <button
-            onClick={() => {
-              setPhase('login');
-              setError('');
-            }}
-            style={{
-              padding: '18px',
-              border: '2px solid #10b981',
-              borderRadius: '10px',
-              background: '#ecfdf5',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            Login (Phone + Password)
-          </button>
-
-          <button
-            onClick={() => {
-              setPhase('activate');
-              setError('');
-            }}
-            style={{
-              padding: '18px',
-              border: '2px solid #0ea5e9',
-              borderRadius: '10px',
-              background: '#f0f9ff',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            Activate Existing Worker (Already Added By Mason)
-          </button>
-
-          <button
-            onClick={() => {
-              setPhase('signup');
-              setError('');
-            }}
-            style={{
-              padding: '18px',
-              border: '2px solid #10b981',
-              borderRadius: '10px',
-              background: '#f0fdf4',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            Register New Worker
-          </button>
-        </div>
-
-        <button
-          onClick={() => {
-            setUserType('user');
-            setPhase('typeSelect');
-            resetAllFields();
-          }}
-          style={{
-            marginTop: '20px',
-            width: '100%',
-            padding: '10px',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer'
-          }}
-        >
-          ← Back
-        </button>
       </div>
     );
   }
@@ -1129,30 +1191,46 @@ function Auth() {
 
           <div style={{ marginBottom: '15px' }}>
             <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
-              Service Type:
+              Service Types (select up to 3):
             </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
+              {workerGigTypes.map(t => (
+                <span key={t} style={{
+                  background: '#10b981', color: 'white', padding: '4px 10px', borderRadius: '16px',
+                  fontSize: '12px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px'
+                }}>
+                  {t} <button type="button" onClick={() => setWorkerGigTypes(prev => prev.filter(g => g !== t))}
+                    style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '14px', padding: 0, lineHeight: 1 }}>✕</button>
+                </span>
+              ))}
+            </div>
             <select
-              value={workerGigType}
-              onChange={(e) => setWorkerGigType(e.target.value)}
+              value=""
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val && !workerGigTypes.includes(val) && workerGigTypes.length < 3) {
+                  setWorkerGigTypes(prev => [...prev, val]);
+                }
+              }}
+              disabled={workerGigTypes.length >= 3}
               style={{
                 width: '100%',
                 padding: '10px',
                 border: '1px solid #ddd',
                 borderRadius: '6px',
                 fontSize: '14px',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                opacity: workerGigTypes.length >= 3 ? 0.5 : 1,
               }}
             >
-              <option value="">Select service type...</option>
-              <option value="plumbing">Plumbing</option>
-              <option value="electrical">Electrical</option>
-              <option value="carpentry">Carpentry</option>
-              <option value="painting">Painting</option>
-              <option value="masonry">Masonry</option>
-              <option value="cleaning">Cleaning</option>
-              <option value="landscaping">Landscaping</option>
-              <option value="other">Other</option>
+              <option value="">{workerGigTypes.length >= 3 ? 'Maximum 3 selected' : 'Select service type...'}</option>
+              {SIGNUP_JOB_TYPES
+                .filter(t => !workerGigTypes.includes(t))
+                .map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1).replace(/-/g, ' ')}</option>)}
             </select>
+            <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+              {workerGigTypes.length}/3 selected. You can edit these later from your dashboard.
+            </div>
           </div>
 
           <div style={{ marginBottom: '15px' }}>

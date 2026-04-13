@@ -3,6 +3,7 @@ import { auth, db } from '../firebase';
 import { onAuthStateChanged, createUserWithEmailAndPassword } from 'firebase/auth';
 import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, getDoc, setDoc, getDocs } from 'firebase/firestore';
 import MasonDashboard from '../components/MasonDashboard';
+import './Workers.css';
 
 export default function Workers() {
   const [user, setUser] = useState(null);
@@ -372,96 +373,93 @@ export default function Workers() {
   }
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>Workers</h2>
+    <div className="workers-page">
+      <header className="workers-header">
+        <div className="eyebrow">Professional Management</div>
+        <h2>Workers & Marketplace</h2>
+      </header>
 
       {/* Mason Dashboard — full job browser for mason/admin roles */}
       {(adminRole === 'mason' || adminRole === 'admin' || adminRole === 'superadmin' || adminRole === 'regionLead') && (
-        <details style={{ marginBottom: 20 }}>
-          <summary style={{
-            cursor: 'pointer',
-            padding: '10px 14px',
-            background: 'var(--bg-light)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 10,
-            fontWeight: 700,
-            fontSize: 14,
-            color: 'var(--primary-purple)',
-          }}>
+        <details className="dashboard-collapsible">
+          <summary>
             🧱 Mason Dashboard — Browse All Job Types &amp; Manage Workers
           </summary>
-          <div style={{ marginTop: 12 }}>
+          <div style={{ padding: 'var(--space-6)' }}>
             <MasonDashboard />
           </div>
         </details>
       )}
       
       {adminRole === 'regionLead' && (
-        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', padding: 10, borderRadius: 8, marginBottom: 12 }}>
-          Region Admin Mode: approve gig registrations in your area and assign each approved gig to a mason.
+        <div className="region-lead-banner">
+          <strong>Region Admin Mode:</strong> Approve gig registrations in your area and assign each approved gig to a mason.
         </div>
       )}
 
       {adminRole === 'regionLead' && (
-        <div style={{ background: '#fff', padding: 12, borderRadius: 8, marginBottom: 12, border: '1px solid #dbeafe' }}>
-          <h4>Create Mason</h4>
-          <input placeholder="Mason Name" value={newAdminName} onChange={e => setNewAdminName(e.target.value)} style={{ padding: 8, marginRight: 8 }} />
-          <input placeholder="Mason Email" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} style={{ padding: 8, marginRight: 8 }} />
-          <input placeholder="Password" type="password" value={newAdminPassword} onChange={e => setNewAdminPassword(e.target.value)} style={{ padding: 8, marginRight: 8 }} />
-          <button onClick={createChildAdmin} style={{ padding: 8, background: '#2563eb', color: 'white', border: 'none', borderRadius: 4 }}>
-            Create Mason
-          </button>
+        <div className="glass-panel">
+          <div className="form-title">👤 Create Mason Account</div>
+          <div className="form-grid">
+            <input className="input-premium" placeholder="Mason Name" value={newAdminName} onChange={e => setNewAdminName(e.target.value)} />
+            <input className="input-premium" placeholder="Mason Email" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} />
+            <input className="input-premium" placeholder="Password" type="password" value={newAdminPassword} onChange={e => setNewAdminPassword(e.target.value)} />
+          </div>
+          <div className="form-actions">
+            <button className="btn-primary" onClick={createChildAdmin}>
+              Create Mason
+            </button>
+          </div>
         </div>
       )}
-      <div style={{ background: '#fff', padding: 12, borderRadius: 8, marginBottom: 12 }}>
-        <h4>Create Worker</h4>
-        <input placeholder="Name" value={name} onChange={e => setName(e.target.value)} style={{ padding: 8, marginRight: 8 }} />
-        <input placeholder="10 digit phone" value={contact} onChange={e => setContact(e.target.value)} style={{ padding: 8, marginRight: 8 }} />
-        <select value={gigType} onChange={e => setGigType(e.target.value)} style={{ padding: 8, marginRight: 8 }}>
-          <option value="Plumber">Plumber</option>
-          <option value="Electrician">Electrician</option>
-          <option value="Carpenter">Carpenter</option>
-          <option value="Painter">Painter</option>
-        </select>
-        <input placeholder="Certifications (comma separated)" value={certifications} onChange={e => setCertifications(e.target.value)} style={{ padding: 8, marginRight: 8, minWidth: 260, marginTop: 8 }} />
-        <input placeholder="Bank Details" value={bankDetails} onChange={e => setBankDetails(e.target.value)} style={{ padding: 8, marginRight: 8, minWidth: 220, marginTop: 8 }} />
-        <input placeholder="Total Earnings" value={totalEarnings} onChange={e => setTotalEarnings(e.target.value)} style={{ padding: 8, marginRight: 8, width: 140, marginTop: 8 }} />
-        <button onClick={createWorker} disabled={adminRole === 'regionLead'} style={{ padding: 8, opacity: adminRole === 'regionLead' ? 0.6 : 1 }}>
-          Create
-        </button>
+
+      <div className="glass-panel">
+        <div className="form-title">👷 Add Professional Worker</div>
+        <div className="form-grid">
+          <input className="input-premium" placeholder="Name" value={name} onChange={e => setName(e.target.value)} />
+          <input className="input-premium" placeholder="10 digit phone" value={contact} onChange={e => setContact(e.target.value)} />
+          <select className="input-premium" value={gigType} onChange={e => setGigType(e.target.value)}>
+            <option value="Plumber">Plumber</option>
+            <option value="Electrician">Electrician</option>
+            <option value="Carpenter">Carpenter</option>
+            <option value="Painter">Painter</option>
+          </select>
+          <input className="input-premium" placeholder="Certifications (comma separated)" value={certifications} onChange={e => setCertifications(e.target.value)} />
+          <input className="input-premium" placeholder="Bank Details" value={bankDetails} onChange={e => setBankDetails(e.target.value)} />
+          <input className="input-premium" placeholder="Total Earnings" value={totalEarnings} onChange={e => setTotalEarnings(e.target.value)} />
+        </div>
+        <div className="form-actions">
+          <button className="btn-primary" onClick={createWorker} disabled={adminRole === 'regionLead'}>
+            Create Worker Profile
+          </button>
+        </div>
       </div>
 
       {/* PENDING GIG APPROVALS - For Region Leads */}
       {adminRole === 'regionLead' && pendingGigs.length > 0 && (
-        <div style={{ background: '#fef3c7', padding: 16, borderRadius: 8, marginBottom: 16, border: '2px solid #fcd34d' }}>
-          <h4 style={{ margin: '0 0 12px 0', color: '#92400e' }}>⏳ Pending Gig Approvals ({pendingGigs.length})</h4>
+        <div className="pending-approvals-section">
+          <div className="form-title" style={{ color: '#92400e' }}>⏳ Pending Gig Approvals ({pendingGigs.length})</div>
           {childAdmins.length === 0 && (
-            <div style={{ marginBottom: 10, padding: 8, background: '#fff7ed', border: '1px solid #fdba74', color: '#9a3412', borderRadius: 6, fontSize: 12 }}>
-              Create at least one mason under this region lead before approving gigs.
+            <div style={{ marginBottom: 16, padding: '12px', background: '#fff7ed', border: '1px solid #fdba74', color: '#9a3412', borderRadius: 8, fontSize: 13 }}>
+              <strong>Action Required:</strong> Create at least one mason under this region lead before approving gigs.
             </div>
           )}
           {pendingGigs.map(w => (
-            <div key={w.id} style={{
-              background: 'white',
-              padding: 12,
-              borderRadius: 6,
-              marginBottom: 10,
-              border: '1px solid #fcd34d',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
+            <div key={w.id} className="pending-card">
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>{w.name}</div>
-                <div style={{ color: '#555', fontSize: 12 }}>📞 {w.contact} | 📧 {w.email}</div>
-                <div style={{ color: '#666', fontSize: 12, marginTop: 4 }}>
+                <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-main)' }}>{w.name}</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>
+                  📞 {w.contact} | 📧 {w.email}
+                </div>
+                <div style={{ color: 'var(--text-main)', fontSize: 14, marginTop: 8 }}>
                   Service: <strong>{w.gigType}</strong> | Area: <strong>{w.area}</strong>
                 </div>
-                <div style={{ marginTop: 8 }}>
+                <div style={{ marginTop: 12 }}>
                   <select
+                    className="input-premium"
                     value={approvalAssignments[w.id] || ''}
                     onChange={e => setApprovalAssignments(prev => ({ ...prev, [w.id]: e.target.value }))}
-                    style={{ padding: 6, minWidth: 220 }}
+                    style={{ maxWidth: 300 }}
                   >
                     <option value="">Assign to mason...</option>
                     {childAdmins.map(a => (
@@ -469,46 +467,26 @@ export default function Workers() {
                     ))}
                   </select>
                 </div>
-                <div style={{ color: '#999', fontSize: 11, marginTop: 4 }}>
-                  Applied: {w.createdAt?.toDate?.()?.toLocaleDateString?.() || 'Recently'}
-                </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, marginLeft: 12 }}>
+              <div style={{ display: 'flex', gap: 12 }}>
                 <button
+                  className="btn-primary"
                   onClick={() => approveWorker(w.id)}
                   disabled={childAdmins.length === 0}
-                  style={{
-                    padding: '6px 14px',
-                    background: '#10b981',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 4,
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    fontWeight: 'bold',
-                    opacity: childAdmins.length === 0 ? 0.5 : 1
-                  }}
+                  style={{ padding: '10px 20px', fontSize: 13 }}
                 >
-                  ✅ Approve
+                  Approve
                 </button>
                 <button
+                  className="btn-secondary"
                   onClick={() => {
                     if (window.confirm('Reject this gig application?')) {
                       rejectWorker(w.id);
                     }
                   }}
-                  style={{
-                    padding: '6px 14px',
-                    background: '#ef4444',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 4,
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    fontWeight: 'bold'
-                  }}
+                  style={{ padding: '10px 20px', fontSize: 13, color: '#ef4444' }}
                 >
-                  ❌ Reject
+                  Reject
                 </button>
               </div>
             </div>
@@ -517,143 +495,86 @@ export default function Workers() {
       )}
 
       <div>
-        <h4>
-          {adminRole === 'superadmin' ? 'All Workers' : 
-           adminRole === 'regionLead' ? `Workers in Your Region` : 
-           'Your Workers'} ({workers.length})
-        </h4>
+        <header style={{ marginBottom: 'var(--space-6)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0 }}>
+            {adminRole === 'superadmin' ? 'Total Workforce' : 
+             adminRole === 'regionLead' ? `Regional Professionals` : 
+             'Assigned Professionals'} ({workers.length})
+          </h3>
+        </header>
         
         {workers.length === 0 ? (
-          <div style={{
-            background: '#f0fdf4',
-            border: '2px solid #bbf7d0',
-            color: '#166534',
-            padding: 16,
-            borderRadius: 8,
-            marginBottom: 12
-          }}>
-            <div style={{ fontWeight: 'bold', marginBottom: 8 }}>📭 No workers created yet</div>
-            <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+          <div className="glass-panel" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
+            <div style={{ fontSize: 48, marginBottom: 'var(--space-4)' }}>📭</div>
+            <div style={{ fontWeight: 700, fontSize: 20, marginBottom: 'var(--space-2)' }}>No professionals found</div>
+            <p style={{ color: 'var(--text-muted)', maxWidth: '400px', margin: '0 auto' }}>
               {adminRole === 'mason' || adminRole === 'admin' 
-                ? 'Create your first worker using the form above. Only workers YOU create will appear here.'
-                : 'Create your first worker using the form above. Your workers will appear here once created.'}
-              <br />
-              <span style={{ fontSize: 11, color: '#15803d', marginTop: 8, display: 'block' }}>
-                👉 Tip: Each worker can be assigned to multiple jobs across the platform.
-              </span>
-            </div>
+                ? 'Create or assign your first professional using the tools above.'
+                : 'Professionals in your regional jurisdiction will appear here once approved.'}
+            </p>
           </div>
-        ) : null}
-        
-        {workers.map(w => (
-          <div key={w.id} style={{ background: '#fff', padding: 12, borderRadius: 8, marginBottom: 8, display: 'flex', justifyContent: 'space-between', border: '1px solid #e5e7eb', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#1f2937' }}>{w.name}</div>
-              <div style={{ color: '#6b7280', fontSize: 13, marginTop: 4 }}>
-                {w.gigType} • 📞 {w.contact}
+        ) : (
+          <div className="worker-grid">
+            {workers.map(w => (
+              <div key={w.id} className="worker-premium-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text-main)' }}>{w.name}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 14, marginTop: 4 }}>
+                      {w.gigType} • 📞 {w.contact}
+                    </div>
+                  </div>
+                  <span className={`worker-status-badge ${w.status === 'active' ? 'status-active' : 'status-inactive'}`}>
+                    {w.status === 'active' ? '● Active' : '○ Inactive'}
+                  </span>
+                </div>
+
+                <div className="worker-earnings">
+                  💰 Total Earnings: Rs.{Number(w.totalEarnings || 0).toLocaleString()}
+                </div>
+
+                <div style={{ marginTop: 'var(--space-4)', fontSize: 13, borderTop: '1px solid var(--border-light)', paddingTop: 'var(--space-3)' }}>
+                  {editingWorkerId === w.id ? (
+                    <div style={{ display: 'grid', gap: 10 }}>
+                      <input className="input-premium" placeholder="Certifications" value={editWorkerData.certifications} onChange={e => setEditWorkerData(prev => ({ ...prev, certifications: e.target.value }))} />
+                      <input className="input-premium" placeholder="Bank Details" value={editWorkerData.bankDetails} onChange={e => setEditWorkerData(prev => ({ ...prev, bankDetails: e.target.value }))} />
+                      <input className="input-premium" type="number" placeholder="Earnings" value={editWorkerData.totalEarnings} onChange={e => setEditWorkerData(prev => ({ ...prev, totalEarnings: e.target.value }))} />
+                    </div>
+                  ) : (
+                    <div style={{ color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                      <div><strong>Cert:</strong> {w.certifications || 'None provided'}</div>
+                      <div><strong>Bank:</strong> {w.bankDetails || 'Not available'}</div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="worker-actions">
+                  {editingWorkerId === w.id ? (
+                    <>
+                      <button className="btn-primary" style={{ padding: '8px 16px', fontSize: 12 }} onClick={() => saveWorkerSchema(w.id)}>Save</button>
+                      <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: 12 }} onClick={() => setEditingWorkerId(null)}>Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: 12, flex: 1 }} onClick={() => startEditWorker(w)}>Update Bio</button>
+                      <button 
+                        className="btn-secondary"
+                        style={{ padding: '8px 16px', fontSize: 12, flex: 1, color: w.status === 'active' ? '#ef4444' : '#10b981' }}
+                        onClick={() => {
+                          if (window.confirm(`${w.status === 'active' ? 'Disable' : 'Enable'} this worker?`)) {
+                            toggleWorker(w.id, w.status);
+                          }
+                        }}
+                      >
+                        {w.status === 'active' ? 'Disable' : 'Enable'}
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>
-                Status: <span style={{ 
-                  fontWeight: 'bold',
-                  color: w.status === 'active' ? '#059669' : '#d97706',
-                  background: w.status === 'active' ? '#d1fae5' : '#fef3c7',
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  display: 'inline-block'
-                }}>
-                  {w.status === 'active' ? '✅ Active' : '⏸️ Inactive'}
-                </span>
-              </div>
-              {w.completedJobs > 0 && (
-                <div style={{ fontSize: 11, color: '#7c3aed', marginTop: 4 }}>
-                  ⭐ Completed: {w.completedJobs} job{w.completedJobs !== 1 ? 's' : ''}
-                </div>
-              )}
-              {w.isTopListed && (
-                <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
-                  🏆 Top Listed Worker
-                </div>
-              )}
-              {editingWorkerId === w.id ? (
-                <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
-                  <input
-                    placeholder="Certifications"
-                    value={editWorkerData.certifications}
-                    onChange={e => setEditWorkerData(prev => ({ ...prev, certifications: e.target.value }))}
-                    style={{ padding: 6, fontSize: 12, minWidth: 260 }}
-                  />
-                  <input
-                    placeholder="Bank Details"
-                    value={editWorkerData.bankDetails}
-                    onChange={e => setEditWorkerData(prev => ({ ...prev, bankDetails: e.target.value }))}
-                    style={{ padding: 6, fontSize: 12, minWidth: 260 }}
-                  />
-                  <input
-                    placeholder="Total Earnings"
-                    value={editWorkerData.totalEarnings}
-                    onChange={e => setEditWorkerData(prev => ({ ...prev, totalEarnings: e.target.value }))}
-                    style={{ padding: 6, fontSize: 12, width: 140 }}
-                  />
-                </div>
-              ) : (
-                <div style={{ fontSize: 11, color: '#374151', marginTop: 6, lineHeight: 1.5 }}>
-                  <div>Certifications: {w.certifications || 'N/A'}</div>
-                  <div>Bank Details: {w.bankDetails || 'N/A'}</div>
-                  <div>Total Earnings: Rs.{Number(w.totalEarnings || 0)}</div>
-                </div>
-              )}
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <button 
-                onClick={() => {
-                  if (window.confirm(`${w.status === 'active' ? 'Disable' : 'Enable'} this worker?`)) {
-                    toggleWorker(w.id, w.status);
-                  }
-                }}
-                style={{ 
-                  padding: '8px 12px',
-                  background: w.status === 'active' ? '#ef4444' : '#10b981',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 'bold',
-                  transition: 'all 0.2s'
-                }}>
-                {w.status === 'active' ? '⏸️ Disable' : '▶️ Enable'}
-              </button>
-              <div style={{ marginTop: 8, display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                {editingWorkerId === w.id ? (
-                  <>
-                    <button
-                      onClick={() => saveWorkerSchema(w.id)}
-                      style={{ padding: '6px 10px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditingWorkerId(null);
-                        setEditWorkerData({ certifications: '', bankDetails: '', totalEarnings: '0' });
-                      }}
-                      style={{ padding: '6px 10px', background: '#9ca3af', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}
-                    >
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => startEditWorker(w)}
-                    style={{ padding: '6px 10px', background: '#0ea5e9', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}
-                  >
-                    Edit Details
-                  </button>
-                )}
-              </div>
-            </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

@@ -1,10 +1,5 @@
 /**
  * InstantBookingModal — Two-step modal for instant worker booking.
- *
- * Step 1: Show worker name, service type, rating, price breakdown (NO phone number)
- * Step 2: Payment confirmation with full pricing breakdown + Pay button
- *
- * After payment → creates instant booking with 'assigned' status → triggers tracking
  */
 import React, { useState, useCallback } from 'react';
 import { auth, db } from '../firebase';
@@ -44,7 +39,6 @@ export default function InstantBookingModal({ worker, userData, onClose, onBooke
         worker,
       });
 
-      // Replace date objects with serverTimestamp
       const firestoreBooking = {
         ...bookingData,
         createdAt: serverTimestamp(),
@@ -53,7 +47,6 @@ export default function InstantBookingModal({ worker, userData, onClose, onBooke
 
       const docRef = await addDoc(collection(db, 'bookings'), firestoreBooking);
 
-      // Mark worker as unavailable after booking
       try {
         await updateDoc(doc(db, 'worker_availability', worker.workerId), {
           isAvailable: false,
@@ -61,11 +54,10 @@ export default function InstantBookingModal({ worker, userData, onClose, onBooke
           updatedAt: serverTimestamp(),
         });
       } catch {
-        // Non-critical: worker availability update failed
+        // Non-critical
       }
 
       setPaymentSuccess(true);
-
       if (onBooked) {
         onBooked({ bookingId: docRef.id, worker, pricing: bookingData.acceptedQuote.pricing });
       }
@@ -75,33 +67,30 @@ export default function InstantBookingModal({ worker, userData, onClose, onBooke
     }
   }, [worker, userData, onBooked]);
 
-  // Step 3: Success view
   if (paymentSuccess) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div style={{ fontSize: 56, marginBottom: 12 }}>✅</div>
-            <h2 style={{ margin: '0 0 8px', fontSize: 20, color: '#059669' }}>Booking Confirmed!</h2>
-            <p style={{ color: '#6B7280', fontSize: 14, margin: '0 0 16px' }}>
-              {displayInfo.workerName} ({displayInfo.serviceType}) has been assigned to you.
-              You can track their live location from My Bookings.
+      <div className="modal-overlay" onClick={onClose} style={{ zIndex: 10000, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+        <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '32px', maxWidth: '440px', width: '100%', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-lg)' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
+            <h2 style={{ margin: '0 0 8px', fontSize: 24, color: 'var(--success)', fontWeight: '800' }}>Booking Confirmed!</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: 15, margin: '0 0 24px', lineHeight: 1.5 }}>
+              <strong>{displayInfo.workerName}</strong> has been assigned. You can track their arrival from your bookings.
             </p>
             <div style={{
-              background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10,
-              padding: 14, marginBottom: 16,
+              background: 'var(--success-bg)', border: '1px solid var(--success)', borderRadius: 16,
+              padding: 16, marginBottom: 24, textAlign: 'left'
             }}>
-              <div style={{ fontSize: 13, color: '#15803D', fontWeight: 600 }}>
+              <div style={{ fontSize: 14, color: 'var(--success)', fontWeight: 700 }}>
                 🚶 Worker is now on the way
               </div>
-              <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-                Live tracking will appear in your My Bookings page
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+                Estimated arrival: 15-30 mins
               </div>
             </div>
             <button
               onClick={onClose}
-              className="btn-primary"
-              style={{ width: '100%', padding: 14 }}
+              style={{ width: '100%', padding: '16px', background: 'var(--primary-purple)', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 12px var(--primary-purple-glow)' }}
             >
               View My Bookings →
             </button>
@@ -112,16 +101,16 @@ export default function InstantBookingModal({ worker, userData, onClose, onBooke
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 10000, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '24px', maxWidth: '440px', width: '100%', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-lg)', maxHeight: '90vh', overflowY: 'auto' }}>
         {/* Step indicator */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
           {[1, 2].map((s) => (
             <div
               key={s}
               style={{
                 flex: 1, height: 4, borderRadius: 2,
-                background: step >= s ? '#A259FF' : '#E9D5FF',
+                background: step >= s ? 'var(--primary-purple)' : 'var(--border-light)',
                 transition: 'background 0.3s',
               }}
             />
@@ -129,180 +118,152 @@ export default function InstantBookingModal({ worker, userData, onClose, onBooke
         </div>
 
         {step === 1 ? (
-          /* ─── STEP 1: Worker Details (no phone) ─── */
           <>
-            <div className="modal-title">Available Worker</div>
+            <h2 style={{ fontSize: 20, fontWeight: '850', color: 'var(--text-main)', margin: '0 0 16px' }}>Available Professional</h2>
 
             {/* Worker card */}
             <div style={{
-              background: 'linear-gradient(135deg, #F5F3FF, #EDE9FE)',
-              borderRadius: 14, padding: 20, marginBottom: 16,
-              border: '1px solid #E9D5FF',
+              background: 'var(--bg-main)',
+              borderRadius: 20, padding: 20, marginBottom: 16,
+              border: '1px solid var(--border-light)',
             }}>
-              {/* Avatar + Name */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
                 <div style={{
-                  width: 56, height: 56, borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #7C3AED, #A259FF)',
+                  width: 64, height: 64, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, var(--primary-purple), #a78bfa)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 24, fontWeight: 700, color: 'white',
+                  fontSize: 28, fontWeight: 800, color: 'white',
+                  boxShadow: '0 4px 12px var(--primary-purple-glow)'
                 }}>
                   {(displayInfo.workerName || 'W').charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#1F1144' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-main)' }}>
                     {displayInfo.workerName}
                   </div>
-                  <div style={{ fontSize: 14, color: '#7C3AED', fontWeight: 600 }}>
+                  <div style={{ fontSize: 14, color: 'var(--primary-purple)', fontWeight: 700 }}>
                     {displayInfo.serviceType}
                   </div>
-                  <div style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
                     ⭐ {displayInfo.rating > 0 ? displayInfo.rating.toFixed(1) : 'New worker'}
                     {displayInfo.area && ` · 📍 ${displayInfo.area}`}
-                    {displayInfo.distanceKm != null && ` · ${displayInfo.distanceKm}km away`}
                   </div>
                 </div>
               </div>
 
               {/* Fixed rate display */}
               <div style={{
-                background: 'white', borderRadius: 10, padding: 14,
-                textAlign: 'center', border: '1px solid #E9D5FF',
+                background: 'var(--bg-card)', borderRadius: 16, padding: 16,
+                textAlign: 'center', border: '1px solid var(--border-light)',
               }}>
-                <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 4 }}>Fixed Day Rate</div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#059669' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Daily Professional Rate</div>
+                <div style={{ fontSize: 32, fontWeight: 900, color: 'var(--success)' }}>
                   ₹{displayInfo.fixedRate.toLocaleString('en-IN')}
-                  <span style={{ fontSize: 14, fontWeight: 500, color: '#6B7280' }}>/day</span>
+                  <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-muted)', marginLeft: 4 }}>/day</span>
                 </div>
               </div>
             </div>
 
             <div style={{
-              background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10,
-              padding: 12, marginBottom: 16, fontSize: 13, color: '#92400E',
+              background: 'var(--warning-bg)', border: '1px solid var(--warning)', borderRadius: 12,
+              padding: 12, marginBottom: 20, fontSize: 13, color: 'var(--warning)', fontWeight: '500'
             }}>
-              ℹ️ Worker's phone number will be shared after booking is confirmed.
+              ℹ️ Direct contact details shared after confirmation.
             </div>
 
             {error && (
               <div style={{
-                background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 8,
-                padding: 10, marginBottom: 12, fontSize: 13, color: '#B91C1C',
+                background: 'var(--error-bg)', border: '1px solid var(--error)', borderRadius: 12,
+                padding: 12, marginBottom: 16, fontSize: 13, color: 'var(--error)', fontWeight: '600'
               }}>
                 {error}
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={onClose} className="btn-secondary" style={{ flex: 1, padding: 12 }}>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={onClose} style={{ flex: 1, padding: '14px', borderRadius: '14px', background: 'transparent', border: '1px solid var(--border-light)', color: 'var(--text-main)', fontWeight: '700', cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button onClick={handleProceedToPayment} className="btn-primary" style={{ flex: 1, padding: 12 }}>
-                Proceed to Pay →
+              <button onClick={handleProceedToPayment} style={{ flex: 1, padding: '14px', borderRadius: '14px', background: 'var(--primary-purple)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 12px var(--primary-purple-glow)' }}>
+                View Price →
               </button>
             </div>
           </>
         ) : (
-          /* ─── STEP 2: Payment Gate ─── */
           <>
-            <div className="modal-title">Payment</div>
+            <h2 style={{ fontSize: 20, fontWeight: '850', color: 'var(--text-main)', margin: '0 0 16px' }}>Price Confirmation</h2>
 
-            {/* Pricing breakdown */}
             <div style={{
-              background: '#F9FAFB', borderRadius: 12,
-              padding: 16, marginBottom: 16,
-              border: '1px solid #E5E7EB',
+              background: 'var(--bg-main)', borderRadius: 18,
+              padding: 20, marginBottom: 20,
+              border: '1px solid var(--border-light)',
             }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#1F1144', marginBottom: 12 }}>
-                Price Breakdown
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-main)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Booking Details
               </div>
 
               {[
-                { label: `${displayInfo.serviceType} — ${displayInfo.workerName}`, value: `₹${displayInfo.fixedRate.toLocaleString('en-IN')}` },
+                { label: `Service: ${displayInfo.serviceType}`, value: `₹${displayInfo.fixedRate.toLocaleString('en-IN')}` },
                 { label: 'Platform Fee (15%)', value: `₹${displayInfo.platformFee.toLocaleString('en-IN')}` },
-                { label: 'Payment Charges (2%)', value: `₹${displayInfo.paymentCharge.toLocaleString('en-IN')}` },
+                { label: 'Insurance & Taxes', value: `₹${displayInfo.paymentCharge.toLocaleString('en-IN')}` },
               ].map((row) => (
                 <div key={row.label} style={{
                   display: 'flex', justifyContent: 'space-between',
-                  padding: '6px 0', fontSize: 14, color: '#374151',
-                  borderBottom: '1px solid #F3F4F6',
+                  padding: '10px 0', fontSize: 14, color: 'var(--text-main)',
+                  borderBottom: '1px solid var(--border-light)',
                 }}>
-                  <span>{row.label}</span>
-                  <span style={{ fontWeight: 600 }}>{row.value}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{row.label}</span>
+                  <span style={{ fontWeight: 700 }}>{row.value}</span>
                 </div>
               ))}
 
               <div style={{
                 display: 'flex', justifyContent: 'space-between',
-                padding: '10px 0 0', fontSize: 16, fontWeight: 700,
-                color: '#059669',
+                padding: '16px 0 0', fontSize: 20, fontWeight: 900,
+                color: 'var(--success)',
               }}>
-                <span>Total</span>
+                <span>Total Payable</span>
                 <span>₹{displayInfo.finalPrice.toLocaleString('en-IN')}</span>
               </div>
             </div>
 
-            {/* Payment method placeholder */}
             <div style={{
-              background: '#F5F3FF', borderRadius: 10, padding: 14,
-              marginBottom: 16, border: '1px solid #E9D5FF',
+              background: 'var(--success-bg)', border: '1px solid var(--success)', borderRadius: 14,
+              padding: 16, marginBottom: 20, fontSize: 13,
             }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#7C3AED', marginBottom: 8 }}>
-                💳 Payment Method
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {['UPI', 'Debit Card', 'Credit Card', 'Net Banking'].map((method) => (
-                  <div key={method} style={{
-                    background: 'white', border: '1px solid #E9D5FF',
-                    borderRadius: 8, padding: '6px 12px',
-                    fontSize: 12, color: '#1F1144', fontWeight: 500,
-                  }}>
-                    {method}
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: 11, color: '#6B7280', marginTop: 6 }}>
-                Secure payment powered by Gigtos Pay
-              </div>
-            </div>
-
-            {/* What happens next */}
-            <div style={{
-              background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10,
-              padding: 12, marginBottom: 16, fontSize: 13,
-            }}>
-              <div style={{ fontWeight: 600, color: '#15803D', marginBottom: 4 }}>After payment:</div>
-              <ul style={{ color: '#374151', margin: 0, paddingLeft: 18, listStyle: 'none' }}>
-                <li>✓ Worker gets notified instantly</li>
-                <li>✓ You can track the worker live</li>
-                <li>✓ Worker's contact shared after arrival</li>
+              <div style={{ fontWeight: 800, color: 'var(--success)', marginBottom: 6 }}>Booking Benefits:</div>
+              <ul style={{ color: 'var(--text-main)', margin: 0, paddingLeft: 18, listStyle: 'none', display: 'grid', gap: '4px' }}>
+                <li>✓ Instant professional matching</li>
+                <li>✓ 24/7 Support assistance</li>
+                <li>✓ Secure digital payment</li>
               </ul>
             </div>
 
             {error && (
               <div style={{
-                background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 8,
-                padding: 10, marginBottom: 12, fontSize: 13, color: '#B91C1C',
+                background: 'var(--error-bg)', border: '1px solid var(--error)', borderRadius: 12,
+                padding: 12, marginBottom: 16, fontSize: 13, color: 'var(--error)', fontWeight: '600'
               }}>
                 {error}
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setStep(1)} className="btn-secondary" style={{ flex: 1, padding: 12 }}>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={() => setStep(1)} style={{ flex: 1, padding: '14px', borderRadius: '14px', background: 'transparent', border: '1px solid var(--border-light)', color: 'var(--text-main)', fontWeight: '700', cursor: 'pointer' }}>
                 ← Back
               </button>
               <button
                 onClick={handlePay}
                 disabled={paying}
                 style={{
-                  flex: 2, padding: 14, fontSize: 16, fontWeight: 700,
+                  flex: 1.5, padding: '14px', fontSize: 16, fontWeight: '900',
                   background: paying
-                    ? '#9CA3AF'
-                    : 'linear-gradient(135deg, #059669, #10B981)',
-                  color: 'white', border: 'none', borderRadius: 10,
+                    ? 'var(--text-muted)'
+                    : 'linear-gradient(135deg, var(--success), #10B981)',
+                  color: 'white', border: 'none', borderRadius: '14px',
                   cursor: paying ? 'not-allowed' : 'pointer',
                   transition: 'all 0.2s',
+                  boxShadow: paying ? 'none' : '0 4px 16px var(--success-bg)'
                 }}
               >
                 {paying ? '⏳ Processing...' : `Pay ₹${displayInfo.finalPrice.toLocaleString('en-IN')}`}

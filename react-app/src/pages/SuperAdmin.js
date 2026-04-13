@@ -54,7 +54,6 @@ export default function SuperAdmin() {
                 setEscalatedBookings(all.filter(b =>
                     b.dispute?.escalationStatus === true && b.dispute?.status === 'open'
                 ));
-                // All disputes (both open and resolved)
                 const disputes = all.filter(b => b.dispute?.status);
                 setAllDisputes(disputes);
             }
@@ -81,27 +80,19 @@ export default function SuperAdmin() {
     /* ── Actions ── */
     const suspendRegion = async (adminId) => {
         if (!window.confirm('Suspend this region lead? Their workers will not receive new assignments.')) return;
-        await updateDoc(doc(db, 'admins', adminId), {
-            regionStatus: 'suspended',
-        });
+        await updateDoc(doc(db, 'admins', adminId), { regionStatus: 'suspended' });
         alert('Region lead suspended.');
     };
 
     const reinstateRegion = async (adminId) => {
-        await updateDoc(doc(db, 'admins', adminId), {
-            regionStatus: 'active',
-            probationStatus: false,
-        });
+        await updateDoc(doc(db, 'admins', adminId), { regionStatus: 'active', probationStatus: false });
         alert('Region lead reinstated.');
     };
 
     const markWorkerFraud = async (workerId) => {
-        if (!window.confirm('Mark this worker as fraudulent? This will impact the region lead\'s score.')) return;
-        await updateDoc(doc(db, 'gig_workers', workerId), {
-            isFraud: true,
-            status: 'inactive',
-        });
-        alert('Worker marked as fraud and deactivated.');
+        if (!window.confirm('Mark this worker as fraudulent?')) return;
+        await updateDoc(doc(db, 'gig_workers', workerId), { isFraud: true, status: 'inactive' });
+        alert('Worker marked as fraud.');
     };
 
     const resolveEscalatedDispute = async (booking, decision) => {
@@ -114,1083 +105,321 @@ export default function SuperAdmin() {
                 extraArgs: { decision }
             });
             alert('✅ Dispute resolved');
-        } catch (err) {
-            alert('Error: ' + err.message);
-        }
+        } catch (err) { alert('Error: ' + err.message); }
     };
 
-    // ✅ Assign child admin to region lead
     const assignAdminToRegionLead = async (adminId, regionLeadId) => {
         if (!adminId || !regionLeadId) return alert('Please select both admin and region lead');
-        if (!window.confirm('Assign this admin to the region lead?')) return;
         try {
-            await updateDoc(doc(db, 'admins', adminId), {
-                parentAdminId: regionLeadId
-            });
-            alert('✅ Admin assigned to region lead');
-        } catch (err) {
-            alert('Error: ' + err.message);
-        }
+            await updateDoc(doc(db, 'admins', adminId), { parentAdminId: regionLeadId });
+            alert('✅ Admin assigned');
+        } catch (err) { alert('Error: ' + err.message); }
     };
 
-    // ✅ Remove admin from region lead
     const unassignAdminFromRegionLead = async (adminId) => {
         if (!window.confirm('Remove this admin from the region lead?')) return;
         try {
-            await updateDoc(doc(db, 'admins', adminId), {
-                parentAdminId: null
-            });
+            await updateDoc(doc(db, 'admins', adminId), { parentAdminId: null });
             alert('✅ Admin unassigned');
-        } catch (err) {
-            alert('Error: ' + err.message);
-        }
+        } catch (err) { alert('Error: ' + err.message); }
     };
 
     const createRegionAdmin = async (e) => {
         e.preventDefault();
-        setCreateError('');
-        setCreateSuccess('');
-
+        setCreateError(''); setCreateSuccess('');
         const { name, email, password, confirmPassword, areaName } = createForm;
-
-        // Validation
-        if (!name || !email || !password || !confirmPassword) {
-            setCreateError('Please fill in all fields');
-            return;
-        }
-
-        if (password !== confirmPassword) {
-            setCreateError('Passwords do not match');
-            return;
-        }
-
-        if (password.length < 6) {
-            setCreateError('Password must be at least 6 characters');
-            return;
-        }
-
-        if (!areaName) {
-            setCreateError('Please specify the area/region name');
-            return;
-        }
-
+        if (!name || !email || !password || !areaName) return setCreateError('Fill all fields');
+        if (password !== confirmPassword) return setCreateError('Passwords mismatch');
+        
         setCreateLoading(true);
-
         try {
-            // Step 1: Create Firebase Auth user
             const userCred = await createUserWithEmailAndPassword(auth, email, password);
-            const uid = userCred.user.uid;
-
-            // Step 2: Create admin document in Firestore
-            const adminData = {
-                name,
-                email,
-                role: 'regionLead',
-                createdAt: new Date(),
-                regionStatus: 'active',
-                probationStatus: false,
-                regionScore: 100,
-                totalDisputes: 0,
-                fraudCount: 0,
-                areaName,
-            };
-
-            await setDoc(doc(db, 'admins', uid), adminData);
-
-            // Step 3: ✅ FIX - Log back in as SuperAdmin (createUserWithEmailAndPassword auto-logged in the new user)
-            const superAdminUser = auth.currentUser;
-            if (superAdminUser) {
-                // Get SuperAdmin credentials and re-authenticate
-                // For now, we'll stay logged in as the newly created region lead briefly, 
-                // but show a message that they should log out and back in as SuperAdmin
-            }
-
-            setCreateSuccess(`✅ Region Admin "${name}" created successfully! You are logged in as the new region lead. Please LOGOUT and log back in to return to SuperAdmin mode.`);
-            
-            // Reset form
-            setCreateForm({
-                name: '',
-                email: '',
-                password: '',
-                confirmPassword: '',
-                role: 'regionAdmin',
-                regionAdminId: '',
-                areaName: '',
+            await setDoc(doc(db, 'admins', userCred.user.uid), {
+                name, email, role: 'regionLead', createdAt: new Date(),
+                regionStatus: 'active', probationStatus: false, regionScore: 100,
+                totalDisputes: 0, fraudCount: 0, areaName
             });
-
-            // Longer timeout since they need to read the message
-            setTimeout(() => setCreateSuccess(''), 5000);
-        } catch (err) {
-            setCreateError('Error: ' + (err.message || err));
-        } finally {
-            setCreateLoading(false);
-        }
+            setCreateSuccess(`✅ Created "${name}". Please logout and log back in.`);
+            setCreateForm({ name: '', email: '', password: '', confirmPassword: '', role: 'regionAdmin', regionAdminId: '', areaName: '' });
+        } catch (err) { setCreateError('Error: ' + err.message); }
+        finally { setCreateLoading(false); }
     };
 
     /* ── Derived data ── */
     const regionLeads = admins.filter(a => a.role === 'regionLead');
     const childAdmins = admins.filter(a => ['admin', 'mason'].includes(a.role) && !!a.parentAdminId);
     const unassignedAdmins = admins.filter(a => ['admin', 'mason'].includes(a.role) && !a.parentAdminId);
-    const probationaryLeads = regionLeads.filter(a => a.probationStatus === true);
-    const suspendedLeads = regionLeads.filter(a => a.regionStatus === 'suspended');
-
+    
     const getScoreColor = (score) => {
-        if (score >= 80) return '#10b981';
-        if (score >= 60) return '#f59e0b';
-        return '#ef4444';
-    };
-
-    /* ── Helper: Get admin/region lead info ── */
-    const getAdminInfo = (adminId) => {
-        return admins.find(a => a.id === adminId) || { name: 'Unknown Admin', id: adminId };
-    };
-
-    const getRegionLeadInfo = (adminId) => {
-        const admin = admins.find(a => a.id === adminId);
-        if (admin?.role === 'regionLead') {
-            return { name: admin.name || admin.email, region: admin.areaName };
-        }
-        if (admin?.parentAdminId) {
-            const regionLead = admins.find(a => a.id === admin.parentAdminId);
-            if (regionLead) {
-                return { name: regionLead.name || regionLead.email, region: regionLead.areaName };
-            }
-        }
-        return { name: 'Unknown Region Lead', region: 'N/A' };
-    };
-
-    const getWorkerInfo = (workerId) => {
-        return allWorkers.find(w => w.id === workerId) || { name: 'Unknown Worker', id: workerId };
-    };
-
-    const getUserInfo = (userId) => {
-        return allUsers.find(u => u.id === userId) || { name: 'Unknown User', phone: 'N/A' };
+        if (score >= 80) return 'var(--success)';
+        if (score >= 60) return 'var(--warning)';
+        return 'var(--error)';
     };
 
     /* ── Filtering helpers ── */
-    const matchesDateRange = (item) => {
-        if (!filterDateFrom && !filterDateTo) return true;
-        const raw = item.createdAt;
-        const ts = raw?.toDate ? raw.toDate() : (raw ? new Date(raw) : null);
-        if (!ts || isNaN(ts.getTime())) return true;
-        if (filterDateFrom && ts < new Date(filterDateFrom)) return false;
-        if (filterDateTo && ts > new Date(filterDateTo + 'T23:59:59')) return false;
-        return true;
-    };
-
-    const matchesSearch = (item) => {
-        if (!filterSearch.trim()) return true;
-        const q = filterSearch.toLowerCase();
-        const fields = [
-            item.serviceType, item.customerName, item.name, item.contact,
-            item.email, item.phone, item.gigType, item.id
-        ].filter(Boolean);
-        return fields.some(f => f.toLowerCase().includes(q));
-    };
-
-    const matchesRegion = (item) => {
-        if (filterRegion === 'all') return true;
-        const adminInfo = admins.find(a => a.id === item.adminId);
-        if (!adminInfo) return false;
-        const regionLeadId = adminInfo.role === 'regionLead' ? adminInfo.id : (adminInfo.parentAdminId || null);
-        return regionLeadId === filterRegion;
-    };
-
     const filteredBookings = allBookings.filter(b => {
-        if (!matchesDateRange(b)) return false;
-        if (!matchesSearch(b)) return false;
-        if (!matchesRegion(b)) return false;
         if (filterStatus !== 'all' && b.status !== filterStatus) return false;
-        return true;
-    });
-
-    const filteredDisputes = allDisputes.filter(b => {
-        if (!matchesDateRange(b)) return false;
-        if (!matchesSearch(b)) return false;
-        if (filterStatus !== 'all') {
-            if (filterStatus === 'open' && b.dispute?.status !== 'open') return false;
-            if (filterStatus === 'resolved' && b.dispute?.status !== 'resolved') return false;
-            if (filterStatus === 'escalated' && b.dispute?.escalationStatus !== true) return false;
-        }
-        return true;
-    });
-
-    const filteredWorkers = allWorkers.filter(w => {
-        if (!matchesSearch(w)) return false;
-        if (filterStatus !== 'all') {
-            if (filterStatus === 'fraud' && !w.isFraud) return false;
-            if (filterStatus === 'active' && w.status !== 'active') return false;
-            if (filterStatus === 'inactive' && (w.status === 'active' || w.isFraud)) return false;
-        }
+        if (filterSearch && !b.customerName?.toLowerCase().includes(filterSearch.toLowerCase())) return false;
         return true;
     });
 
     const resetFilters = () => {
-        setFilterSearch('');
-        setFilterStatus('all');
-        setFilterDateFrom('');
-        setFilterDateTo('');
-        setFilterRegion('all');
+        setFilterSearch(''); setFilterStatus('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterRegion('all');
     };
-
-    const filterBarStyle = {
-        display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center',
-        padding: '12px 16px', background: '#f8fafc', borderRadius: '10px',
-        border: '1px solid #e2e8f0', marginBottom: '16px'
-    };
-    const filterInputStyle = {
-        padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px',
-        fontSize: '12px', background: 'white', outline: 'none'
-    };
-
-    const renderFilterBar = (statusOptions) => (
-        <div style={filterBarStyle}>
-            <input
-                type="text"
-                placeholder="🔍 Search..."
-                value={filterSearch}
-                onChange={e => setFilterSearch(e.target.value)}
-                style={{ ...filterInputStyle, minWidth: '140px', flex: '1 1 140px' }}
-            />
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-                style={{ ...filterInputStyle, minWidth: '100px' }}>
-                <option value="all">All Status</option>
-                {statusOptions.map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-            </select>
-            {regionLeads.length > 0 && (
-                <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)}
-                    style={{ ...filterInputStyle, minWidth: '120px' }}>
-                    <option value="all">All Regions</option>
-                    {regionLeads.map(rl => (
-                        <option key={rl.id} value={rl.id}>{rl.name || rl.areaName || rl.email}</option>
-                    ))}
-                </select>
-            )}
-            <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
-                style={filterInputStyle} title="From date" />
-            <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
-                style={filterInputStyle} title="To date" />
-            <button onClick={resetFilters} style={{
-                padding: '7px 12px', background: '#e2e8f0', border: 'none',
-                borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 600, color: '#475569'
-            }}>Reset</button>
-        </div>
-    );
 
     return (
-        <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '20px' }}>
-            {/* Header */}
-            <div style={{ marginBottom: '30px' }}>
-                <h1 style={{ fontSize: '28px', margin: '0 0 8px 0', color: '#1e293b' }}>
-                    🛡️ SuperAdmin Control Center
-                </h1>
-                <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>
-                    Governance, region performance, escalated disputes, and fraud management
-                </p>
-            </div>
+        <div className="dash-container" style={{ minHeight: '100vh', background: 'var(--bg-main)', padding: '40px 20px' }}>
+            <main style={{ maxWidth: 1200, margin: '0 auto' }}>
+                
+                {/* Global Header */}
+                <header style={{ 
+                    background: 'var(--primary-purple-glow)', 
+                    backdropFilter: 'var(--glass-blur)',
+                    border: '1px solid var(--primary-purple)',
+                    borderRadius: 'var(--radius-xl)',
+                    padding: '48px',
+                    marginBottom: '40px',
+                    boxShadow: 'var(--glass-shadow)'
+                }}>
+                    <h1 style={{ fontSize: 'var(--font-xl)', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>SuperAdmin Control Center</h1>
+                    <p style={{ color: 'var(--text-muted)', fontWeight: 600, marginTop: 12 }}>Governance & Global Logistics Oversight</p>
+                </header>
 
-            {/* Summary Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '30px' }}>
-                {[
-                    { label: 'Region Admins', value: regionLeads.length, icon: '🌐', color: '#667eea' },
-                    { label: 'Masons', value: childAdmins.length, icon: '👤', color: '#3b82f6' },
-                    { label: 'Unassigned Masons', value: unassignedAdmins.length, icon: '⚠️', color: '#f97316' },
-                    { label: 'On Probation', value: probationaryLeads.length, icon: '⚠️', color: '#f59e0b' },
-                    { label: 'Suspended', value: suspendedLeads.length, icon: '🚫', color: '#ef4444' },
-                    { label: 'Escalated Disputes', value: escalatedBookings.length, icon: '🚨', color: '#dc2626' },
-                    { label: 'Total Workers', value: allWorkers.length, icon: '👷', color: '#10b981' },
-                    { label: 'Fraud Workers', value: allWorkers.filter(w => w.isFraud).length, icon: '🕵️', color: '#7c3aed' },
-                ].map((card) => (
-                    <div key={card.label} style={{
-                        background: 'white', padding: '16px', borderRadius: '12px',
-                        border: `2px solid ${card.color}20`, textAlign: 'center',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                    }}>
-                        <div style={{ fontSize: '28px', marginBottom: '6px' }}>{card.icon}</div>
-                        <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 'bold', marginBottom: '4px' }}>{card.label}</div>
-                        <div style={{ fontSize: '24px', fontWeight: 'bold', color: card.color }}>{card.value}</div>
-                    </div>
-                ))}
-            </div>
-
-            {/* Tab Navigation */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
-                {[
-                    { key: 'escalations', label: `🚨 Escalations (${escalatedBookings.length})`, color: '#dc2626' },
-                    { key: 'disputes', label: `⚠️ All Disputes (${allDisputes.length})`, color: '#f59e0b' },
-                    { key: 'work-status', label: `📋 Work Status (${allBookings.length})`, color: '#2563eb' },
-                    { key: 'admin-workers', label: '👥 Admin & Workers', color: '#059669' },
-                    { key: 'regions', label: '🌐 Region Performance', color: '#667eea' },
-                    { key: 'create', label: '➕ Create Region Admin', color: '#1e40af' },
-                ].map(tab => (
-                    <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                        style={{
-                            padding: '10px 20px', border: 'none', borderRadius: '25px',
-                            cursor: 'pointer', fontWeight: 'bold', fontSize: '13px',
-                            background: activeTab === tab.key ? tab.color : '#f1f5f9',
-                            color: activeTab === tab.key ? 'white' : '#475569',
-                            transition: 'all 0.2s',
-                        }}>
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
-
-            {/* ═══════════════ CREATE ADMIN/REGIONLEAD TAB ═══════════════ */}
-            {activeTab === 'create' && (
-                <div>
-                    <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>➕ Create New Region Admin</h3>
-
-                    <div style={{
-                        background: 'white', borderRadius: '12px', padding: '24px',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.05)', maxWidth: '600px'
-                    }}>
-                        {createError && (
-                            <div style={{
-                                padding: '12px 16px', background: '#fee2e2', color: '#991b1b',
-                                borderRadius: '8px', marginBottom: '16px', fontSize: '13px', fontWeight: '500'
-                            }}>
-                                ❌ {createError}
-                            </div>
-                        )}
-
-                        {createSuccess && (
-                            <div style={{
-                                padding: '12px 16px', background: '#dcfce7', color: '#166534',
-                                borderRadius: '8px', marginBottom: '16px', fontSize: '13px', fontWeight: '500'
-                            }}>
-                                {createSuccess}
-                            </div>
-                        )}
-
-                        <form onSubmit={createRegionAdmin}>
-                            {/* Name */}
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>
-                                    Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={createForm.name}
-                                    onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                                    style={{
-                                        width: '100%', padding: '10px', border: '1px solid #cbd5e1',
-                                        borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box'
-                                    }}
-                                    placeholder="e.g., Rajesh Kumar"
-                                />
-                            </div>
-
-                            {/* Email */}
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>
-                                    Email *
-                                </label>
-                                <input
-                                    type="email"
-                                    value={createForm.email}
-                                    onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                                    style={{
-                                        width: '100%', padding: '10px', border: '1px solid #cbd5e1',
-                                        borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box'
-                                    }}
-                                    placeholder="e.g., rajesh@example.com"
-                                />
-                            </div>
-
-                            {/* Password */}
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>
-                                    Password (min 6 chars) *
-                                </label>
-                                <input
-                                    type="password"
-                                    value={createForm.password}
-                                    onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-                                    style={{
-                                        width: '100%', padding: '10px', border: '1px solid #cbd5e1',
-                                        borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box'
-                                    }}
-                                    placeholder="Enter password"
-                                />
-                            </div>
-
-                            {/* Confirm Password */}
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>
-                                    Confirm Password *
-                                </label>
-                                <input
-                                    type="password"
-                                    value={createForm.confirmPassword}
-                                    onChange={(e) => setCreateForm({ ...createForm, confirmPassword: e.target.value })}
-                                    style={{
-                                        width: '100%', padding: '10px', border: '1px solid #cbd5e1',
-                                        borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box'
-                                    }}
-                                    placeholder="Confirm password"
-                                />
-                            </div>
-
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>
-                                    Role
-                                </label>
-                                <input
-                                    value="Region Admin"
-                                    readOnly
-                                    style={{
-                                        width: '100%', padding: '10px', border: '1px solid #cbd5e1',
-                                        borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box', background: '#f8fafc', color: '#475569'
-                                    }}
-                                />
-                            </div>
-
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>
-                                    Area/Region Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={createForm.areaName}
-                                    onChange={(e) => setCreateForm({ ...createForm, areaName: e.target.value })}
-                                    style={{
-                                        width: '100%', padding: '10px', border: '1px solid #cbd5e1',
-                                        borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box'
-                                    }}
-                                    placeholder="e.g., North Mumbai, Delhi South"
-                                />
-                            </div>
-
-                            {/* Submit Button */}
-                            <button
-                                type="submit"
-                                disabled={createLoading}
-                                style={{
-                                    width: '100%', padding: '12px', background: '#1e40af',
-                                    color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px',
-                                    fontWeight: 'bold', cursor: createLoading ? 'not-allowed' : 'pointer',
-                                    opacity: createLoading ? 0.6 : 1, transition: 'all 0.2s'
-                                }}
-                            >
-                                {createLoading ? '⏳ Creating...' : '✅ Create Account'}
-                            </button>
-                        </form>
-                    </div>
+                {/* Summary Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 40 }}>
+                    {[
+                        { label: 'Regions', value: regionLeads.length, icon: '🌐', color: 'var(--primary-purple)' },
+                        { label: 'Masons', value: childAdmins.length, icon: '👤', color: 'var(--secondary-green)' },
+                        { label: 'Escalations', value: escalatedBookings.length, icon: '🚨', color: 'var(--error)' },
+                        { label: 'Total Jobs', value: allBookings.length, icon: '📋', color: 'var(--text-main)' },
+                        { label: 'Active Pros', value: allWorkers.length, icon: '👷', color: 'var(--success)' },
+                    ].map(card => (
+                        <div key={card.label} className="job-card" style={{ padding: 20, textAlign: 'center' }}>
+                            <div style={{ fontSize: 24, marginBottom: 8 }}>{card.icon}</div>
+                            <div style={{ fontSize: 24, fontWeight: 900, color: card.color }}>{card.value}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase' }}>{card.label}</div>
+                        </div>
+                    ))}
                 </div>
-            )}
 
-            {/* ═══════════════ ADMIN & WORKERS TAB ═══════════════ */}
-            {activeTab === 'admin-workers' && (
-                <div>
-                    <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>👥 Region Admins, Child Admins & Workers</h3>
+                {/* Navigation */}
+                <div style={{ display: 'flex', gap: 12, marginBottom: 32, flexWrap: 'wrap', background: 'var(--bg-soft)', padding: 8, borderRadius: 'var(--radius-lg)' }}>
+                    {[
+                        { id: 'escalations', label: 'Escalations', icon: '🚨', count: escalatedBookings.length },
+                        { id: 'disputes', label: 'Disputes', icon: '⚠️' },
+                        { id: 'work-status', label: 'Monitor', icon: '🔍' },
+                        { id: 'regions', label: 'Performance', icon: '📊' },
+                        { id: 'admin-workers', label: 'Infrastructure', icon: '👥' },
+                        { id: 'create', label: 'Setup', icon: '➕' },
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            style={{
+                                padding: '12px 20px',
+                                borderRadius: 'var(--radius-md)',
+                                background: activeTab === tab.id ? 'var(--bg-main)' : 'transparent',
+                                color: activeTab === tab.id ? 'var(--primary-purple)' : 'var(--text-muted)',
+                                fontWeight: 800,
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                transition: 'all 0.2s',
+                                boxShadow: activeTab === tab.id ? 'var(--shadow-sm)' : 'none'
+                            }}
+                        >
+                            <span>{tab.icon}</span> {tab.label}
+                            {tab.count > 0 && <span style={{ background: 'var(--error)', color: 'white', fontSize: 10, padding: '2px 6px', borderRadius: 10 }}>{tab.count}</span>}
+                        </button>
+                    ))}
+                </div>
 
-                    {regionLeads.length === 0 && (
-                        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px' }}>
-                            No region admins found.
+                {/* Tab Content Rendering */}
+                <div style={{ minHeight: 400 }}>
+                    {activeTab === 'escalations' && (
+                        <div className="job-card" style={{ padding: 32 }}>
+                            <h3 style={{ margin: '0 0 24px 0', fontSize: 20, fontWeight: 800 }}>Escalated Resolution Queue</h3>
+                            {escalatedBookings.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-muted)' }}>✅ No pending escalations.</div>
+                            ) : (
+                                <div style={{ display: 'grid', gap: 16 }}>
+                                    {escalatedBookings.map(b => (
+                                        <div key={b.id} style={{ padding: 24, background: 'var(--bg-soft)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--error)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 800, fontSize: 18 }}>{b.serviceType} - {b.id.slice(-6)}</div>
+                                                    <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Customer: {b.customerName} | Region: {b.area || 'Unknown'}</div>
+                                                </div>
+                                                <div style={{ background: 'var(--error-bg)', color: 'var(--error)', padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 900 }}>ESCALATED</div>
+                                            </div>
+                                            <div style={{ background: 'var(--bg-main)', padding: 16, borderRadius: 12, marginBottom: 20, fontSize: 13 }}>
+                                                <strong>Dispute Detail:</strong> {b.dispute?.reason || 'No reason provided'}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 12 }}>
+                                                <button onClick={() => resolveEscalatedDispute(b, 'refund_user')} className="btn-primary" style={{ background: 'var(--error)' }}>Full Refund</button>
+                                                <button onClick={() => resolveEscalatedDispute(b, 'pay_worker')} className="btn-primary" style={{ background: 'var(--success)' }}>Pay Worker</button>
+                                                <button onClick={() => resolveEscalatedDispute(b, 'split_payment')} className="btn-primary" style={{ background: 'var(--primary-purple)' }}>Split 50/50</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
 
-                    {regionLeads.map((regionAdmin) => {
-                        const adminsUnderRegion = childAdmins.filter(a => a.parentAdminId === regionAdmin.id);
-                        return (
-                            <div key={regionAdmin.id} style={{ background: 'white', borderRadius: '12px', padding: '20px', marginBottom: '16px', border: '2px solid #667eea', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                                <div style={{ marginBottom: '12px' }}>
-                                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>🌐 {regionAdmin.name || regionAdmin.email}</div>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Area: {regionAdmin.areaName || 'N/A'} | Child Admins: {adminsUnderRegion.length}</div>
-                                </div>
-
-                                {adminsUnderRegion.length === 0 && (
-                                    <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '8px', color: '#94a3b8', fontSize: '13px' }}>
-                                        No child admins assigned to this region admin.
-                                    </div>
-                                )}
-
-                                {adminsUnderRegion.map((admin) => {
-                                    const adminWorkers = allWorkers.filter(w => w.adminId === admin.id);
-                                    return (
-                                        <div key={admin.id} style={{ marginTop: '10px', padding: '12px', border: '1px solid #cbd5e1', borderRadius: '8px', background: '#f8fafc' }}>
-                                            <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>👤 {admin.name || admin.email}</div>
-                                            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>Workers: {adminWorkers.length}</div>
-
-                                            {adminWorkers.length === 0 ? (
-                                                <div style={{ fontSize: '12px', color: '#94a3b8' }}>No workers under this admin.</div>
-                                            ) : (
-                                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                                                    <thead>
-                                                        <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                                            <th style={{ textAlign: 'left', padding: '6px' }}>Worker</th>
-                                                            <th style={{ textAlign: 'left', padding: '6px' }}>Service</th>
-                                                            <th style={{ textAlign: 'center', padding: '6px' }}>Status</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {adminWorkers.map(w => (
-                                                            <tr key={w.id} style={{ borderBottom: '1px solid #eef2f7' }}>
-                                                                <td style={{ padding: '6px' }}>{w.name}</td>
-                                                                <td style={{ padding: '6px' }}>{w.gigType}</td>
-                                                                <td style={{ padding: '6px', textAlign: 'center' }}>{w.status}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            )}
+                    {activeTab === 'regions' && (
+                        <div style={{ display: 'grid', gap: 20 }}>
+                            {regionLeads.map(lead => (
+                                <div key={lead.id} className="job-card" style={{ padding: 32, borderLeft: `6px solid ${getScoreColor(lead.regionScore)}` }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                                        <div>
+                                            <div style={{ fontSize: 22, fontWeight: 900 }}>{lead.name || lead.email}</div>
+                                            <div style={{ color: 'var(--primary-purple)', fontWeight: 700 }}>{lead.areaName}</div>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        );
-                    })}
-
-                    {unassignedAdmins.length > 0 && (
-                        <div style={{ marginTop: '20px', padding: '14px', border: '1px solid #fb923c', borderRadius: '8px', background: '#fff7ed' }}>
-                            <div style={{ fontWeight: 'bold', color: '#9a3412', marginBottom: '12px' }}>⚠️ Unassigned Masons - Assign to Region Lead</div>
-                            {unassignedAdmins.map(a => (
-                                <div key={a.id} style={{ fontSize: '13px', color: '#7c2d12', marginBottom: '12px', padding: '10px', background: 'white', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <div style={{ flex: 1 }}>{a.name || a.email}</div>
-                                    <select
-                                        defaultValue=""
-                                        onChange={(e) => {
-                                            if (e.target.value) {
-                                                assignAdminToRegionLead(a.id, e.target.value);
-                                                e.target.value = '';
-                                            }
-                                        }}
-                                        style={{
-                                            padding: '6px 8px', fontSize: '12px', border: '1px solid #cbd5e1',
-                                            borderRadius: '4px', cursor: 'pointer', background: 'white'
-                                        }}
-                                    >
-                                        <option value="">← Assign to...</option>
-                                        {regionLeads.map(rl => (
-                                            <option key={rl.id} value={rl.id}>{rl.name || rl.email} ({rl.areaName})</option>
-                                        ))}
-                                    </select>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 800 }}>PERFORMANCE SCORE</div>
+                                            <div style={{ fontSize: 32, fontWeight: 900, color: getScoreColor(lead.regionScore) }}>{lead.regionScore}%</div>
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 20, marginBottom: 24 }}>
+                                        <div style={{ background: 'var(--bg-soft)', padding: 16, borderRadius: 12 }}>
+                                            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 800 }}>DISPUTES</div>
+                                            <div style={{ fontSize: 20, fontWeight: 800 }}>{lead.totalDisputes || 0}</div>
+                                        </div>
+                                        <div style={{ background: 'var(--bg-soft)', padding: 16, borderRadius: 12 }}>
+                                            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 800 }}>FRAUD</div>
+                                            <div style={{ fontSize: 20, fontWeight: 800, color: (lead.fraudCount || 0) > 0 ? 'var(--error)' : 'inherit' }}>{lead.fraudCount || 0}</div>
+                                        </div>
+                                        <div style={{ background: 'var(--bg-soft)', padding: 16, borderRadius: 12 }}>
+                                            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 800 }}>MASONS</div>
+                                            <div style={{ fontSize: 20, fontWeight: 800 }}>{childAdmins.filter(a => a.parentAdminId === lead.id).length}</div>
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 12 }}>
+                                        {lead.regionStatus !== 'suspended' 
+                                            ? <button onClick={() => suspendRegion(lead.id)} style={{ padding: '10px 20px', borderRadius: 8, background: 'var(--error)', color: 'white', border: 'none', fontWeight: 800, cursor: 'pointer' }}>Suspend Region</button>
+                                            : <button onClick={() => reinstateRegion(lead.id)} style={{ padding: '10px 20px', borderRadius: 8, background: 'var(--success)', color: 'white', border: 'none', fontWeight: 800, cursor: 'pointer' }}>Reinstate Region</button>
+                                        }
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     )}
 
-                    {/* Show assigned masons with ability to unassign */}
-                    {childAdmins.length > 0 && (
-                        <div style={{ marginTop: '20px', padding: '14px', border: '1px solid #86efac', borderRadius: '8px', background: '#f0fdf4' }}>
-                            <div style={{ fontWeight: 'bold', color: '#166534', marginBottom: '12px' }}>✅ Assigned Masons</div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
-                                {childAdmins.map(a => {
-                                    const regionLead = admins.find(r => r.id === a.parentAdminId);
+                    {activeTab === 'create' && (
+                        <div className="job-card" style={{ padding: 48, maxWidth: 600, margin: '0 auto' }}>
+                            <h3 style={{ margin: '0 0 32px 0', fontSize: 24, fontWeight: 800 }}>Commission New Region</h3>
+                            <form onSubmit={createRegionAdmin} style={{ display: 'grid', gap: 20 }}>
+                                {createError && <div style={{ background: 'var(--error-bg)', color: 'var(--error)', padding: 16, borderRadius: 12, fontWeight: 700 }}>{createError}</div>}
+                                {createSuccess && <div style={{ background: 'var(--success-bg)', color: 'var(--success)', padding: 16, borderRadius: 12, fontWeight: 700 }}>{createSuccess}</div>}
+                                <input placeholder="Region Leader Name" className="input-field" value={createForm.name} onChange={e => setCreateForm({...createForm, name: e.target.value})} />
+                                <input placeholder="Official Email" className="input-field" value={createForm.email} onChange={e => setCreateForm({...createForm, email: e.target.value})} />
+                                <input placeholder="Jurisdiction / Area Name" className="input-field" value={createForm.areaName} onChange={e => setCreateForm({...createForm, areaName: e.target.value})} />
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                    <input type="password" placeholder="Secure Password" className="input-field" value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} />
+                                    <input type="password" placeholder="Confirm Password" className="input-field" value={createForm.confirmPassword} onChange={e => setCreateForm({...createForm, confirmPassword: e.target.value})} />
+                                </div>
+                                <button type="submit" disabled={createLoading} className="btn-primary" style={{ padding: 20 }}>{createLoading ? 'Provisioning...' : 'Confirm Provisioning'}</button>
+                            </form>
+                        </div>
+                    )}
+
+                    {/* Infrastructure Tab (Child Admins/Masons) */}
+                    {activeTab === 'admin-workers' && (
+                         <div className="job-card" style={{ padding: 32 }}>
+                            <h3 style={{ margin: '0 0 24px 0', fontSize: 20, fontWeight: 800 }}>Logistics Network</h3>
+                            <div style={{ display: 'grid', gap: 32 }}>
+                                {regionLeads.map(rl => {
+                                    const masons = childAdmins.filter(a => a.parentAdminId === rl.id);
                                     return (
-                                        <div key={a.id} style={{ padding: '10px', background: 'white', borderRadius: '6px', border: '1px solid #d1fae5' }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }}>{a.name || a.email}</div>
-                                            <div style={{ fontSize: '11px', color: '#059669', marginBottom: '6px' }}>📍 {regionLead?.areaName || 'N/A'}</div>
-                                            <button onClick={() => unassignAdminFromRegionLead(a.id)}
-                                                style={{
-                                                    width: '100%', padding: '6px', fontSize: '11px', background: '#fecaca', border: '1px solid #fca5a5',
-                                                    borderRadius: '4px', cursor: 'pointer', color: '#7f1d1d', fontWeight: 'bold'
-                                                }}>
-                                                Unassign
-                                            </button>
+                                        <div key={rl.id} style={{ borderBottom: '1px solid var(--border-light)', pb: 32 }}>
+                                            <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--primary-purple)', mb: 16 }}>🌐 {rl.name} ({rl.areaName})</div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                                                {masons.map(m => (
+                                                    <div key={m.id} style={{ background: 'var(--bg-soft)', padding: 16, borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <div>
+                                                            <div style={{ fontWeight: 800 }}>{m.name}</div>
+                                                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.email}</div>
+                                                        </div>
+                                                        <button onClick={() => unassignAdminFromRegionLead(m.id)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--error)', color: 'var(--error)', background: 'transparent', fontSize: 10, fontWeight: 800 }}>DETACH</button>
+                                                    </div>
+                                                ))}
+                                                {masons.length === 0 && <div style={{ fontSize: 13, color: 'var(--text-muted)', italic: true }}>No masons assigned to this region.</div>}
+                                            </div>
                                         </div>
-                                    );
+                                    )
                                 })}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* ═══════════════ REGIONS TAB ═══════════════ */}
-            {activeTab === 'regions' && (
-                <div>
-                    <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>📊 Region Lead Performance</h3>
-
-                    {regionLeads.length === 0 && (
-                        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px' }}>
-                            No region leads found.
-                        </div>
-                    )}
-
-                    {regionLeads.map(lead => (
-                        <div key={lead.id} style={{
-                            background: 'white', borderRadius: '12px', padding: '20px',
-                            marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-                            border: lead.probationStatus ? '2px solid #f59e0b' : lead.regionStatus === 'suspended' ? '2px solid #ef4444' : '1px solid #e2e8f0',
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                                        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>
-                                            {lead.name || lead.email || lead.id}
-                                        </span>
-                                        {lead.probationStatus && (
-                                            <span style={{ padding: '3px 8px', background: '#fef3c7', color: '#92400e', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold' }}>
-                                                ⚠️ PROBATION
-                                            </span>
-                                        )}
-                                        {lead.regionStatus === 'suspended' && (
-                                            <span style={{ padding: '3px 8px', background: '#fee2e2', color: '#991b1b', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold' }}>
-                                                🚫 SUSPENDED
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {/* Performance Metrics */}
-                                    <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                                        <div>
-                                            <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold' }}>Score</div>
-                                            <div style={{ fontSize: '24px', fontWeight: 'bold', color: getScoreColor(lead.regionScore ?? 100) }}>
-                                                {lead.regionScore ?? 100}
-                                            </div>
+                                
+                                {unassignedAdmins.length > 0 && (
+                                    <div style={{ background: 'var(--warning-bg)', padding: 24, borderRadius: 16, border: '1px dashed var(--warning)' }}>
+                                        <h4 style={{ margin: '0 0 16px 0', color: 'var(--warning)', fontWeight: 800 }}>⚠️ Unassigned Logisticians (Masons)</h4>
+                                        <div style={{ display: 'grid', gap: 12 }}>
+                                            {unassignedAdmins.map(a => (
+                                                <div key={a.id} style={{ background: 'var(--bg-main)', padding: 12, borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontWeight: 700 }}>{a.name} ({a.email})</span>
+                                                    <select 
+                                                        onChange={(e) => e.target.value && assignAdminToRegionLead(a.id, e.target.value)}
+                                                        style={{ padding: '6px 12px', borderRadius: 6, background: 'var(--bg-soft)', color: 'var(--text-main)', border: '1px solid var(--border-light)' }}
+                                                    >
+                                                        <option value="">Assign to Region...</option>
+                                                        {regionLeads.map(rl => <option key={rl.id} value={rl.id}>{rl.name} ({rl.areaName})</option>)}
+                                                    </select>
+                                                </div>
+                                            ))}
                                         </div>
-                                        <div>
-                                            <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold' }}>Disputes</div>
-                                            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#475569' }}>{lead.totalDisputes || 0}</div>
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold' }}>Fraud Cases</div>
-                                            <div style={{ fontSize: '24px', fontWeight: 'bold', color: (lead.fraudCount || 0) > 0 ? '#ef4444' : '#475569' }}>{lead.fraudCount || 0}</div>
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold' }}>Avg Resolution</div>
-                                            <div style={{ fontSize: '24px', fontWeight: 'bold', color: (lead.avgResolutionTime || 0) > 24 ? '#ef4444' : '#475569' }}>
-                                                {lead.avgResolutionTime ? `${lead.avgResolutionTime}h` : '—'}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Score Bar */}
-                                    <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-                                        <div style={{
-                                            width: `${lead.regionScore ?? 100}%`, height: '100%',
-                                            background: getScoreColor(lead.regionScore ?? 100),
-                                            borderRadius: '4px', transition: 'width 0.5s ease',
-                                        }} />
-                                    </div>
-                                </div>
-
-                                {/* Actions */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {lead.regionStatus !== 'suspended' ? (
-                                        <button onClick={() => suspendRegion(lead.id)}
-                                            style={{ padding: '8px 16px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
-                                            🚫 Suspend
-                                        </button>
-                                    ) : (
-                                        <button onClick={() => reinstateRegion(lead.id)}
-                                            style={{ padding: '8px 16px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
-                                            ✅ Reinstate
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* ═══════════════ ESCALATIONS TAB ═══════════════ */}
-            {activeTab === 'escalations' && (
-                <div>
-                    <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>🚨 Escalated Disputes (Immediate Attention Required)</h3>
-
-                    {escalatedBookings.length === 0 && (
-                        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px' }}>
-                            ✅ No escalated disputes — all regions are performing well.
-                        </div>
-                    )}
-
-                    <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                        <thead>
-                            <tr style={{ background: '#fef2f2', borderBottom: '2px solid #fca5a5' }}>
-                                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Booking ID</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Service</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>User Info</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Admin</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Region Lead</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Worker</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Dispute Reason</th>
-                                <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {escalatedBookings.map(b => {
-                                const admin = getAdminInfo(b.adminId);
-                                const regionLead = getRegionLeadInfo(b.adminId);
-                                const worker = getWorkerInfo(b.assignedWorkerId);
-                                const user = getUserInfo(b.userId);
-                                return (
-                                    <tr key={b.id} style={{ borderBottom: '1px solid #fed7d7', background: '#fffbfb' }}>
-                                        <td style={{ padding: '12px', fontSize: '12px', fontFamily: 'monospace', color: '#475569', fontWeight: 'bold' }}>
-                                            {b.id.slice(0, 8)}...
-                                        </td>
-                                        <td style={{ padding: '12px', fontSize: '13px', color: '#1e293b', fontWeight: 'bold' }}>
-                                            {b.serviceType}
-                                        </td>
-                                        <td style={{ padding: '12px', fontSize: '12px', color: '#475569' }}>
-                                            {user.name || b.customerName}
-                                            <br />
-                                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>📞 {b.phone}</span>
-                                        </td>
-                                        <td style={{ padding: '12px', fontSize: '12px', color: '#1e293b', fontWeight: '500' }}>
-                                            {admin.name}
-                                        </td>
-                                        <td style={{ padding: '12px', fontSize: '12px', color: '#1e293b', fontWeight: '500' }}>
-                                            {regionLead.name}
-                                            {regionLead.region && <br />}
-                                            {regionLead.region && <span style={{ fontSize: '11px', color: '#94a3b8' }}>{regionLead.region}</span>}
-                                        </td>
-                                        <td style={{ padding: '12px', fontSize: '12px', color: '#1e293b' }}>
-                                            {b.assignedWorkerId ? (
-                                                <>
-                                                    {worker.name}
-                                                    <br />
-                                                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>📱 {worker.contact || 'N/A'}</span>
-                                                </>
-                                            ) : (
-                                                <span style={{ color: '#94a3b8' }}>Not assigned</span>
-                                            )}
-                                        </td>
-                                        <td style={{ padding: '12px', fontSize: '11px', color: '#7f1d1d', maxWidth: '150px' }}>
-                                            <div style={{ wordBreak: 'break-word', lineHeight: '1.4' }}>{b.dispute?.reason}</div>
-                                        </td>
-                                        <td style={{ padding: '12px', textAlign: 'center' }}>
-                                            <button onClick={() => {
-                                                const decision = prompt('Enter decision:\nworker_fault\nuser_fault\nshared_fault');
-                                                if (decision) resolveEscalatedDispute(b, decision);
-                                            }}
-                                                style={{
-                                                    padding: '6px 10px', background: '#dc2626', color: 'white', border: 'none',
-                                                    borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'
-                                                }}>
-                                                Resolve
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-
-            {/* ═══════════════ DISPUTES TAB ═══════════════ */}
-            {activeTab === 'disputes' && (
-                <div>
-                    <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>⚠️ All Disputes</h3>
-
-                    {renderFilterBar([
-                        { value: 'open', label: 'Open' },
-                        { value: 'resolved', label: 'Resolved' },
-                        { value: 'escalated', label: 'Escalated' },
-                    ])}
-
-                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
-                        Showing {filteredDisputes.length} of {allDisputes.length} disputes
-                    </div>
-
-                    {filteredDisputes.length === 0 && (
-                        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px' }}>
-                            No disputes match the current filters.
-                        </div>
-                    )}
-
-                    <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                        <thead>
-                            <tr style={{ background: '#fffbf0', borderBottom: '2px solid #fed7aa' }}>
-                                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Booking ID</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Service</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>User</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Raised By</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Reason</th>
-                                <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Status</th>
-                                <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Raised Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredDisputes.map(b => {
-                                const user = getUserInfo(b.userId);
-                                const isOpen = b.dispute?.status === 'open';
-                                const isEscalated = b.dispute?.escalationStatus === true;
-                                return (
-                                    <tr key={b.id} style={{
-                                        borderBottom: '1px solid #fed7aa',
-                                        background: isEscalated ? '#fef2f2' : isOpen ? '#fffbf0' : '#f0fdf4'
-                                    }}>
-                                        <td style={{ padding: '12px', fontSize: '12px', fontFamily: 'monospace', color: '#475569', fontWeight: 'bold' }}>
-                                            {b.id.slice(0, 8)}...
-                                        </td>
-                                        <td style={{ padding: '12px', fontSize: '13px', color: '#1e293b', fontWeight: 'bold' }}>
-                                            {b.serviceType}
-                                        </td>
-                                        <td style={{ padding: '12px', fontSize: '12px', color: '#475569' }}>
-                                            {user.name || b.customerName}
-                                        </td>
-                                        <td style={{ padding: '12px', fontSize: '12px', color: '#475569' }}>
-                                            {b.dispute?.raisedBy === b.userId ? '👤 User' : '👨‍💼 Admin'}
-                                        </td>
-                                        <td style={{ padding: '12px', fontSize: '11px', color: '#475569', maxWidth: '150px' }}>
-                                            <div style={{ wordBreak: 'break-word', lineHeight: '1.4' }}>{b.dispute?.reason}</div>
-                                        </td>
-                                        <td style={{ padding: '12px', textAlign: 'center', fontSize: '11px', fontWeight: 'bold' }}>
-                                            {isEscalated && <div style={{ color: '#dc2626' }}>🚨 ESCALATED</div>}
-                                            {isOpen && <div style={{ color: '#f59e0b' }}>⏳ OPEN</div>}
-                                            {b.dispute?.status === 'resolved' && <div style={{ color: '#10b981' }}>✅ RESOLVED</div>}
-                                        </td>
-                                        <td style={{ padding: '12px', textAlign: 'center', fontSize: '11px', color: '#94a3b8' }}>
-                                            {b.dispute?.raisedAt?.toDate?.()?.toLocaleDateString?.() || '—'}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-
-            {/* ═══════════════ WORK STATUS TAB ═══════════════ */}
-            {activeTab === 'work-status' && (
-                <div>
-                    <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>📋 All Work Status</h3>
-
-                    {renderFilterBar([
-                        { value: 'pending', label: 'Pending' },
-                        { value: 'quoted', label: 'Quoted' },
-                        { value: 'accepted', label: 'Accepted' },
-                        { value: 'assigned', label: 'Assigned' },
-                        { value: 'in_progress', label: 'In Progress' },
-                        { value: 'completed', label: 'Completed' },
-                        { value: 'cancelled', label: 'Cancelled' },
-                    ])}
-
-                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
-                        Showing {filteredBookings.length} of {allBookings.length} bookings
-                    </div>
-
-                    {filteredBookings.length === 0 && (
-                        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px' }}>
-                            No bookings match the current filters.
-                        </div>
-                    )}
-
-                    <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', fontSize: '12px' }}>
-                        <thead>
-                            <tr style={{ background: '#f0f4f8', borderBottom: '2px solid #cbd5e1' }}>
-                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold', color: '#1e293b' }}>ID</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold', color: '#1e293b' }}>Service</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold', color: '#1e293b' }}>User</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold', color: '#1e293b' }}>Admin</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold', color: '#1e293b' }}>Worker</th>
-                                <th style={{ padding: '12px', textAlign: 'center', fontWeight: 'bold', color: '#1e293b' }}>Status</th>
-                                <th style={{ padding: '12px', textAlign: 'center', fontWeight: 'bold', color: '#1e293b' }}>Created</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredBookings.map(b => {
-                                const admin = getAdminInfo(b.adminId);
-                                const worker = getWorkerInfo(b.assignedWorkerId);
-                                const user = getUserInfo(b.userId);
-                                const statusColors = {
-                                    'pending': '#ff9800',
-                                    'quoted': '#6366f1',
-                                    'accepted': '#ec4899',
-                                    'assigned': '#2196f3',
-                                    'in_progress': '#9c27b0',
-                                    'awaiting_confirmation': '#f44336',
-                                    'completed': '#4caf50',
-                                    'cancelled': '#757575',
-                                };
-                                return (
-                                    <tr key={b.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                        <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 'bold', color: '#475569' }}>
-                                            {b.id.slice(0, 6)}...
-                                        </td>
-                                        <td style={{ padding: '10px 12px', color: '#1e293b', fontWeight: '500' }}>
-                                            {b.serviceType}
-                                        </td>
-                                        <td style={{ padding: '10px 12px', color: '#475569' }}>
-                                            {user.name || b.customerName}
-                                        </td>
-                                        <td style={{ padding: '10px 12px', color: '#475569' }}>
-                                            {admin.name || 'Unassigned'}
-                                        </td>
-                                        <td style={{ padding: '10px 12px', color: '#475569' }}>
-                                            {b.assignedWorkerId ? worker.name : '—'}
-                                        </td>
-                                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                                            <span style={{
-                                                padding: '4px 8px',
-                                                background: statusColors[b.status] + '20',
-                                                color: statusColors[b.status],
-                                                borderRadius: '6px',
-                                                fontWeight: 'bold',
-                                                fontSize: '11px',
-                                                whiteSpace: 'nowrap'
-                                            }}>
-                                                {b.status}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '10px 12px', textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>
-                                            {b.createdAt?.toDate?.()?.toLocaleDateString?.() || '—'}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-
-            {/* ═══════════════ ESCALATED DISPUTES TAB (LEGACY) ═══════════════ */}
-            {activeTab === 'escalated' && (
-                <div>
-                    <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>🚨 Escalated Disputes (Overdue 24h+)</h3>
-
-                    {escalatedBookings.length === 0 && (
-                        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px' }}>
-                            ✅ No escalated disputes — all regions are performing well.
-                        </div>
-                    )}
-
-                    {escalatedBookings.map(b => (
-                        <div key={b.id} style={{
-                            background: 'white', borderRadius: '12px', padding: '20px',
-                            marginBottom: '16px', border: '2px solid #fca5a5',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-                                <div>
-                                    <div style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>
-                                        {b.serviceType} — {b.customerName}
-                                    </div>
-                                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                                        📞 {b.phone} | Booking ID: {b.id.slice(0, 8)}...
-                                    </div>
-                                </div>
-                                <span style={{ padding: '4px 10px', background: '#fef2f2', color: '#dc2626', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold' }}>
-                                    ⏰ ESCALATED
-                                </span>
-                            </div>
-
-                            {/* Dispute Info */}
-                            <div style={{ background: '#fef2f2', padding: '12px', borderRadius: '8px', marginBottom: '12px' }}>
-                                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#991b1b', marginBottom: '4px' }}>Dispute Reason:</div>
-                                <div style={{ fontSize: '13px', color: '#7f1d1d' }}>{b.dispute?.reason}</div>
-                                <div style={{ fontSize: '11px', color: '#991b1b', marginTop: '6px' }}>
-                                    Raised: {b.dispute?.raisedAt?.toDate?.()?.toLocaleString?.() || '—'}
-                                    {b.dispute?.escalatedAt && ` | Escalated: ${b.dispute.escalatedAt.toDate?.()?.toLocaleString?.() || '—'}`}
-                                </div>
-                                {b.dispute?.autoTriggered && (
-                                    <div style={{ fontSize: '11px', color: '#7c3aed', marginTop: '4px', fontWeight: 'bold' }}>
-                                        ⚡ Auto-triggered by 1-star rating
                                     </div>
                                 )}
                             </div>
-
-                            {/* SuperAdmin Decision */}
-                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                {['worker_fault', 'user_fault', 'shared_fault'].map(decision => (
-                                    <button key={decision}
-                                        onClick={() => resolveEscalatedDispute(b, decision)}
-                                        style={{
-                                            padding: '8px 16px', border: 'none', borderRadius: '8px',
-                                            cursor: 'pointer', fontSize: '12px', fontWeight: 'bold',
-                                            background: decision === 'worker_fault' ? '#ef4444' : decision === 'user_fault' ? '#3b82f6' : '#f59e0b',
-                                            color: 'white',
-                                        }}>
-                                        {decision === 'worker_fault' ? '⚠️ Worker Fault' :
-                                            decision === 'user_fault' ? '👤 User Fault' : '🤝 Shared Fault'}
-                                    </button>
-                                ))}
+                         </div>
+                    )}
+                    
+                    {/* Monitor Tab */}
+                    {activeTab === 'work-status' && (
+                        <div className="job-card" style={{ padding: 32 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 24 }}>
+                                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Global Operation Monitor</h3>
+                                <div style={{ display: 'flex', gap: 12 }}>
+                                    <input placeholder="Search customer..." className="input-field" style={{ width: 200, padding: '8px 12px' }} value={filterSearch} onChange={e => setFilterSearch(e.target.value)} />
+                                    <select className="input-field" style={{ padding: '8px 12px' }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                                        <option value="all">All Status</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="in_progress">Active</option>
+                                        <option value="completed">Completed</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 20 }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '2px solid var(--border-light)', textAlign: 'left' }}>
+                                            <th style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)' }}>JOB ID</th>
+                                            <th style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)' }}>CUSTOMER</th>
+                                            <th style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)' }}>SERVICE</th>
+                                            <th style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)' }}>STATUS</th>
+                                            <th style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)' }}>REGION</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredBookings.map(b => (
+                                            <tr key={b.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                                                <td style={{ padding: 12, fontSize: 13, fontWeight: 700 }}>#{b.id.slice(-6)}</td>
+                                                <td style={{ padding: 12, fontSize: 13 }}>{b.customerName}</td>
+                                                <td style={{ padding: 12, fontSize: 13 }}>{b.serviceType}</td>
+                                                <td style={{ padding: 12 }}>
+                                                    <span style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', padding: '4px 8px', borderRadius: 4, background: b.status === 'completed' ? 'var(--success-bg)' : 'var(--bg-soft)', color: b.status === 'completed' ? 'var(--success)' : 'inherit' }}>{b.status}</span>
+                                                </td>
+                                                <td style={{ padding: 12, fontSize: 13 }}>{b.area || '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                    ))}
-                </div>
-            )}
-
-            {/* ═══════════════ WORKERS & FRAUD TAB ═══════════════ */}
-            {activeTab === 'workers' && (
-                <div>
-                    <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>👷 Worker Overview & Fraud Management</h3>
-
-                    {renderFilterBar([
-                        { value: 'active', label: 'Active' },
-                        { value: 'inactive', label: 'Inactive' },
-                        { value: 'fraud', label: 'Fraud' },
-                    ])}
-
-                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
-                        Showing {filteredWorkers.length} of {allWorkers.length} workers
-                    </div>
-
-                    {filteredWorkers.length === 0 && (
-                        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px' }}>
-                            No workers match the current filters.
-                        </div>
                     )}
-
-                    {/* Workers Table */}
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                            <thead>
-                                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                                    <th style={{ textAlign: 'left', padding: '12px 8px', color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Worker</th>
-                                    <th style={{ textAlign: 'left', padding: '12px 8px', color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Type</th>
-                                    <th style={{ textAlign: 'center', padding: '12px 8px', color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Jobs</th>
-                                    <th style={{ textAlign: 'center', padding: '12px 8px', color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Top Listed</th>
-                                    <th style={{ textAlign: 'center', padding: '12px 8px', color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Status</th>
-                                    <th style={{ textAlign: 'center', padding: '12px 8px', color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredWorkers.map(w => (
-                                    <tr key={w.id} style={{
-                                        borderBottom: '1px solid #f1f5f9',
-                                        background: w.isFraud ? '#fef2f2' : 'white',
-                                    }}>
-                                        <td style={{ padding: '12px 8px' }}>
-                                            <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{w.name}</div>
-                                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{w.contact}</div>
-                                        </td>
-                                        <td style={{ padding: '12px 8px', color: '#475569' }}>{w.gigType}</td>
-                                        <td style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 'bold', color: '#475569' }}>{w.completedJobs || 0}</td>
-                                        <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                                            {w.isTopListed ? (
-                                                <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>⭐ Yes</span>
-                                            ) : (
-                                                <span style={{ color: '#94a3b8' }}>—</span>
-                                            )}
-                                        </td>
-                                        <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                                            {w.isFraud ? (
-                                                <span style={{ padding: '3px 8px', background: '#fee2e2', color: '#991b1b', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>
-                                                    🚨 FRAUD
-                                                </span>
-                                            ) : (
-                                                <span style={{
-                                                    padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold',
-                                                    background: w.status === 'active' ? '#dcfce7' : '#f1f5f9',
-                                                    color: w.status === 'active' ? '#166534' : '#64748b',
-                                                }}>
-                                                    {w.status}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                                            {!w.isFraud && (
-                                                <button onClick={() => markWorkerFraud(w.id)}
-                                                    style={{ padding: '5px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>
-                                                    🕵️ Mark Fraud
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
                 </div>
-            )}
+            </main>
         </div>
     );
 }

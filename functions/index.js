@@ -1396,3 +1396,33 @@ exports.secureLogActivity = functions.https.onCall(async (data, context) => {
 
   return { success: true };
 });
+
+/**
+ * TRIGGER: When a worker's availability changes.
+ * LOGIC: Sends a proactive notification to users who recently searched for this service.
+ */
+exports.onWorkerAvailabilityChange = functions.firestore
+  .document('worker_availability/{id}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+
+    // Only notify if worker just became available
+    if (!before.isAvailable && after.isAvailable) {
+      console.log(`[Notification] Worker ${after.workerName} (${after.serviceType}) is now online.`);
+      
+      const msg = `⚡ ${after.serviceType} near you is available now! ${after.workerName} is ready to work for ₹${after.dailyRate || 600}/day.`;
+      
+      // Simulation: Send SMS/Email via existing helpers if config exists
+      // For now, we broadcast to the notifications collection
+      await db.collection('notifications').add({
+        type: 'worker_online',
+        title: 'Worker Available Nearby',
+        message: msg,
+        workerId: after.workerId,
+        serviceType: after.serviceType,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    return null;
+  });

@@ -1,11 +1,6 @@
 /**
  * NearbyWorkerNotification — Floating notification showing available workers
  * with their fixed daily rates near the user.
- *
- * Queries `worker_availability` collection for active workers matching
- * the user's area, then shows a dismissible banner:
- *   "⚡ Electrician near you available for ₹600/day!"
- *   [Book Now]
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { auth, db } from '../firebase';
@@ -45,7 +40,6 @@ export default function NearbyWorkerNotification({ onBookWorker }) {
         );
         const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-        // Match for each unique service type within radius
         const serviceTypes = [...new Set(all.map((w) => w.serviceType))];
         const allMatched = [];
         const seen = new Set();
@@ -64,7 +58,6 @@ export default function NearbyWorkerNotification({ onBookWorker }) {
             }
           }
         }
-
         setWorkers(allMatched);
       } catch {
         setWorkers([]);
@@ -73,16 +66,13 @@ export default function NearbyWorkerNotification({ onBookWorker }) {
       }
     };
 
-    // Don't show for workers or unauthenticated users
     if (!auth.currentUser) {
       setLoading(false);
       return;
     }
-
     fetchWorkers();
   }, [location, dismissed]);
 
-  // Cycle through workers
   useEffect(() => {
     if (workers.length <= 1) return;
     const interval = setInterval(() => {
@@ -125,14 +115,15 @@ export default function NearbyWorkerNotification({ onBookWorker }) {
     >
       <div
         style={{
-          background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
-          borderRadius: 14,
+          background: 'linear-gradient(135deg, var(--success) 0%, #10B981 100%)',
+          borderRadius: 'var(--radius-md)',
           padding: '14px 16px',
-          boxShadow: '0 8px 28px rgba(5, 150, 105, 0.35)',
-          color: 'white',
+          boxShadow: '0 8px 28px var(--success-bg)',
+          color: '#fff',
           display: 'flex',
           alignItems: 'center',
           gap: 12,
+          border: '1px solid rgba(255,255,255,0.1)'
         }}
       >
         {/* Pulsing indicator */}
@@ -159,7 +150,7 @@ export default function NearbyWorkerNotification({ onBookWorker }) {
         <button
           onClick={handleBook}
           style={{
-            background: 'white', color: '#059669',
+            background: '#fff', color: 'var(--success)',
             border: 'none', borderRadius: 8,
             padding: '8px 16px', fontSize: 13, fontWeight: 700,
             cursor: 'pointer', whiteSpace: 'nowrap',
@@ -174,7 +165,7 @@ export default function NearbyWorkerNotification({ onBookWorker }) {
           onClick={handleDismiss}
           style={{
             background: 'rgba(255,255,255,0.2)', border: 'none',
-            color: 'white', borderRadius: '50%',
+            color: '#fff', borderRadius: '50%',
             width: 24, height: 24, fontSize: 14,
             cursor: 'pointer', display: 'flex',
             alignItems: 'center', justifyContent: 'center',
@@ -197,7 +188,7 @@ export default function NearbyWorkerNotification({ onBookWorker }) {
               style={{
                 width: i === currentIndex ? 16 : 6, height: 6,
                 borderRadius: 3,
-                background: i === currentIndex ? '#10B981' : 'rgba(16,185,129,0.3)',
+                background: i === currentIndex ? 'var(--success)' : 'var(--success-bg)',
                 transition: 'all 0.3s ease',
               }}
             />

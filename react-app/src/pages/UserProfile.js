@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import './UserProfile.css';
 
 const MOCK_PROFILE = {
   name: 'Ravi Kumar',
@@ -23,43 +24,84 @@ const MOCK_REVIEWS = [
   { id: 'r2', worker: 'Prasad M.', rating: 4, comment: 'Good service, came on time.', date: '1 month ago' },
 ];
 
-const TABS = ['Posted Jobs', 'Saved Workers', 'Reviews'];
+const MOCK_WALLET = {
+  balance: 1240,
+  lifetimeEarned: 4310,
+  tier: 'Gold',
+  nextTier: 'Platinum',
+  nextTierProgress: 72,
+  transactions: [
+    { id: 't1', label: 'Cashback - Plumbing Repair', amount: 240, date: '3 days ago', type: 'credit' },
+    { id: 't2', label: 'Wallet used - Painting', amount: 300, date: '1 week ago', type: 'debit' },
+    { id: 't3', label: 'Referral bonus', amount: 500, date: '2 weeks ago', type: 'credit' },
+  ],
+};
 
-const purple = '#A259FF';
+const TABS = ['Posted Jobs', 'Saved Workers', 'Reviews', 'Wallet'];
 
 export default function UserProfile() {
   const [activeTab, setActiveTab] = useState(0);
   const [loading] = useState(false);
   const [error] = useState('');
+  const completedJobs = useMemo(
+    () => MOCK_POSTED_JOBS.filter((j) => j.status === 'Completed').length,
+    []
+  );
 
   if (loading) {
-    return <div style={{ padding: 48, textAlign: 'center', color: '#9ca3af' }} role="status">⏳ Loading profile...</div>;
+    return <div className="user-profile-loading" role="status">Loading profile...</div>;
   }
 
   if (error) {
-    return <div style={{ padding: 24, color: '#b91c1c' }} role="alert">❌ {error}</div>;
+    return <div className="user-profile-error" role="alert">{error}</div>;
   }
 
   return (
-    <main style={{ maxWidth: 780, margin: '24px auto', padding: '0 16px' }} aria-label="User Profile">
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 20 }}>My Profile</h1>
-
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24, marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-          <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#f3e8ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }} aria-hidden="true">👤</div>
+    <main className="user-profile-page" aria-label="User Profile">
+      <section className="profile-hero-card">
+        <div className="profile-hero-top">
+          <div className="profile-avatar" aria-hidden="true">👤</div>
           <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{MOCK_PROFILE.name}</h2>
-            <p style={{ margin: 0, color: '#6b7280', fontSize: 13 }}>Member since {MOCK_PROFILE.joinedAt}</p>
+            <h1>{MOCK_PROFILE.name}</h1>
+            <p>Member since {MOCK_PROFILE.joinedAt}</p>
+          </div>
+          <div className="profile-tier-chip">{MOCK_WALLET.tier} Member</div>
+        </div>
+
+        <dl className="profile-details-grid">
+          <div><dt>Email</dt><dd>{MOCK_PROFILE.email}</dd></div>
+          <div><dt>Phone</dt><dd>{MOCK_PROFILE.phone}</dd></div>
+          <div><dt>Location</dt><dd>{MOCK_PROFILE.location}</dd></div>
+          <div><dt>Completed Jobs</dt><dd>{completedJobs}</dd></div>
+        </dl>
+
+        <div className="wallet-strip">
+          <div>
+            <span>Wallet Balance</span>
+            <strong>Rs. {MOCK_WALLET.balance.toLocaleString()}</strong>
+          </div>
+          <div>
+            <span>Lifetime Cashback</span>
+            <strong>Rs. {MOCK_WALLET.lifetimeEarned.toLocaleString()}</strong>
+          </div>
+          <div>
+            <span>Next Tier</span>
+            <strong>{MOCK_WALLET.nextTier}</strong>
           </div>
         </div>
-        <dl style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px', fontSize: 14 }}>
-          <div><dt style={{ color: '#9ca3af', fontSize: 12 }}>Email</dt><dd style={{ margin: 0, fontWeight: 500 }}>{MOCK_PROFILE.email}</dd></div>
-          <div><dt style={{ color: '#9ca3af', fontSize: 12 }}>Phone</dt><dd style={{ margin: 0, fontWeight: 500 }}>{MOCK_PROFILE.phone}</dd></div>
-          <div><dt style={{ color: '#9ca3af', fontSize: 12 }}>Location</dt><dd style={{ margin: 0, fontWeight: 500 }}>{MOCK_PROFILE.location}</dd></div>
-        </dl>
-      </div>
 
-      <div style={{ display: 'flex', borderBottom: '2px solid #e5e7eb', marginBottom: 20 }} role="tablist" aria-label="Profile sections">
+        <div className="tier-progress-wrap">
+          <div className="tier-progress-head">
+            <span>Progress to {MOCK_WALLET.nextTier}</span>
+            <span>{MOCK_WALLET.nextTierProgress}%</span>
+          </div>
+          <div className="tier-progress-track">
+            <div className="tier-progress-fill" style={{ width: `${MOCK_WALLET.nextTierProgress}%` }} />
+          </div>
+        </div>
+      </section>
+
+      <div className="profile-tabs" role="tablist" aria-label="Profile sections">
         {TABS.map((tab, i) => (
           <button
             key={tab}
@@ -67,26 +109,26 @@ export default function UserProfile() {
             aria-selected={activeTab === i}
             aria-controls={`tab-panel-${i}`}
             onClick={() => setActiveTab(i)}
-            style={{ padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 14, color: activeTab === i ? purple : '#6b7280', borderBottom: activeTab === i ? `2px solid ${purple}` : '2px solid transparent', marginBottom: -2 }}
+            className={`profile-tab-btn ${activeTab === i ? 'active' : ''}`}
           >
             {tab}
           </button>
         ))}
       </div>
 
-      <div role="tabpanel" id={`tab-panel-${activeTab}`}>
+      <div role="tabpanel" id={`tab-panel-${activeTab}`} className="profile-tab-panel">
         {activeTab === 0 && (
           MOCK_POSTED_JOBS.length === 0 ? (
-            <p style={{ color: '#9ca3af', textAlign: 'center', padding: 32 }}>No posted jobs yet.</p>
+            <p className="profile-empty">No posted jobs yet.</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="profile-card-list">
               {MOCK_POSTED_JOBS.map(j => (
-                <div key={j.id} style={{ background: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div key={j.id} className="profile-data-card">
                   <div>
-                    <p style={{ margin: 0, fontWeight: 600 }}>{j.title}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>{j.postedAt}</p>
+                    <p className="profile-card-title">{j.title}</p>
+                    <p className="profile-card-sub">{j.postedAt}</p>
                   </div>
-                  <span style={{ background: j.status === 'Open' ? '#d1fae5' : '#f3f4f6', color: j.status === 'Open' ? '#065f46' : '#6b7280', borderRadius: 20, padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>{j.status}</span>
+                  <span className={`status-pill ${j.status === 'Open' ? 'open' : 'completed'}`}>{j.status}</span>
                 </div>
               ))}
             </div>
@@ -95,16 +137,16 @@ export default function UserProfile() {
 
         {activeTab === 1 && (
           MOCK_SAVED_WORKERS.length === 0 ? (
-            <p style={{ color: '#9ca3af', textAlign: 'center', padding: 32 }}>No saved workers yet.</p>
+            <p className="profile-empty">No saved workers yet.</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="profile-card-list">
               {MOCK_SAVED_WORKERS.map(w => (
-                <div key={w.id} style={{ background: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div key={w.id} className="profile-data-card">
                   <div>
-                    <p style={{ margin: 0, fontWeight: 600 }}>{w.name}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>{w.service}</p>
+                    <p className="profile-card-title">{w.name}</p>
+                    <p className="profile-card-sub">{w.service}</p>
                   </div>
-                  <span style={{ color: '#f59e0b', fontWeight: 700 }}>★ {w.rating}</span>
+                  <span className="worker-rating">★ {w.rating}</span>
                 </div>
               ))}
             </div>
@@ -113,21 +155,40 @@ export default function UserProfile() {
 
         {activeTab === 2 && (
           MOCK_REVIEWS.length === 0 ? (
-            <p style={{ color: '#9ca3af', textAlign: 'center', padding: 32 }}>No reviews yet.</p>
+            <p className="profile-empty">No reviews yet.</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="profile-card-list">
               {MOCK_REVIEWS.map(r => (
-                <div key={r.id} style={{ background: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: '12px 16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <div key={r.id} className="profile-data-card review-card">
+                  <div className="review-header">
                     <strong>{r.worker}</strong>
-                    <span style={{ color: '#f59e0b' }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                    <span className="review-stars">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
                   </div>
-                  <p style={{ margin: 0, fontSize: 13, color: '#374151' }}>{r.comment}</p>
-                  <p style={{ margin: 0, fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{r.date}</p>
+                  <p className="review-comment">{r.comment}</p>
+                  <p className="review-date">{r.date}</p>
                 </div>
               ))}
             </div>
           )
+        )}
+
+        {activeTab === 3 && (
+          <section className="wallet-panel">
+            <h3>Cashback Wallet Activity</h3>
+            <div className="wallet-tx-list">
+              {MOCK_WALLET.transactions.map((tx) => (
+                <div key={tx.id} className="wallet-tx-item">
+                  <div>
+                    <p>{tx.label}</p>
+                    <span>{tx.date}</span>
+                  </div>
+                  <strong className={tx.type === 'credit' ? 'credit' : 'debit'}>
+                    {tx.type === 'credit' ? '+' : '-'} Rs. {tx.amount}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </main>

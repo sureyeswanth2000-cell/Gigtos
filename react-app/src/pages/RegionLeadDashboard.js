@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, onSnapshot, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../firebase';
 
@@ -21,13 +21,13 @@ export default function RegionLeadDashboard() {
   const [regionLeadData, setRegionLeadData] = useState(null);
   const [childAdmins, setChildAdmins] = useState([]);
   const [pendingGigs, setPendingGigs] = useState([]);
-  const [allGigs, setAllGigs] = useState([]);
   const [activeBookings, setActiveBookings] = useState([]);
   const [disputes, setDisputes] = useState([]);
-  const [allDisputeBookings, setAllDisputeBookings] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [delayedBookings, setDelayedBookings] = useState([]);
-  const [disputeFilter, setDisputeFilter] = useState('open');
+  const [activeTab, setActiveTab] = useState('overview');
+  const [loading, setLoading] = useState(true);
+
   const [stats, setStats] = useState({
     totalMasons: 0,
     totalGigs: 0,
@@ -36,850 +36,362 @@ export default function RegionLeadDashboard() {
     openDisputes: 0,
     regionScore: 100,
   });
-  
-  // Form states
+
   const [newAdminName, setNewAdminName] = useState('');
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [approvalAssignments, setApprovalAssignments] = useState({});
-  const [activeTab, setActiveTab] = useState('overview');
-  const [loading, setLoading] = useState(true);
 
   const uid = auth.currentUser?.uid;
 
-  // Load region lead data
   useEffect(() => {
     if (!uid) return;
     const unsub = onSnapshot(doc(db, 'admins', uid), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        const role = data.role;
-        if (role !== 'regionLead' && role !== 'region-lead') {
+        if (data.role !== 'regionLead' && data.role !== 'region-lead') {
           navigate('/admin');
           return;
         }
         setRegionLeadData(data);
-        setStats(prev => ({
-          ...prev,
-          regionScore: data.regionScore || 100,
-        }));
+        setStats(prev => ({ ...prev, regionScore: data.regionScore || 100 }));
       }
       setLoading(false);
     });
     return unsub;
   }, [uid, navigate]);
 
-  // Load child admins
   useEffect(() => {
     if (!uid) return;
-    const unsub = onSnapshot(
-      query(collection(db, 'admins'), where('parentAdminId', '==', uid)),
-      (snap) => {
-        const admins = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setChildAdmins(admins);
-        setStats(prev => ({ ...prev, totalMasons: admins.length }));
-      }
-    );
+    const unsub = onSnapshot(query(collection(db, 'admins'), where('parentAdminId', '==', uid)), (snap) => {
+      const admins = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setChildAdmins(admins);
+      setStats(prev => ({ ...prev, totalMasons: admins.length }));
+    });
     return unsub;
   }, [uid]);
 
-  // Load gigs (both pending and approved)
   useEffect(() => {
     if (!uid || !regionLeadData?.areaName) return;
-    const unsubs = [];
-
-    unsubs.push(onSnapshot(
-      query(
-        collection(db, 'gig_workers'),
-        where('approvalStatus', '==', 'pending'),
-        where('area', '==', regionLeadData.areaName)
-      ),
-      (snap) => {
-        const pending = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setPendingGigs(pending);
-        setStats(prev => ({ ...prev, pendingApprovals: pending.length }));
-      },
-      (error) => { /* error loading pending gigs */ }
-    ));
-
-    const childIds = childAdmins.map(a => a.id);
-    if (childIds.length === 0) {
-      setAllGigs([]);
-      setStats(prev => ({ ...prev, totalGigs: 0 }));
-      return () => unsubs.forEach(fn => fn());
-    }
-
-    const gigsByAdmin = {};
-    const updateApprovedGigs = () => {
-      const approved = Object.values(gigsByAdmin).flat().filter(w => !w.approvalStatus || w.approvalStatus === 'approved');
-      setAllGigs(approved);
-      setStats(prev => ({ ...prev, totalGigs: approved.length }));
-    };
-
-    childIds.forEach((adminId) => {
-      unsubs.push(onSnapshot(
-        query(collection(db, 'gig_workers'), where('adminId', '==', adminId)),
-        (snap) => {
-          gigsByAdmin[adminId] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          updateApprovedGigs();
-        },
-        (error) => { /* error loading gigs */ }
-      ));
+    const unsubPending = onSnapshot(query(collection(db, 'gig_workers'), where('approvalStatus', '==', 'pending'), where('area', '==', regionLeadData.areaName)), (snap) => {
+      const pending = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setPendingGigs(pending);
+      setStats(prev => ({ ...prev, pendingApprovals: pending.length }));
     });
+    return unsubPending;
+  }, [uid, regionLeadData]);
 
-    return () => unsubs.forEach(fn => fn());
-  }, [uid, regionLeadData, childAdmins]);
-
-  // Load bookings and disputes
   useEffect(() => {
     if (!uid || childAdmins.length === 0) return;
-    
     const childAdminIds = childAdmins.map(a => a.id);
-    const unsubscribers = [];
-    
-    // Use state to properly track bookings from multiple sources
     const bookingsByAdmin = {};
-    let unassignedBookings = [];
-    
-    const aggregateAndUpdate = () => {
-      // Combine assigned bookings from all child admins + unassigned bookings
-      const assignedBookings = Object.values(bookingsByAdmin).flat();
-      const allBookings = [...assignedBookings, ...unassignedBookings];
-      
-      const active = allBookings.filter(b =>
-        ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status)
-      );
-      const delayed = active.filter((b) => getStatusAgeHours(b) >= 24 || b.sla?.breached);
-      
-      const disputeBookings = allBookings.filter(b => b.dispute?.status);
-      const openDisputes = disputeBookings.filter(b => b.dispute?.status === 'open');
-      
+    const unsubs = childAdminIds.map(adminId => onSnapshot(query(collection(db, 'bookings'), where('adminId', '==', adminId)), (snap) => {
+      bookingsByAdmin[adminId] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const all = Object.values(bookingsByAdmin).flat();
+      const active = all.filter(b => ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status));
+      const delayed = active.filter(b => getStatusAgeHours(b) >= 24);
+      const openDisputes = all.filter(b => b.dispute?.status === 'open');
       setActiveBookings(active);
       setDelayedBookings(delayed);
-      setAllDisputeBookings(disputeBookings);
       setDisputes(openDisputes);
-      setStats(prev => ({
-        ...prev,
-        activeBookings: active.length,
-        openDisputes: openDisputes.length,
-      }));
-    };
-    
-    
-    // Query 1: Listen to bookings assigned to child admins
-    childAdminIds.forEach(adminId => {
-      const unsub = onSnapshot(
-        query(collection(db, 'bookings'), where('adminId', '==', adminId)),
-        (snap) => {
-          bookingsByAdmin[adminId] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          aggregateAndUpdate();
-        },
-        () => {
-          /* error loading bookings for mason */
-        }
-      );
-      unsubscribers.push(unsub);
-    });
-    
-    // Query 2: Listen to unassigned bookings (no adminId yet - awaiting quotes)
-    const unsubUnassigned = onSnapshot(
-      query(
-        collection(db, 'bookings'),
-        where('adminId', '==', null)
-      ),
-      (snap) => {
-        unassignedBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        aggregateAndUpdate();
-      },
-      () => {
-        /* error loading unassigned bookings */
-      }
-    );
-    unsubscribers.push(unsubUnassigned);
-    
-    return () => unsubscribers.forEach(fn => fn());
+      setStats(prev => ({ ...prev, activeBookings: active.length, openDisputes: openDisputes.length }));
+    }));
+    return () => unsubs.forEach(fn => fn());
   }, [uid, childAdmins]);
 
   useEffect(() => {
     if (!uid) return;
-    const unsub = onSnapshot(
-      query(
-        collection(db, 'admin_alerts'),
-        where('adminId', '==', uid),
-        where('status', '==', 'open')
-      ),
-      (snap) => {
-        setAlerts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      }
-    );
+    const unsub = onSnapshot(query(collection(db, 'admin_alerts'), where('adminId', '==', uid), where('status', '==', 'open')), (snap) => {
+      setAlerts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
     return unsub;
   }, [uid]);
 
   const createChildAdmin = async () => {
-    if (!newAdminName || !newAdminEmail || !newAdminPassword) {
-      alert('Please fill in all fields');
-      return;
-    }
-    if (newAdminPassword.length < 6) {
-      alert('Password must be at least 6 characters');
-      return;
-    }
-
+    if (!newAdminName || !newAdminEmail || !newAdminPassword) return alert('Fill all fields');
     try {
       const cred = await createUserWithEmailAndPassword(auth, newAdminEmail, newAdminPassword);
-      const newUid = cred.user.uid;
-      
-      await setDoc(doc(db, 'admins', newUid), {
-        name: newAdminName,
-        email: newAdminEmail,
-        role: 'mason',
-        parentAdminId: uid,
-        areaName: regionLeadData?.areaName || '',
-        regionStatus: 'active',
-        createdAt: new Date(),
+      await setDoc(doc(db, 'admins', cred.user.uid), {
+        name: newAdminName, email: newAdminEmail, role: 'mason',
+        parentAdminId: uid, areaName: regionLeadData?.areaName || '',
+        regionStatus: 'active', createdAt: new Date(),
       });
-      
-      alert('✅ Mason created successfully!');
-      setNewAdminName('');
-      setNewAdminEmail('');
-      setNewAdminPassword('');
-    } catch (error) {
-      alert('Error: ' + error.message);
-    }
+      alert('Mason created!');
+      setNewAdminName(''); setNewAdminEmail(''); setNewAdminPassword('');
+    } catch (e) { alert(e.message); }
   };
 
   const approveWorker = async (workerId) => {
     const targetAdminId = approvalAssignments[workerId];
-    if (!targetAdminId) {
-      alert('Please select a mason to assign this gig to');
-      return;
-    }
-
+    if (!targetAdminId) return alert('Select a mason');
     try {
       await updateDoc(doc(db, 'gig_workers', workerId), {
-        approvalStatus: 'approved',
-        adminId: targetAdminId,
-        status: 'active',
-        approvedAt: new Date(),
-        approvedByRegionLeadId: uid,
+        approvalStatus: 'approved', adminId: targetAdminId, status: 'active',
+        approvedAt: new Date(), approvedByRegionLeadId: uid,
       });
-      alert('✅ Gig approved!');
-      setApprovalAssignments(prev => {
-        const updated = { ...prev };
-        delete updated[workerId];
-        return updated;
-      });
-    } catch (error) {
-      alert('Error: ' + error.message);
-    }
+      alert('Approved!');
+    } catch (e) { alert(e.message); }
   };
 
-  const rejectWorker = async (workerId) => {
-    if (!window.confirm('Reject this gig application?')) return;
-    
-    try {
-      await updateDoc(doc(db, 'gig_workers', workerId), {
-        approvalStatus: 'rejected',
-        status: 'inactive',
-        rejectedAt: new Date(),
-      });
-      alert('Gig application rejected');
-    } catch (error) {
-      alert('Error: ' + error.message);
-    }
-  };
-
-  if (loading) {
-    return <div style={{ padding: '40px', textAlign: 'center' }}>Loading...</div>;
-  }
-
-  if (!regionLeadData || regionLeadData.role !== 'regionLead') {
-    return <div style={{ padding: '40px', textAlign: 'center' }}>Access Denied</div>;
-  }
+  if (loading) return <div style={{ padding: 80, textAlign: 'center', color: 'var(--text-main)', background: 'var(--bg-main)', minHeight: '100vh' }}>⏳ Loading Region Console...</div>;
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
-      {/* Premium Header */}
-      <div style={{ 
-        marginBottom: '32px', 
-        padding: '30px', 
-        borderRadius: '24px', 
-        background: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
-        color: 'white',
-        boxShadow: '0 10px 25px -5px rgba(79, 70, 229, 0.4)',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <h1 style={{ fontSize: '32px', marginBottom: '8px', fontWeight: '800', letterSpacing: '-0.025em' }}>
-            🌐 Region Operations
-          </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.9 }}>
-            <span style={{ background: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>
-              {regionLeadData.areaName || 'Universal Access'}
-            </span>
-            <span style={{ fontSize: '14px', fontWeight: '500' }}>
-              {regionLeadData.name || regionLeadData.email}
-            </span>
-          </div>
-        </div>
-        {/* Decorative background circle */}
-        <div style={{ 
-          position: 'absolute', 
-          right: '-50px', 
-          top: '-50px', 
-          width: '200px', 
-          height: '200px', 
-          borderRadius: '50%', 
-          background: 'rgba(255,255,255,0.1)',
-          pointerEvents: 'none'
-        }} />
-      </div>
-
-      {/* Region Score Alert */}
-      {stats.regionScore < 80 && (
-        <div style={{
-          background: '#fef2f2',
-          border: '2px solid #fca5a5',
-          borderRadius: '8px',
-          padding: '12px',
-          marginBottom: '20px',
-          color: '#991b1b',
-          fontWeight: 'bold'
+    <div className="dash-container" style={{ minHeight: '100vh', background: 'var(--bg-main)', padding: '40px 20px' }}>
+      <main style={{ maxWidth: 1200, margin: '0 auto' }}>
+        
+        {/* Region Header */}
+        <header style={{ 
+          background: 'var(--primary-purple-glow)', 
+          backdropFilter: 'var(--glass-blur)',
+          border: '1px solid var(--primary-purple)',
+          borderRadius: 'var(--radius-xl)',
+          padding: '48px',
+          marginBottom: '40px',
+          position: 'relative',
+          overflow: 'hidden',
+          boxShadow: 'var(--glass-shadow)'
         }}>
-          ⚠️ Region Score: {stats.regionScore}/100 - Below threshold! Check performance metrics.
-        </div>
-      )}
-
-      {alerts.length > 0 && (
-        <div style={{ background: '#fff7ed', border: '2px solid #fb923c', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
-          <div style={{ fontWeight: 'bold', color: '#9a3412', marginBottom: '8px' }}>
-            SLA Alerts ({alerts.length})
-          </div>
-          {alerts.slice(0, 5).map((a) => (
-            <div key={a.id} style={{ background: 'white', border: '1px solid #fdba74', borderRadius: '6px', padding: '8px', marginBottom: '6px' }}>
-              <div style={{ fontSize: '12px', color: '#7c2d12', fontWeight: 'bold' }}>{a.title}</div>
-              <div style={{ fontSize: '12px', color: '#9a3412', marginTop: '2px' }}>{a.message}</div>
-              <button
-                onClick={() => updateDoc(doc(db, 'admin_alerts', a.id), { status: 'closed', readAt: new Date() })}
-                style={{ marginTop: '6px', padding: '4px 8px', border: 'none', borderRadius: '4px', background: '#ea580c', color: 'white', fontSize: '11px', cursor: 'pointer' }}
-              >
-                Mark Read
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {delayedBookings.length > 0 && (
-        <div style={{ background: '#fef2f2', border: '2px solid #ef4444', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
-          <div style={{ fontWeight: 'bold', color: '#991b1b', marginBottom: '8px' }}>
-            Delayed Bookings {'>'}24h ({delayedBookings.length})
-          </div>
-          {delayedBookings.slice(0, 6).map((b) => (
-            <div key={b.id} style={{ background: 'white', border: '1px solid #fecaca', borderRadius: '6px', padding: '8px', marginBottom: '6px', fontSize: '12px' }}>
-              <div style={{ fontWeight: 'bold', color: '#7f1d1d' }}>{b.serviceType} - {b.customerName}</div>
-              <div style={{ color: '#991b1b' }}>Status: {b.status} | Booking: {b.id}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* High-Impact Stats Grid */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', 
-        gap: '20px', 
-        marginBottom: '32px' 
-      }}>
-        {[
-          { label: 'Masons', value: stats.totalMasons, color: '#6366f1', bg: '#eef2ff', icon: '👷' },
-          { label: 'Active Gigs', value: stats.totalGigs, color: '#10b981', bg: '#ecfdf5', icon: '💼' },
-          { label: 'Waitlist', value: stats.pendingApprovals, color: '#f59e0b', bg: '#fffbeb', icon: '⏳' },
-          { label: 'Bookings', value: stats.activeBookings, color: '#ec4899', bg: '#fdf2f8', icon: '📅' },
-          { label: 'Disputes', value: stats.openDisputes, color: '#ef4444', bg: '#fef2f2', icon: '🚨' },
-          { label: 'Score', value: `${stats.regionScore}%`, color: '#8b5cf6', bg: '#f5f3ff', icon: '📈' },
-        ].map((stat, i) => (
-          <div key={i} style={{ 
-            background: 'white',
-            padding: '24px 20px', 
-            borderRadius: '20px', 
-            border: '1px solid #f3f4f6',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-            textAlign: 'center',
-            transition: 'transform 0.2s, box-shadow 0.2s',
-            cursor: 'pointer'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-5px)';
-            e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05)';
-          }}>
-            <div style={{ 
-              fontSize: '24px', 
-              marginBottom: '8px',
-              width: '48px',
-              height: '48px',
-              background: stat.bg,
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 12px'
-            }}>
-              {stat.icon}
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: '800', color: '#111827', lineHeight: 1 }}>{stat.value}</div>
-            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '6px', fontWeight: '600' }}>{stat.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Tab Navigation */}
-      <div style={{ 
-        display: 'flex', 
-        gap: '4px', 
-        marginBottom: '32px', 
-        background: '#f3f4f6', 
-        padding: '6px', 
-        borderRadius: '14px',
-        width: 'fit-content'
-      }}>
-        {[
-          { key: 'overview', label: 'Overview', icon: '📊' },
-          { key: 'gigs', label: `Gig Approvals`, count: stats.pendingApprovals, icon: '⏳' },
-          { key: 'admins', label: 'Manage Masons', icon: '👷' },
-          { key: 'disputes', label: `Disputes`, count: stats.openDisputes, icon: '🚨' },
-        ].map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            style={{
-              padding: '10px 20px',
-              background: activeTab === tab.key ? 'white' : 'transparent',
-              color: activeTab === tab.key ? '#4f46e5' : '#6b7280',
-              border: 'none',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              fontWeight: '700',
-              fontSize: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: activeTab === tab.key ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none',
-              transition: 'all 0.2s'
-            }}
-          >
-            <span>{tab.icon}</span>
-            {tab.label}
-            {tab.count > 0 && (
-              <span style={{ 
-                background: activeTab === tab.key ? '#4f46e5' : '#9ca3af',
-                color: 'white',
-                padding: '2px 8px',
-                borderRadius: '10px',
-                fontSize: '11px'
-              }}>
-                {tab.count}
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <h1 style={{ fontSize: 'var(--font-xl)', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>Region Operations</h1>
+            <div style={{ display: 'flex', gap: 16, marginTop: 12, alignItems: 'center' }}>
+              <span style={{ background: 'var(--primary-purple)', color: 'white', padding: '6px 16px', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 800 }}>
+                📍 {regionLeadData?.areaName || 'Universal'}
               </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Overview Tab */}
-      {activeTab === 'overview' && (
-        <div>
-          <h3 style={{ marginBottom: '16px' }}>Quick Actions</h3>
-          <div style={{ display: 'grid', gap: '12px' }}>
-            <button
-              onClick={() => navigate('/admin/bookings')}
-              style={{
-                padding: '16px',
-                background: '#f0f9ff',
-                border: '2px solid #3b82f6',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                fontSize: '14px'
-              }}
-            >
-              <div style={{ fontWeight: 'bold', color: '#1e40af', marginBottom: '4px' }}>
-                📋 View All Bookings
-              </div>
-              <div style={{ color: '#64748b', fontSize: '12px' }}>
-                Monitor bookings from all child admins
-              </div>
-            </button>
-            
-            <button
-              onClick={() => navigate('/admin/workers')}
-              style={{
-                padding: '16px',
-                background: '#f0fdf4',
-                border: '2px solid #10b981',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                fontSize: '14px'
-              }}
-            >
-              <div style={{ fontWeight: 'bold', color: '#065f46', marginBottom: '4px' }}>
-                👷 Manage Gigs
-              </div>
-              <div style={{ color: '#64748b', fontSize: '12px' }}>
-                View all gigs and their performance
-              </div>
-            </button>
-            
-            <button
-              onClick={() => setActiveTab('gigs')}
-              style={{
-                padding: '16px',
-                background: '#fef3c7',
-                border: '2px solid #f59e0b',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                fontSize: '14px'
-              }}
-            >
-              <div style={{ fontWeight: 'bold', color: '#92400e', marginBottom: '4px' }}>
-                ⏳ Approve Gigs ({stats.pendingApprovals})
-              </div>
-              <div style={{ color: '#64748b', fontSize: '12px' }}>
-                Review and approve gig registrations
-              </div>
-            </button>
+              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Region Lead: {regionLeadData?.name}</span>
+            </div>
           </div>
-        </div>
-      )}
+          <div style={{ position: 'absolute', right: -40, top: -40, width: 240, height: 240, borderRadius: '50%', background: 'var(--primary-purple)', opacity: 0.05 }} />
+        </header>
 
-      {/* Gig Approvals Tab */}
-      {activeTab === 'gigs' && (
-        <div>
-          <h3 style={{ marginBottom: '16px' }}>Pending Gig Approvals</h3>
-          
-          {childAdmins.length === 0 && (
-            <div style={{
-              background: '#fff7ed',
-              border: '1px solid #fdba74',
-              color: '#9a3412',
-              padding: '12px',
-              borderRadius: '8px',
-              marginBottom: '16px',
-              fontSize: '13px'
-            }}>
-              ⚠️ Create at least one mason before approving gigs.
+        {/* Stats Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 20, marginBottom: 40 }}>
+          {[
+            { label: 'Masons', value: stats.totalMasons, icon: '👷', color: 'var(--primary-purple)' },
+            { label: 'Pro Workers', value: stats.totalGigs, icon: '💼', color: 'var(--success)' },
+            { label: 'Approvals', value: stats.pendingApprovals, icon: '⏳', color: 'var(--warning)' },
+            { label: 'Active Jobs', value: stats.activeBookings, icon: '⚡', color: 'var(--secondary-green)' },
+            { label: 'Open Disputes', value: stats.openDisputes, icon: '🚨', color: 'var(--error)' },
+          ].map(s => (
+            <div key={s.label} className="job-card" style={{ padding: 24, textAlign: 'center' }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>{s.icon}</div>
+              <div style={{ fontSize: 32, fontWeight: 900, color: 'var(--text-main)' }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase', marginTop: 4 }}>{s.label}</div>
             </div>
-          )}
-          
-          {pendingGigs.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
-              No pending gig approvals
-            </div>
-          ) : (
-            pendingGigs.map(worker => (
-              <div key={worker.id} style={{
-                background: 'white',
-                border: '2px solid #fcd34d',
-                borderRadius: '12px',
-                padding: '16px',
-                marginBottom: '12px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                  <div style={{ flex: 1 }}>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#111' }}>
-                      {worker.name}
-                    </h4>
-                    <div style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>
-                      📞 {worker.contact} | 📧 {worker.email}
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#666', marginBottom: '12px' }}>
-                      🔧 {worker.gigType} | 📍 {worker.area}
-                    </div>
-                    
-                    <select
-                      value={approvalAssignments[worker.id] || ''}
-                      onChange={(e) => setApprovalAssignments(prev => ({ ...prev, [worker.id]: e.target.value }))}
-                      style={{
-                        padding: '8px',
-                        borderRadius: '6px',
-                        border: '1px solid #d1d5db',
-                        fontSize: '13px',
-                        minWidth: '240px'
-                      }}
-                    >
-                      <option value="">Select mason to assign...</option>
-                      {childAdmins.map(admin => (
-                        <option key={admin.id} value={admin.id}>
-                          {admin.name || admin.email}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div style={{ display: 'flex', gap: '8px', marginLeft: '16px' }}>
-                    <button
-                      onClick={() => approveWorker(worker.id)}
-                      disabled={!approvalAssignments[worker.id] || childAdmins.length === 0}
-                      style={{
-                        padding: '8px 16px',
-                        background: '#10b981',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        fontWeight: 'bold',
-                        opacity: (!approvalAssignments[worker.id] || childAdmins.length === 0) ? 0.5 : 1
-                      }}
-                    >
-                      ✅ Approve
-                    </button>
-                    <button
-                      onClick={() => rejectWorker(worker.id)}
-                      style={{
-                        padding: '8px 16px',
-                        background: '#ef4444',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        fontWeight: 'bold'
-                      }}
-                    >
-                      ❌ Reject
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
+          ))}
         </div>
-      )}
 
-      {/* Admins Tab */}
-      {activeTab === 'admins' && (
-        <div>
-          <h3 style={{ marginBottom: '16px' }}>Create Mason</h3>
-          
-          <div style={{
-            background: 'white',
-            border: '2px solid #3b82f6',
-            borderRadius: '12px',
-            padding: '20px',
-            marginBottom: '24px'
-          }}>
-            <div style={{ display: 'grid', gap: '12px', marginBottom: '16px' }}>
-              <input
-                type="text"
-                placeholder="Mason Name"
-                value={newAdminName}
-                onChange={(e) => setNewAdminName(e.target.value)}
-                style={{
-                  padding: '12px',
-                  borderRadius: '6px',
-                  border: '1px solid #d1d5db',
-                  fontSize: '14px'
-                }}
-              />
-              <input
-                type="email"
-                placeholder="Mason Email"
-                value={newAdminEmail}
-                onChange={(e) => setNewAdminEmail(e.target.value)}
-                style={{
-                  padding: '12px',
-                  borderRadius: '6px',
-                  border: '1px solid #d1d5db',
-                  fontSize: '14px'
-                }}
-              />
-              <input
-                type="password"
-                placeholder="Password (min 6 characters)"
-                value={newAdminPassword}
-                onChange={(e) => setNewAdminPassword(e.target.value)}
-                style={{
-                  padding: '12px',
-                  borderRadius: '6px',
-                  border: '1px solid #d1d5db',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-            
+        {/* Navigation Tabs */}
+        <div style={{ display: 'flex', gap: 12, marginBottom: 32, background: 'var(--bg-soft)', padding: 8, borderRadius: 'var(--radius-lg)', width: 'fit-content' }}>
+          {[
+            { id: 'overview', label: 'Monitor', icon: '📊' },
+            { id: 'gigs', label: 'Approvals', icon: '🛡️', count: stats.pendingApprovals },
+            { id: 'admins', label: 'Masons', icon: '🛠️' },
+            { id: 'disputes', label: 'Disputes', icon: '🚨', count: stats.openDisputes },
+          ].map(t => (
             <button
-              onClick={createChildAdmin}
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
               style={{
                 padding: '12px 24px',
-                background: '#3b82f6',
-                color: 'white',
+                borderRadius: 'var(--radius-md)',
+                background: activeTab === t.id ? 'var(--bg-main)' : 'transparent',
+                color: activeTab === t.id ? 'var(--primary-purple)' : 'var(--text-muted)',
+                fontWeight: 800,
                 border: 'none',
-                borderRadius: '6px',
                 cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                width: '100%'
+                display: 'flex',
+                gap: 10,
+                alignItems: 'center',
+                boxShadow: activeTab === t.id ? 'var(--shadow-sm)' : 'none'
               }}
             >
-              Create Mason
+              <span>{t.icon}</span> {t.label} 
+              {t.count > 0 && <span style={{ background: 'var(--error)', color: 'white', fontSize: 10, padding: '2px 6px', borderRadius: 10 }}>{t.count}</span>}
             </button>
-          </div>
-
-          <h3 style={{ marginBottom: '16px' }}>Masons ({childAdmins.length})</h3>
-          
-          {childAdmins.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
-              No masons created yet
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gap: '12px' }}>
-              {childAdmins.map(admin => (
-                <div key={admin.id} style={{
-                  background: 'white',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <div>
-                    <div style={{ fontWeight: 'bold', fontSize: '15px', color: '#111', marginBottom: '4px' }}>
-                      {admin.name || 'Unnamed Mason'}
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#666' }}>
-                      📧 {admin.email} | 📍 {admin.areaName || 'No area'}
-                    </div>
-                  </div>
-                  <div style={{
-                    padding: '4px 12px',
-                    background: admin.regionStatus === 'active' ? '#d1fae5' : '#fee2e2',
-                    color: admin.regionStatus === 'active' ? '#065f46' : '#991b1b',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }}>
-                    {admin.regionStatus || 'active'}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          ))}
         </div>
-      )}
 
-      {/* Disputes Tab */}
-      {activeTab === 'disputes' && (
-        <div>
-          <h3 style={{ marginBottom: '16px' }}>Disputes</h3>
+        {/* Tab Content */}
+        {activeTab === 'overview' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 32 }}>
+            <div className="job-card" style={{ padding: 32 }}>
+              <h3 style={{ margin: '0 0 24px 0', fontSize: 20, fontWeight: 800 }}>Command Center</h3>
+              <div style={{ display: 'grid', gap: 16 }}>
+                <button onClick={() => navigate('/admin/bookings')} className="btn-glass" style={{ textAlign: 'left', padding: 24, background: 'var(--bg-soft)' }}>
+                  <div style={{ fontWeight: 800, color: 'var(--primary-purple)' }}>Central Bookings Command</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 8 }}>Track every job lifecycle in real-time.</div>
+                </button>
+                <button onClick={() => navigate('/admin/workers')} className="btn-glass" style={{ textAlign: 'left', padding: 24, background: 'var(--bg-soft)' }}>
+                  <div style={{ fontWeight: 800, color: 'var(--success)' }}>Professional Workforce</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 8 }}>Review and manage regional skill pool.</div>
+                </button>
+              </div>
+            </div>
 
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-            {[['open', 'Open'], ['all', 'All'], ['resolved', 'Resolved']].map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setDisputeFilter(key)}
-                style={{
-                  padding: '8px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  background: disputeFilter === key ? '#1f2937' : 'white',
-                  color: disputeFilter === key ? 'white' : '#111827',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          
-          {/* Debug Info */}
-          <div style={{
-            background: '#fef3c7',
-            border: '1px solid #f59e0b',
-            borderRadius: '8px',
-            padding: '12px',
-            marginBottom: '16px',
-            fontSize: '12px'
-          }}>
-            <div><strong>Debug Info:</strong></div>
-            <div>↳ Masons under you: {childAdmins.length} ({childAdmins.map(a => a.name).join(', ') || 'none'})</div>
-            <div>↳ Total active bookings loaded: {activeBookings.length}</div>
-            <div>↳ Bookings with disputes: {allDisputeBookings.length}</div>
-            <div>↳ Open disputes: {disputes.length}</div>
-            <div>↳ Mason IDs: {childAdmins.map(a => a.id.slice(-6)).join(', ')}</div>
-            {childAdmins.map(a => (
-              <div key={a.id}>↳ {a.name}: parentAdminId = {a.parentAdminId ? a.parentAdminId.slice(-6) + (a.parentAdminId === uid ? ' ✅' : ' ❌') : 'MISSING'}</div>
-            ))}
-          </div>
-
-          {(() => {
-            const shownDisputes = disputeFilter === 'open'
-              ? disputes
-              : disputeFilter === 'resolved'
-                ? allDisputeBookings.filter(b => b.dispute?.status === 'resolved')
-                : allDisputeBookings;
-
-            if (shownDisputes.length === 0) {
-              return (
-                <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
-                  No {disputeFilter} disputes
+            <div className="job-card" style={{ padding: 32 }}>
+              <h3 style={{ margin: '0 0 24px 0', fontSize: 20, fontWeight: 800 }}>Critical Alerts</h3>
+              {alerts.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>✅ Region is healthy</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {alerts.map(a => (
+                    <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 16, background: 'var(--error-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--error)' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--error)' }}>{a.title}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-main)', opacity: 0.8 }}>{a.message}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              );
-            }
+              )}
+            </div>
+          </div>
+        )}
 
-            return (
-              <div>
-                {shownDisputes.map(booking => (
-                  <div key={booking.id} style={{
-                    background: booking.dispute?.status === 'resolved' ? '#ecfdf5' : '#fef2f2',
-                    border: `2px solid ${booking.dispute?.status === 'resolved' ? '#10b981' : '#ef4444'}`,
-                    borderRadius: '12px',
-                    padding: '16px',
-                    marginBottom: '12px'
-                  }}>
-                    <div style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '8px', color: booking.dispute?.status === 'resolved' ? '#065f46' : '#991b1b' }}>
-                      {booking.dispute?.status === 'resolved' ? '✅' : '🚨'} Booking #{booking.id.slice(-6)}
+        {activeTab === 'gigs' && (
+          <div className="job-card" style={{ padding: 32 }}>
+            <h3 style={{ margin: '0 0 32px 0', fontSize: 24, fontWeight: 800 }}>Pending Pro Approvals</h3>
+            {pendingGigs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-muted)' }}>No pending applications.</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 20 }}>
+                {pendingGigs.map(w => (
+                  <div key={w.id} style={{ padding: 24, background: 'var(--bg-soft)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 24 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 20, fontWeight: 800 }}>{w.name}</div>
+                      <div style={{ color: 'var(--primary-purple)', fontWeight: 700, marginTop: 4 }}>{w.gigType} · {w.area}</div>
                     </div>
-                    <div style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>
-                      Customer: {booking.customerName} | Service: {booking.serviceType}
+                    <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                      <select 
+                        value={approvalAssignments[w.id] || ''} 
+                        onChange={e => setApprovalAssignments(prev => ({ ...prev, [w.id]: e.target.value }))}
+                        className="input-field"
+                        style={{ padding: '10px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', background: 'var(--bg-main)', minWidth: 200 }}
+                      >
+                        <option value="">Select Mason...</option>
+                        {childAdmins.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </select>
+                      <button onClick={() => approveWorker(w.id)} disabled={!approvalAssignments[w.id]} className="btn-primary" style={{ padding: '12px 24px', opacity: approvalAssignments[w.id] ? 1 : 0.5 }}>Approve</button>
                     </div>
-                    <div style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>
-                      Status: {booking.dispute?.status || 'unknown'}
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#666', marginBottom: '8px' }}>
-                      Dispute Reason: {booking.dispute?.reason || 'No reason provided'}
-                    </div>
-                    <button
-                      onClick={() => navigate('/admin/bookings')}
-                      style={{
-                        padding: '8px 16px',
-                        background: booking.dispute?.status === 'resolved' ? '#10b981' : '#ef4444',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        fontWeight: 'bold'
-                      }}
-                    >
-                      Handle Dispute
-                    </button>
                   </div>
                 ))}
               </div>
-            );
-          })()}
+            )}
+          </div>
+        )}
+
+        {activeTab === 'admins' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 32 }}>
+            <div className="job-card" style={{ padding: 32 }}>
+              <h3 style={{ margin: '0 0 24px 0', fontSize: 20, fontWeight: 800 }}>Onboard New Mason</h3>
+              <div style={{ display: 'grid', gap: 16 }}>
+                <input placeholder="Name" value={newAdminName} onChange={e => setNewAdminName(e.target.value)} className="input-field" style={{ padding: 16, borderRadius: 'var(--radius-md)', background: 'var(--bg-soft)', border: '1px solid var(--border-light)', color: 'var(--text-main)' }} />
+                <input placeholder="Email" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} className="input-field" style={{ padding: 16, borderRadius: 'var(--radius-md)', background: 'var(--bg-soft)', border: '1px solid var(--border-light)', color: 'var(--text-main)' }} />
+                <input placeholder="Password" type="password" value={newAdminPassword} onChange={e => setNewAdminPassword(e.target.value)} className="input-field" style={{ padding: 16, borderRadius: 'var(--radius-md)', background: 'var(--bg-soft)', border: '1px solid var(--border-light)', color: 'var(--text-main)' }} />
+                <button onClick={createChildAdmin} className="btn-primary" style={{ padding: 18 }}>Create Account</button>
+              </div>
+            </div>
+            <div className="job-card" style={{ padding: 32 }}>
+              <h3 style={{ margin: '0 0 24px 0', fontSize: 20, fontWeight: 800 }}>Active Regional Masons</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {childAdmins.map(a => (
+                  <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 16, borderBottom: '1px solid var(--border-light)' }}>
+                    <div>
+                      <div style={{ fontWeight: 800 }}>{a.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{a.email}</div>
+                    </div>
+                    <span style={{ color: 'var(--success)', fontWeight: 800, fontSize: 11 }}>ACTIVE</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'disputes' && (
+          <div className="job-card" style={{ padding: 48 }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: 24, fontWeight: 800 }}>Resolution Queue</h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: 32 }}>Active disputes requiring oversight.</p>
+            {disputes.length === 0 ? (
+              <div style={{ fontSize: 64, marginBottom: 24, textAlign: 'center' }}>✅</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+                {disputes.map((d) => (
+                  <DisputeCard key={d.id} booking={d} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// DisputeCard component for displaying dispute details and AI analysis
+function DisputeCard({ booking }) {
+  const [ai, setAi] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  React.useEffect(() => {
+    // Fetch AI analysis from sub-collection
+    import('firebase/firestore').then(({ collection, getDocs, doc, getFirestore }) => {
+      const db = getFirestore();
+      getDocs(collection(doc(db, 'bookings', booking.id), 'dispute_analysis')).then((snap) => {
+        if (!snap.empty) setAi(snap.docs[0].data());
+        setLoading(false);
+      }).catch(() => setLoading(false));
+    });
+  }, [booking.id]);
+
+  return (
+    <div style={{ border: '1px solid var(--border-light)', borderRadius: 16, padding: 24, background: 'var(--bg-soft)', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>Booking: {booking.id.slice(0, 8).toUpperCase()}</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Service: {booking.serviceType} | Customer: {booking.customerName}</div>
         </div>
-      )}
+        <div style={{ color: 'var(--error)', fontWeight: 700 }}>🚨 Dispute: {booking.dispute?.reason}</div>
+      </div>
+      <div style={{ margin: '12px 0' }}>
+        <b>Job Description:</b> {booking.jobDescription || 'N/A'}
+      </div>
+      <div style={{ display: 'flex', gap: 24, margin: '16px 0' }}>
+        <div>
+          <b>Before Photos:</b>
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            {(booking.beforePhotos || []).map((url, i) => <img key={i} src={url} alt="before" style={{ maxWidth: 80, borderRadius: 8 }} />)}
+          </div>
+        </div>
+        <div>
+          <b>After Photos:</b>
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            {(booking.afterPhotos || []).map((url, i) => <img key={i} src={url} alt="after" style={{ maxWidth: 80, borderRadius: 8 }} />)}
+          </div>
+        </div>
+        <div>
+          <b>User Dispute Photos:</b>
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            {(booking.dispute?.userPhotos || []).map((url, i) => <img key={i} src={url} alt="user" style={{ maxWidth: 80, borderRadius: 8 }} />)}
+          </div>
+        </div>
+      </div>
+      <div style={{ margin: '16px 0', background: 'var(--bg-main)', borderRadius: 8, padding: 16 }}>
+        <b>AI Executive Summary:</b>
+        {loading ? <span style={{ marginLeft: 8 }}>Loading...</span> : ai ? (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontWeight: 700, color: 'var(--primary-purple)' }}>{ai.summary}</div>
+            <div style={{ marginTop: 6 }}><b>Suggested Fault:</b> {ai.fault} ({ai.faultPercent || '--'}%)</div>
+            {ai.flaggedMessages && ai.flaggedMessages.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <b>Flagged Chat:</b>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {ai.flaggedMessages.map((msg, i) => <li key={i}>{msg}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>No AI analysis found.</span>}
+      </div>
     </div>
   );
 }

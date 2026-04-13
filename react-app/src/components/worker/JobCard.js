@@ -1,4 +1,5 @@
 import React from 'react';
+import StartTravelButton from './StartTravelButton';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr);
@@ -9,7 +10,8 @@ function timeAgo(dateStr) {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
-export default function JobCard({ job, onSendQuote, onViewDetails }) {
+export default function JobCard({ job, onSendQuote, onViewDetails, onCompleteJob }) {
+  const workerId = job.assignedWorkerId || job.workerId;
   return (
     <div className="job-card">
       <div className="job-card-header">
@@ -33,6 +35,14 @@ export default function JobCard({ job, onSendQuote, onViewDetails }) {
         <button className="btn-primary" onClick={() => onSendQuote && onSendQuote(job)}>
           Send Quote
         </button>
+        {onCompleteJob && (
+          <button className="btn-success" onClick={() => onCompleteJob(job)}>
+            Mark Complete
+          </button>
+        )}
+        {workerId && job.id && (
+          <StartTravelButton bookingId={job.id} workerId={workerId} />
+        )}
       </div>
     </div>
   );

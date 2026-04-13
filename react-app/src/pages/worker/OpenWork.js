@@ -4,6 +4,7 @@ import { auth, db } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import JobCard from '../../components/worker/JobCard';
+import CompleteJobModal from '../../components/worker/CompleteJobModal';
 import QuoteModal from '../../components/worker/QuoteModal';
 import WorkerBottomNav from '../../components/worker/WorkerBottomNav';
 import '../../styles/worker-dashboard.css';
@@ -18,6 +19,7 @@ export default function OpenWork() {
   const [sortBy, setSortBy] = useState('recent');
   const [toast, setToast] = useState(null);
   const toastTimeoutRef = useRef(null);
+  const [completeJob, setCompleteJob] = useState(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -107,16 +109,29 @@ export default function OpenWork() {
               job={job}
               onSendQuote={() => setSelectedJob(job)}
               onViewDetails={() => setSelectedJob(job)}
+              onCompleteJob={() => setCompleteJob(job)}
             />
           ))
         )}
       </div>
+
 
       {selectedJob && (
         <QuoteModal
           job={selectedJob}
           onClose={() => setSelectedJob(null)}
           onSubmit={handleSendQuote}
+        />
+      )}
+
+      {completeJob && (
+        <CompleteJobModal
+          job={completeJob}
+          onClose={() => setCompleteJob(null)}
+          onCompleted={() => {
+            setCompleteJob(null);
+            showToast('Job marked as complete!', 'success');
+          }}
         />
       )}
 

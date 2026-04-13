@@ -1,0 +1,187 @@
+.workers-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.workers-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.workers-header h2 {
+  font-size: 32px;
+  margin: 0;
+  background: linear-gradient(135deg, var(--text-main) 30%, var(--primary-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ─── Admin Mode Banners ────────────────────────────────── */
+.region-lead-banner {
+  background: rgba(37, 99, 235, 0.05);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  color: #1d4ed8;
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-lg);
+  font-size: 14px;
+  backdrop-filter: blur(8px);
+}
+
+/* ─── Forms and Cards ────────────────────────────────────── */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  box-shadow: var(--glass-shadow);
+}
+
+.form-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: var(--space-6);
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.form-actions {
+  margin-top: var(--space-6);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ─── Pending Approvals ─────────────────────────────────── */
+.pending-approvals-section {
+  background: rgba(245, 158, 11, 0.03);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+}
+
+.pending-card {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  border: 1px solid var(--border-light);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: transform var(--motion-fast);
+  margin-bottom: var(--space-4);
+}
+
+.pending-card:hover {
+  transform: translateX(4px);
+}
+
+/* ─── Worker List/Grid ───────────────────────────────────── */
+.worker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: var(--space-6);
+}
+
+.worker-premium-card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-6);
+  background: white;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  position: relative;
+  transition: all var(--motion-fast);
+}
+
+.worker-premium-card:hover {
+  border-color: var(--primary-purple);
+  box-shadow: var(--shadow-md);
+}
+
+.worker-status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-active {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.status-inactive {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.worker-earnings {
+  margin-top: var(--space-4);
+  background: var(--bg-light);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-purple);
+}
+
+.worker-actions {
+  margin-top: auto;
+  padding-top: var(--space-4);
+  display: flex;
+  gap: var(--space-3);
+  border-top: 1px solid var(--border-light);
+}
+
+/* ─── Details/Mason Dashboard ───────────────────────────── */
+.dashboard-collapsible {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.dashboard-collapsible summary {
+  padding: var(--space-4) var(--space-6);
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--primary-purple);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  transition: background 0.2s;
+}
+
+.dashboard-collapsible summary:hover {
+  background: rgba(var(--brand-h), 70%, 60%, 0.05);
+}
+
+.dashboard-collapsible[open] summary {
+  border-bottom: 1px solid var(--glass-border);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .pending-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+}

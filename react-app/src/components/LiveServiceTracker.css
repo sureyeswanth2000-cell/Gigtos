@@ -1,0 +1,124 @@
+/* 
+ * GIGTOS LIVE SERVICE TRACKER STYLES
+ * Compact and Premium Tracking Indicator
+ */
+
+.live-tracker-container {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--glass-bg-base);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1.5px solid var(--glass-border-light);
+  border-radius: 18px;
+  transition: all 0.3s ease;
+  animation: fadeInTracker 0.4s ease-out;
+}
+
+@keyframes fadeInTracker {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tracker-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.tracker-icon {
+  font-size: 28px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.tracker-icon.pulse {
+  animation: trackerPulse 2s infinite ease-in-out;
+}
+
+@keyframes trackerPulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.tracker-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.tracker-label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.tracker-subtext {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.tracker-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px;
+  background: var(--bg-surface);
+  border-radius: 12px;
+  margin-top: 8px;
+}
+
+.stat-item {
+  font-size: 12px;
+  color: var(--text-main);
+  display: flex;
+  gap: 4px;
+}
+
+.stat-label {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.map-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--text-main);
+  transition: all 0.2s ease;
+}
+
+.map-link:hover {
+  background: var(--bg-surface);
+  border-color: var(--primary-purple);
+  transform: translateY(-1px);
+}
+
+/* Compact Mode */
+.live-tracker-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 30px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--glass-bg-base);
+  border: 1px solid var(--glass-border-light);
+  box-shadow: var(--shadow-sm);
+}

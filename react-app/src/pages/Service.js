@@ -34,10 +34,10 @@ const professionalDirectory = {
 };
 
 const steps = [
-  { id: 1, label: 'Your Details' },
-  { id: 2, label: 'Service Details' },
-  { id: 3, label: 'Schedule & Pro' },
-  { id: 4, label: 'Confirm & Next Steps' },
+  { id: 1, label: 'Account' },
+  { id: 2, label: 'Problem' },
+  { id: 3, label: 'Schedule' },
+  { id: 4, label: 'Review' },
 ];
 
 export default function Service() {
@@ -75,7 +75,6 @@ export default function Service() {
   const professionals = useMemo(() => professionalDirectory[type] || [], [type]);
   const selectedProfessional = professionals.find((pro) => pro.id === preferredProId);
 
-  /** AI budget suggestion for user display (marked-up range) */
   const budgetSuggestion = useMemo(() => {
     if (currentStep !== 4) return null;
     return suggestBudgetForUser({
@@ -95,16 +94,16 @@ export default function Service() {
         if (!userDoc.exists()) return;
 
         const data = userDoc.data();
-        setName((prev) => prev || data.name || '');
-        if (!location.state?.prefillAddress) setAddress((prev) => prev || data.address || '');
-        if (!location.state?.prefillPhone) setUserPhone((prev) => prev || data.phone || '');
+        setName((p) => p || data.name || '');
+        if (!location.state?.prefillAddress) setAddress((p) => p || data.address || '');
+        if (!location.state?.prefillPhone) setUserPhone((p) => p || data.phone || '');
         setUserLocationCity(data.locationCity || '');
 
         if (!data.phone || !data.name) {
           setProfileIncomplete(true);
         }
       } catch {
-        /* profile load error */
+        /* Profile load fail */
       }
     };
 
@@ -129,64 +128,48 @@ export default function Service() {
     }
   };
 
-  const validateStepOne = () => {
-    // Step 1 is read-only profile display; only check if profile is filled
-    if (!name.trim() || !address.trim() || !userPhone.trim()) {
-      setError('Your profile is incomplete. Please update your profile first.');
-      return false;
+  const validateStep = (step) => {
+    if (step === 1) {
+       if (!name.trim() || !address.trim() || !userPhone.trim()) {
+        setError('Please complete your profile details to proceed.');
+        setProfileIncomplete(true);
+        return false;
+      }
     }
-    return true;
-  };
-
-  const validateStepTwo = () => {
-    if (!issueTitle.trim()) {
-      setError('Please add a short service request title.');
-      return false;
+    if (step === 2) {
+      if (!issueTitle.trim()) {
+        setError('Please provide a brief title for your request.');
+        return false;
+      }
     }
-
-    return true;
-  };
-
-  const validateStepThree = () => {
-    if (isScheduled && (!scheduledDate || !timeSlot)) {
-      setError('Select a scheduled date and time slot to continue.');
-      return false;
+    if (step === 3) {
+      if (isScheduled && (!scheduledDate || !timeSlot)) {
+        setError('Please select a date and time slot.');
+        return false;
+      }
     }
-
-    if (!estimatedDays || Number(estimatedDays) < 1) {
-      setError('Estimated work days should be at least 1.');
-      return false;
-    }
-
     return true;
   };
 
   const goNext = () => {
     setError('');
-    if (currentStep === 1 && !validateStepOne()) return;
-    if (currentStep === 2 && !validateStepTwo()) return;
-    if (currentStep === 3 && !validateStepThree()) return;
-    setCurrentStep((prev) => Math.min(4, prev + 1));
+    if (validateStep(currentStep)) {
+      setCurrentStep((p) => Math.min(4, p + 1));
+    }
   };
 
   const goBack = () => {
     setError('');
-    setCurrentStep((prev) => Math.max(1, prev - 1));
+    setCurrentStep((p) => Math.max(1, p - 1));
   };
 
   const handleBooking = async () => {
-    setError('');
-
-    if (!validateStepOne() || !validateStepTwo() || !validateStepThree()) {
-      return;
-    }
-
+    if (!validateStep(1) || !validateStep(2) || !validateStep(3)) return;
     setLoading(true);
+    setError('');
 
     try {
       const user = auth.currentUser;
-      if (!user) throw new Error('Not authenticated');
-
       const bookingPayload = {
         userId: user.uid,
         serviceType: type,
@@ -204,25 +187,18 @@ export default function Service() {
         remainingWorkDays: Number(estimatedDays),
         isMultiDay: Number(estimatedDays) > 1,
         requestedProfessional: selectedProfessional
-          ? {
-              id: selectedProfessional.id,
-              name: selectedProfessional.name,
-              rating: selectedProfessional.rating,
-            }
+          ? { id: selectedProfessional.id, name: selectedProfessional.name, rating: selectedProfessional.rating }
           : null,
-        requestedPhotos: requestedPhoto ? [{ url: requestedPhoto, label: 'User Requested', uploadedAt: new Date() }] : [],
+        requestedPhotos: requestedPhoto ? [{ url: requestedPhoto, label: 'Customer Photo', uploadedAt: new Date() }] : [],
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
       await addDoc(collection(db, 'bookings'), bookingPayload);
-
-      setSuccess('Booking confirmed. You will receive quotes and next-step updates in My Bookings.');
-      setTimeout(() => {
-        navigate('/my-bookings');
-      }, 1400);
+      setSuccess('Great! Your booking is being shared with local pros.');
+      setTimeout(() => navigate('/my-bookings'), 1500);
     } catch (err) {
-      setError(err.message || 'Failed to submit booking. Please try again.');
+      setError('Booking failed. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -230,301 +206,177 @@ export default function Service() {
 
   return (
     <div className="service-page">
-      <section className="service-shell">
+      <div className="service-shell">
         <header className="service-header">
-          <div className="service-badge">Editorial Concierge Booking</div>
-          <h1>
-            <span aria-hidden="true">{serviceIcons[type] || '🛠️'}</span> Book {type} in {cityName}
-          </h1>
-          <p>
-            Guided booking with verified pros and transparent quotes.
-          </p>
-          <div className="trust-signals">
-            <span>Verified Pros</span>
-            <span>Quote Approval</span>
-            <span>Track in Real-Time</span>
-          </div>
+          <span className="service-badge">Secure Booking</span>
+          <h1>{serviceIcons[type] || '🛠️'} {type} in {cityName}</h1>
+          <p>Get accurate quotes from top-rated {type}s nearby.</p>
         </header>
 
-        <div className="stepper" role="list" aria-label="Booking steps">
-          {steps.map((step) => (
-            <div
-              key={step.id}
-              role="listitem"
-              className={`step-item ${currentStep === step.id ? 'active' : ''} ${currentStep > step.id ? 'done' : ''}`}
-            >
-              <span>{step.id}</span>
-              <p>{step.label}</p>
+        <nav className="stepper">
+          {steps.map((s) => (
+            <div key={s.id} className={`step-item ${currentStep === s.id ? 'active' : ''} ${currentStep > s.id ? 'done' : ''}`}>
+              <span>{currentStep > s.id ? '✓' : s.id}</span>
+              <p>{s.label}</p>
             </div>
           ))}
-        </div>
+        </nav>
 
-        {error && <div className="alert error">{error}</div>}
-        {success && <div className="alert success">{success}</div>}
+        {error && <div className="alert-message error">{error}</div>}
+        {success && <div className="alert-message success">{success}</div>}
 
-        <section className="step-content">
+        <main className="step-content">
           {currentStep === 1 && (
-            <div className="step-layout">
-              <h2>Your Details</h2>
-              <p className="step-note">Tap your profile card to make changes.</p>
-
-              <div className="summary-card" onClick={() => navigate('/profile')} style={{ cursor: 'pointer' }} title="Click to edit your profile">
+            <section className="step-layout">
+              <h2>Contact & Location</h2>
+              <p className="step-note">Confirm your details for the service visit.</p>
+              <div className="summary-card" onClick={() => navigate('/profile')}>
                 <div className="detail-chip">
-                  <div className="chip-icon">👤</div>
-                  <div className="chip-text">
-                    <span className="chip-label">Name</span>
-                    <span className="chip-value">{name || <span className="not-set">Not set</span>}</span>
-                  </div>
+                   <div className="chip-icon">👤</div>
+                   <div className="chip-text">
+                     <span className="chip-label">Name</span>
+                     <span className="chip-value">{name || 'Set Name'}</span>
+                   </div>
                 </div>
                 <div className="detail-chip">
-                  <div className="chip-icon">📱</div>
-                  <div className="chip-text">
-                    <span className="chip-label">Phone</span>
-                    <span className="chip-value">{userPhone || <span className="not-set">Not set</span>}</span>
-                  </div>
+                   <div className="chip-icon">📱</div>
+                   <div className="chip-text">
+                     <span className="chip-label">Phone</span>
+                     <span className="chip-value">{userPhone || 'Set Phone'}</span>
+                   </div>
                 </div>
                 <div className="detail-chip">
-                  <div className="chip-icon">🏠</div>
-                  <div className="chip-text">
-                    <span className="chip-label">Address</span>
-                    <span className="chip-value">{address || <span className="not-set">Not set</span>}</span>
-                  </div>
+                   <div className="chip-icon">🏠</div>
+                   <div className="chip-text">
+                     <span className="chip-label">Address</span>
+                     <span className="chip-value">{address || 'Set Address'}</span>
+                   </div>
                 </div>
                 <div className="detail-chip">
-                  <div className="chip-icon">📍</div>
-                  <div className="chip-text">
-                    <span className="chip-label">Location</span>
-                    <span className="chip-value">{userLocationCity || cityName || <span className="not-set">Not set</span>}</span>
-                  </div>
+                   <div className="chip-icon">📍</div>
+                   <div className="chip-text">
+                     <span className="chip-label">City</span>
+                     <span className="chip-value">{userLocationCity || cityName}</span>
+                   </div>
                 </div>
               </div>
-
               {profileIncomplete && (
-                <div className="alert warning">
-                  Profile incomplete — please update before booking.
-                  <button onClick={() => navigate('/profile')}>Edit Profile</button>
-                </div>
+                <button className="btn-secondary w-full" onClick={() => navigate('/profile')}>Update Profile first</button>
               )}
-            </div>
+            </section>
           )}
 
           {currentStep === 2 && (
-            <div className="step-layout">
-              <h2>Service Selection & Details</h2>
-              <p className="step-note">Tell us what you need so professionals can quote accurately.</p>
-
-              <div className="form-grid two-col">
+            <section className="step-layout">
+              <h2>Describe the Job</h2>
+              <p className="step-note">Be as detailed as possible for better quotes.</p>
+              <div className="form-grid">
                 <label>
-                  Request Title
-                  <input
-                    value={issueTitle}
-                    onChange={(e) => setIssueTitle(e.target.value)}
-                    placeholder={`Example: ${type === 'Plumber' ? 'Leaky kitchen tap' : 'Service request details'}`}
+                  Problem Title
+                  <input 
+                    value={issueTitle} 
+                    onChange={e => setIssueTitle(e.target.value)} 
+                    placeholder="e.g. Broken faucet, Wiring fix..." 
                   />
                 </label>
                 <label>
-                  Photo (Optional)
-                  <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e.target.files[0])} disabled={uploadingPhoto} />
-                  <small>{uploadingPhoto ? 'Uploading image...' : requestedPhoto ? 'Photo attached successfully.' : 'A photo improves quote quality.'}</small>
+                  Service Snapshot (Optional)
+                  <input type="file" accept="image/*" onChange={e => handlePhotoUpload(e.target.files[0])} disabled={uploadingPhoto} />
+                  <small>{uploadingPhoto ? 'Processing...' : requestedPhoto ? 'Photo ready' : 'Photos help pros understand the scale'}</small>
+                </label>
+                <label>
+                  Specific Instructions
+                  <textarea 
+                    rows={4} 
+                    value={jobDetails} 
+                    onChange={e => setJobDetails(e.target.value)} 
+                    placeholder="Tell us about the issue, access notes etc." 
+                  />
                 </label>
               </div>
-
-              <label>
-                Additional Instructions (Optional)
-                <textarea
-                  rows={3}
-                  value={jobDetails}
-                  onChange={(e) => setJobDetails(e.target.value)}
-                  placeholder="Share issue details, apartment floor, preferred call time, or access notes"
-                />
-              </label>
-            </div>
+            </section>
           )}
 
           {currentStep === 3 && (
-            <div className="step-layout">
-              <h2>Scheduling & Professional</h2>
-              <p className="step-note">Choose when you need service and optionally nominate a preferred verified professional.</p>
-
+            <section className="step-layout">
+              <h2>Schedule & Preferences</h2>
+              <p className="step-note">When should the professional arrive?</p>
+              
               <div className="mode-toggle">
-                <button
-                  className={!isScheduled ? 'active' : ''}
-                  onClick={() => {
-                    setIsScheduled(false);
-                    setScheduledDate('');
-                    setTimeSlot('');
-                  }}
-                >
-                  Immediate Service
-                </button>
-                <button className={isScheduled ? 'active' : ''} onClick={() => setIsScheduled(true)}>
-                  Schedule for Later
-                </button>
+                <button className={!isScheduled ? 'active' : ''} onClick={() => setIsScheduled(false)}>Now</button>
+                <button className={isScheduled ? 'active' : ''} onClick={() => setIsScheduled(true)}>Later</button>
               </div>
 
               {isScheduled && (
                 <div className="form-grid two-col">
-                  <label>
-                    Preferred Date
-                    <input
-                      type="date"
-                      value={scheduledDate}
-                      min={new Date().toISOString().split('T')[0]}
-                      onChange={(e) => setScheduledDate(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Time Slot
-                    <select value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)}>
-                      <option value="">Choose a slot</option>
-                      <option value="9 AM - 12 PM">Morning (9 AM - 12 PM)</option>
-                      <option value="12 PM - 3 PM">Afternoon (12 PM - 3 PM)</option>
-                      <option value="3 PM - 6 PM">Evening (3 PM - 6 PM)</option>
+                  <label>Date <input type="date" value={scheduledDate} min={new Date().toISOString().split('T')[0]} onChange={e => setScheduledDate(e.target.value)} /></label>
+                  <label>Slot 
+                    <select value={timeSlot} onChange={e => setTimeSlot(e.target.value)}>
+                      <option value="">Any time</option>
+                      <option value="9 AM - 12 PM">Morning</option>
+                      <option value="12 PM - 3 PM">Afternoon</option>
+                      <option value="3 PM - 6 PM">Evening</option>
                     </select>
                   </label>
                 </div>
               )}
 
-              <label>
-                Estimated Work Days
-                <select value={estimatedDays} onChange={(e) => setEstimatedDays(Number(e.target.value))}>
-                  <option value={1}>1 day</option>
-                  <option value={2}>2 days</option>
-                  <option value={3}>3 days</option>
-                  <option value={4}>4 days</option>
-                  <option value={5}>5+ days</option>
+              <label className="mt-4">
+                Expected Work Duration
+                <select value={estimatedDays} onChange={e => setEstimatedDays(Number(e.target.value))}>
+                  {[1,2,3,4,5].map(d => <option key={d} value={d}>{d} Day{d>1?'s':''}</option>)}
                 </select>
               </label>
 
-              <div>
-                <h3 className="subhead">Preferred Verified Professional (Optional)</h3>
-                <div className="pro-grid">
-                  {professionals.map((pro) => (
-                    <button
-                      key={pro.id}
-                      className={`pro-card ${preferredProId === pro.id ? 'selected' : ''}`}
-                      onClick={() => setPreferredProId(preferredProId === pro.id ? '' : pro.id)}
-                    >
-                      <strong>{pro.name}</strong>
-                      <span>★ {pro.rating} | {pro.jobs} jobs</span>
-                      <span>Avg response: {pro.eta}</span>
-                    </button>
-                  ))}
-                </div>
+              <h3 className="subhead mt-6">Nominate a Pro (Optional)</h3>
+              <div className="pro-grid">
+                {professionals.map(pro => (
+                  <button key={pro.id} className={`pro-card ${preferredProId === pro.id ? 'selected' : ''}`} onClick={() => setPreferredProId(p => p === pro.id ? '' : pro.id)}>
+                    <strong>{pro.name}</strong>
+                    <span>★ {pro.rating} • {pro.jobs} 💼</span>
+                    <span>ETA: {pro.eta}</span>
+                  </button>
+                ))}
               </div>
-            </div>
+            </section>
           )}
 
           {currentStep === 4 && (
-            <div className="step-layout">
-              <h2>Confirm & Book</h2>
-              <p className="step-note">Review your booking summary.</p>
-
+            <section className="step-layout">
+              <h2>Review Booking</h2>
               <div className="confirm-summary">
-                <div className="confirm-row">
-                  <div className="row-icon">🛠️</div>
-                  <div className="row-text">
-                    <span className="row-label">Service</span>
-                    <span className="row-value">{type}</span>
-                  </div>
-                </div>
-                <div className="confirm-row">
-                  <div className="row-icon">📝</div>
-                  <div className="row-text">
-                    <span className="row-label">Request</span>
-                    <span className="row-value">{issueTitle || 'Not provided'}</span>
-                  </div>
-                </div>
-                <div className="confirm-row">
-                  <div className="row-icon">👤</div>
-                  <div className="row-text">
-                    <span className="row-label">Customer</span>
-                    <span className="row-value">{name || 'Not provided'}{userPhone ? ` · ${userPhone}` : ''}</span>
-                  </div>
-                </div>
-                <div className="confirm-row">
-                  <div className="row-icon">🏠</div>
-                  <div className="row-text">
-                    <span className="row-label">Address</span>
-                    <span className="row-value">{address || 'Not provided'}</span>
-                  </div>
-                </div>
-                <div className="confirm-row">
-                  <div className="row-icon">📅</div>
-                  <div className="row-text">
-                    <span className="row-label">Booking</span>
-                    <span className="row-value">
-                      {isScheduled ? `${scheduledDate || 'TBD'}` : 'Immediate'}
-                      {isScheduled && timeSlot ? ` · ${timeSlot}` : ''}
-                      {` · ${estimatedDays} day${estimatedDays > 1 ? 's' : ''}`}
-                    </span>
-                  </div>
-                </div>
-                {selectedProfessional && (
-                  <div className="confirm-row">
-                    <div className="row-icon">⭐</div>
-                    <div className="row-text">
-                      <span className="row-label">Preferred Pro</span>
-                      <span className="row-value">{selectedProfessional.name}</span>
-                    </div>
-                  </div>
-                )}
+                <div className="confirm-row"><span className="row-icon">{serviceIcons[type]||'🛠️'}</span><div className="row-text"><span className="row-label">Category</span><span className="row-value">{type}</span></div></div>
+                <div className="confirm-row"><span className="row-icon">📝</span><div className="row-text"><span className="row-label">Request</span><span className="row-value">{issueTitle}</span></div></div>
+                <div className="confirm-row"><span className="row-icon">📅</span><div className="row-text"><span className="row-label">Timing</span><span className="row-value">{isScheduled ? `${scheduledDate} (${timeSlot})` : 'Immediate'}</span></div></div>
+                <div className="confirm-row"><span className="row-icon">🏠</span><div className="row-text"><span className="row-label">Destination</span><span className="row-value">{address}</span></div></div>
               </div>
 
               {budgetSuggestion && (
                 <div className="budget-suggestion-card">
-                  <div className="budget-suggestion-header">
-                    <span className="budget-suggestion-title">🤖 Gito AI Budget Suggestion</span>
-                    <span className={`budget-confidence-badge ${budgetSuggestion.confidence}`}>
-                      📊 {budgetSuggestion.confidence}
-                    </span>
-                  </div>
-                  <div className="budget-suggestion-range">
-                    {formatBudgetRange(budgetSuggestion)}
-                  </div>
-                  <p className="budget-suggestion-explanation">
-                    {budgetSuggestion.explanation}
-                  </p>
-                  <p className="budget-suggestion-disclaimer">
-                    This is an AI-estimated range. Actual quotes from workers may vary based on materials and site conditions.
-                  </p>
+                  <h4>💡 Gito AI Price Anchor</h4>
+                  <div className="budget-suggestion-range">{formatBudgetRange(budgetSuggestion)}</div>
+                  <p>{budgetSuggestion.explanation}</p>
                 </div>
               )}
 
               <div className="next-steps">
-                <h3>What happens next</h3>
-                <ul>
-                  <li>Your request is shared with local verified professionals.</li>
-                  <li>You receive one or more quotes in My Bookings.</li>
-                  <li>You approve your preferred quote and track progress live.</li>
-                </ul>
+                <h4>What's next?</h4>
+                <p>Pros will review your details and send quotes. You only pay after you're satisfied with the work.</p>
               </div>
-            </div>
+            </section>
           )}
-        </section>
+        </main>
 
         <footer className="service-actions">
-          {currentStep > 1 ? (
-            <button className="btn ghost" onClick={goBack}>
-              Back
-            </button>
-          ) : (
-            <button className="btn ghost" onClick={() => navigate('/')}>
-              Cancel
-            </button>
-          )}
-
-          {currentStep < 4 ? (
-            <button className="btn primary" onClick={goNext}>
-              Continue
-            </button>
-          ) : (
-            <button className="btn primary" onClick={handleBooking} disabled={loading}>
-              {loading ? 'Submitting...' : 'Confirm Booking'}
-            </button>
-          )}
+           <button className="btn-secondary" onClick={currentStep === 1 ? () => navigate('/') : goBack}>
+             {currentStep === 1 ? 'Cancel' : 'Back'}
+           </button>
+           <button className="btn-primary" onClick={currentStep === 4 ? handleBooking : goNext} disabled={loading}>
+             {loading ? 'Processing...' : currentStep === 4 ? 'Confirm Booking' : 'Continue'}
+           </button>
         </footer>
-      </section>
+      </div>
     </div>
   );
 }
+

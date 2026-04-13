@@ -24,6 +24,12 @@ Updated backlog after latest implementation pass.
 - Validate all role flows (User, Mason, Worker, RegionLead, SuperAdmin).
 - Capture strict step-by-step PASS/FAIL execution logs.
 
+6. Premium UI Polish: Phase 2 (Public & Functional Pages)
+- [ ] Global Layout: Refactor Header, App.js, and tokens.css for consistent premium glassmorphism.
+- [ ] Landing Page: Redesign Home.js/Home.css hero and service display.
+- [ ] Functional Flows: Overhaul Service.js (Booking), MyBookings.js, and Profile.js.
+- [ ] Management: Premium cards for Workers.js and AdminBookings.js.
+
 ## Completed In This Cycle
 - Worker schema fields wired (`certifications`, `bankDetails`, `totalEarnings`).
 - Worker auto-pick assignment with mason override before start.

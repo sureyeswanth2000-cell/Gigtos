@@ -35,7 +35,7 @@ export default function Home() {
       .then((snap) => {
         if (snap.exists()) setUserData(snap.data());
       })
-      .catch(() => { /* Firestore read failed — user data not critical */ });
+      .catch(() => { /* Firestore read failed */ });
   }, []);
 
   useEffect(() => {
@@ -54,59 +54,55 @@ export default function Home() {
         setAvailableJobIds(new Set(ids.map(String)));
       })
       .catch(() => {
-        // If API is unavailable, show all jobs as available (graceful degradation)
         setAvailableJobIds(new Set(ALL_JOBS.map((j) => j.id)));
       });
   }, [location]);
 
   const trustPillars = [
-    'Verified professionals with identity checks',
-    'Transparent quote-based pricing before approval',
-    'Fast support and on-time service updates',
+    '🛡️ Identity Verified Pro\'s',
+    '💰 Transparent Pre-quotes',
+    '⚡ On-demand Response',
   ];
+
   const steps = [
     {
-      title: 'Tell us your problem',
-      description: 'Describe the job in plain language and add photos if needed.',
+      title: 'Describe Your Task',
+      description: 'Describe what you need help with in plain language. Add photos for more accurate quotes.',
     },
     {
-      title: 'Compare quotes',
-      description: `Receive quotes from local, verified workers near you.`,
+      title: 'Compare Quotes',
+      description: `Receive and compare fair quotes from top-rated, verified local professionals.`,
     },
     {
-      title: 'Book with confidence',
-      description: 'Confirm your preferred worker and track updates in one place.',
+      title: 'Hassle-free Booking',
+      description: 'Choose your pro, track their arrival, and pay securely after the job is done.',
     },
   ];
+
   const testimonials = [
     {
       name: 'Sravani M.',
-      text: 'Gigtos found me a plumber in under an hour. The quote was clear and fair.',
+      text: 'Gigtos found me a professional plumber in under 30 minutes. High quality and fair pricing.',
     },
     {
       name: 'Ravi Kumar',
-      text: 'I loved comparing options before booking. The process felt safe and simple.',
+      text: 'Comparing quotes before booking is a game changer. I felt in control of the pricing and quality.',
     },
   ];
 
-  // Handle service selection and login check
   const handleBookService = (job) => {
-    // Block booking for services not available in the user's area
     const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
     if (!isAvailable) return;
 
-    // If not logged in, redirect to auth with user mode
     if (!auth.currentUser) {
       navigate('/auth?mode=user');
       return;
     }
-    // Set selected job and show confirmation/subtype modal
     setSelectedService(job);
     setSelectedSubtype(null);
     setShowModal(true);
   };
 
-  // Confirm selection and navigate to the detailed booking page
   const confirmBooking = () => {
     if (selectedService) {
       if (selectedService.isSpecial && selectedSubtype) {
@@ -138,16 +134,17 @@ export default function Home() {
 
   return (
     <div className="home-page">
+      {/* Hero Section */}
       <section className="hero-shell" id="discover">
         <div className="hero-intro">
-          <p className="eyebrow">{cityName} local network</p>
-          <h1>Trusted home services, booked in minutes.</h1>
+          <span className="eyebrow">Local Network: {cityName}</span>
+          <h1>Premium Home Services, Booked in Minutes.</h1>
           <p className="hero-subtext">
-            From urgent repairs to planned upgrades, Gigtos helps you find verified professionals with transparent quotes.
+            Connecting you with top-tier verified professionals for any task, with instant transparent quotes.
           </p>
           <div className="hero-actions">
-            <button className="primary-btn" onClick={() => scrollToSection('services')} aria-label="Get started with Gigtos">{getHeroCTAText()}</button>
-            <button className="secondary-btn" onClick={() => scrollToSection('how-it-works')}>How It Works</button>
+            <button className="btn-primary" onClick={() => scrollToSection('services')}>{getHeroCTAText()}</button>
+            <button className="btn-secondary" onClick={() => scrollToSection('how-it-works')}>See How it Works</button>
           </div>
           <div className="trust-row">
             {trustPillars.map((pillar) => (
@@ -155,21 +152,22 @@ export default function Home() {
             ))}
           </div>
         </div>
-
       </section>
 
+      {/* Dynamic AI Hero Carousel */}
       <AiHeroCarousel
         onQuerySelect={(query) => setAssistantPrompt(query)}
         onBookWorker={(w) => setInstantWorker(w)}
       />
 
+      {/* Services Section */}
       <section className="services-section" id="services">
         <div className="section-header-row">
           <div>
-            <p className="eyebrow">Popular in {cityName}</p>
-            <h2>Popular Services in {cityName}</h2>
+            <span className="eyebrow">On-demand availability</span>
+            <h2>Top Rated in {cityName}</h2>
           </div>
-          <p className="section-caption">Verified pro availability updates daily</p>
+          <p className="section-caption">Verified pro availability updates every 60 seconds</p>
         </div>
 
         <div className="services-tools">
@@ -177,67 +175,54 @@ export default function Home() {
             type="text"
             value={serviceSearch}
             onChange={(event) => setServiceSearch(event.target.value)}
-            placeholder="Search services (plumber, electrician, painting...)"
+            placeholder="Search our 50+ services (e.g. plumber, cleaning...)"
             aria-label="Search services"
           />
         </div>
 
-        <div className="services-scroll-wrapper">
-          <div className="services-grid">
-            {visibleServices.map((job) => {
-              const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
-              const isCheckingAvailability = availableJobIds === null && location;
+        <div className="services-grid">
+          {visibleServices.map((job) => {
+            const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
+            const isCheckingAvailability = availableJobIds === null && location;
 
-              return (
-                <article key={job.id} className={`service-card${!isAvailable ? ' service-card--disabled' : ''}`}>
-                  <div className="service-top">
-                    <span className="service-icon" role="img" aria-label={job.name}>{job.icon || '🔧'}</span>
-                    {!isAvailable ? (
-                      <span className="coming-soon-chip">Coming Soon</span>
-                    ) : (
-                      <span className="verified-chip">{job.isUpcoming ? 'Coming Soon' : 'Verified Pro'}</span>
-                    )}
-                  </div>
-                  <h3>{job.name}</h3>
-                  <p>{job.desc}</p>
-                  {!isAvailable && (
-                    <span className="coming-soon-area-label">🚀 Coming soon in your area</span>
+            return (
+              <article key={job.id} className={`service-card${!isAvailable ? ' service-card--disabled' : ''}`}>
+                <div className="service-top">
+                  <span className="service-icon" role="img" aria-label={job.name}>{job.icon || '🔧'}</span>
+                  {!isAvailable ? (
+                    <span className="coming-soon-chip">Coming Soon</span>
+                  ) : (
+                    <span className="verified-chip">{job.isUpcoming ? 'Soon' : 'Verified'}</span>
                   )}
-                  <div className="service-card-actions">
-                    {!isAvailable ? (
-                      <button className="primary-btn" disabled>
-                        Coming Soon
-                      </button>
-                    ) : (
-                      <button className="primary-btn" onClick={() => handleBookService(job)} disabled={isCheckingAvailability}>
-                        {isCheckingAvailability ? 'Checking…' : job.isSpecial ? 'View Options' : 'Book Service'}
-                      </button>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+                </div>
+                <h3>{job.name}</h3>
+                <p>{job.desc}</p>
+                <div className="service-card-actions">
+                  <button 
+                    className="btn-primary" 
+                    onClick={() => handleBookService(job)} 
+                    disabled={!isAvailable || isCheckingAvailability}
+                  >
+                    {!isAvailable ? 'Notify Me' : (isCheckingAvailability ? 'Checking...' : (job.isSpecial ? 'Options' : 'Book Now'))}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
-
-        {visibleServices.length > 2 && (
-          <div className="scroll-hint">
-            <span>Swipe to see more services</span>
-            <span className="scroll-hint-arrow">→</span>
-          </div>
-        )}
 
         {visibleServices.length === 0 && (
           <div className="no-services-note">
-            No services found for "{serviceSearch}". Try another keyword or ask Gito AI.
+            No services found. Try asking our <strong>Gito AI</strong> for a custom quote.
           </div>
         )}
       </section>
 
+      {/* How it Works Section */}
       <section className="steps-section" id="how-it-works">
         <div className="section-header-row">
-          <h2>Seamless in 3 steps</h2>
-          <p className="section-caption">Built for quick decisions and safer bookings</p>
+          <h2>Seamless in 3 Easy Steps</h2>
+          <p className="section-caption">Engineered for speed, built for reliability</p>
         </div>
         <div className="steps-grid">
           {steps.map((step, index) => (
@@ -250,10 +235,11 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Testimonials */}
       <section className="testimonials-section" id="trust">
         <div className="section-header-row">
-          <h2>Customer confidence, every booking</h2>
-          <p className="section-caption">Real reviews from local households</p>
+          <h2>Customer Stories</h2>
+          <p className="section-caption">Reviews from {cityName} households</p>
         </div>
         <div className="testimonial-grid">
           {testimonials.map((testimonial) => (
@@ -265,24 +251,29 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Why Gigtos */}
       <section className="why-section">
-        <h2>Why choose Gigtos?</h2>
+        <div className="section-header-row">
+          <h2>Why Gigtos?</h2>
+          <p className="section-caption">Setting the gold standard for the gig economy</p>
+        </div>
         <div className="why-grid">
           <div>
-            <h3>Local-first matching</h3>
-            <p>We prioritize professionals who actively service your neighborhood in {cityName}.</p>
+            <h3>Hyper-Local Focus</h3>
+            <p>We only show you pros who are currently active and nearby in {cityName}.</p>
           </div>
           <div>
-            <h3>Transparent quotes</h3>
-            <p>Approve only when the quote, timeline, and worker details look right for your job.</p>
+            <h3>Fair Quote Guarantee</h3>
+            <p>Compare multiple quotes instantly. No hidden fees or surprise upcharges.</p>
           </div>
           <div>
-            <h3>Reliable support</h3>
-            <p>Need help with re-scheduling or follow-up? Our support flow is built into your booking journey.</p>
+            <h3>Verified Security</h3>
+            <p>Every worker undergoes detailed identity and background verification.</p>
           </div>
         </div>
       </section>
 
+      {/* AI Assistant Hook */}
       <ConsumerAiAssistant
         services={SERVICE_CATALOG}
         onBookService={handleBookService}
@@ -290,85 +281,66 @@ export default function Home() {
         onPromptConsumed={() => setAssistantPrompt('')}
       />
 
-      {/* Nearby Worker Notification + Instant Booking Modal */}
+      {/* Overlays */}
       <NearbyWorkerNotification onBookWorker={(w) => setInstantWorker(w)} />
 
       {instantWorker && (
         <InstantBookingModal
           worker={instantWorker}
           userData={userData}
-          onClose={() => {
-            setInstantWorker(null);
-          }}
-          onBooked={({ bookingId }) => {
+          onClose={() => setInstantWorker(null)}
+          onBooked={() => {
             setInstantWorker(null);
             navigate('/my-bookings');
           }}
         />
       )}
 
-      {/* Booking / Subtype Selection Modal */}
       {showModal && selectedService && (
         <div className="booking-modal-overlay">
           <div className="booking-modal-card">
             <div className="booking-modal-head">
-              <span className="service-icon" role="img" aria-label={selectedService.name}
-                style={{ fontSize: '38px', width: 'auto', height: 'auto' }}>{selectedService.icon || '🔧'}</span>
-              <h2>{selectedService.isSpecial ? selectedService.name : `Book ${selectedService.name}`}</h2>
+               <span className="service-icon">{selectedService.icon || '🔧'}</span>
+              <h2>{selectedService.isSpecial ? selectedService.name : `Select ${selectedService.name}`}</h2>
               <p>{selectedService.desc}</p>
             </div>
 
             {selectedService.isSpecial ? (
-              <>
-                <div className="query-list">
-                  {(getSpecialJob(selectedService.id)?.subtypes || []).map((subtype) => (
-                    <button
-                      key={subtype.id}
-                      onClick={() => setSelectedSubtype(subtype)}
-                      style={selectedSubtype?.id === subtype.id ? { borderColor: 'var(--color-brand-600)', borderStyle: 'solid', background: '#fff' } : {}}
-                    >
-                      {subtype.icon} {subtype.label} — {subtype.desc}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="modal-actions">
-                  <button onClick={() => setShowModal(false)} className="cancel-btn">
-                    Cancel
-                  </button>
+              <div className="query-list">
+                {(getSpecialJob(selectedService.id)?.subtypes || []).map((subtype) => (
                   <button
-                    onClick={confirmBooking}
-                    className="primary-btn"
-                    disabled={!selectedSubtype}
+                    key={subtype.id}
+                    onClick={() => setSelectedSubtype(subtype)}
+                    className={selectedSubtype?.id === subtype.id ? 'active' : ''}
                   >
-                    {selectedSubtype ? `Book ${selectedSubtype.label} →` : 'Select an option'}
+                    <span className="subtype-icon">{subtype.icon}</span>
+                    <div className="subtype-info">
+                      <strong>{subtype.label}</strong>
+                      <p>{subtype.desc}</p>
+                    </div>
                   </button>
-                </div>
-              </>
+                ))}
+              </div>
             ) : (
-              <>
-                <div className="modal-benefits">
-                  <p>
-                    ✓ Verified worker profiles<br />
-                    ✓ Quote-based approval flow<br />
-                    ✓ Flexible time-slot booking<br />
-                    ✓ Real-time update tracking
-                  </p>
-                </div>
-
-                <div className="modal-actions">
-                  <button onClick={() => setShowModal(false)} className="cancel-btn">
-                    Cancel
-                  </button>
-                  <button onClick={confirmBooking} className="primary-btn">
-                    Proceed to Book
-                  </button>
-                </div>
-              </>
+              <div className="modal-benefits">
+                <p>✓ Transparent Bidding<br />✓ No Advanced Payment<br />✓ 24/7 Quality Support</p>
+              </div>
             )}
+
+            <div className="modal-actions">
+              <button onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
+              <button 
+                onClick={confirmBooking} 
+                className="btn-primary" 
+                disabled={selectedService.isSpecial && !selectedSubtype}
+              >
+                Continue to Book
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
+

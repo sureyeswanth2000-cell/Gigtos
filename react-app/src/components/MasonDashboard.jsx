@@ -138,7 +138,7 @@ export default function MasonDashboard() {
         {/* Modern Sidebar for Job Types */}
         <div className="mason-jobs-panel GlassCard">
           <div className="mason-panel-header">
-            <h2 style={{ color: '#065f46', fontSize: '18px', fontWeight: '800' }}>Job Categories</h2>
+            <h2 style={{ color: 'var(--text-main)', fontSize: '18px', fontWeight: '800' }}>Job Categories</h2>
             <div className="mason-search-container">
               <span className="search-icon">🔍</span>
               <input

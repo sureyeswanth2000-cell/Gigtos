@@ -16,9 +16,9 @@ export default function Footer() {
               Connecting skilled workers with opportunities. The future of the gig economy, built for speed and trust.
             </p>
             <div className="footer-socials">
-              <a href="#" className="social-link">𝕏</a>
-              <a href="#" className="social-link">📸</a>
-              <a href="#" className="social-link">💼</a>
+              <a href="https://x.com" target="_blank" rel="noreferrer" className="social-link">𝕏</a>
+              <a href="https://instagram.com" target="_blank" rel="noreferrer" className="social-link">📸</a>
+              <a href="https://linkedin.com" target="_blank" rel="noreferrer" className="social-link">💼</a>
             </div>
           </div>
 
@@ -27,21 +27,21 @@ export default function Footer() {
             <h4>Platform</h4>
             <Link to="/jobs">Browse Jobs</Link>
             <Link to="/auth">Sign In</Link>
-            <Link to="/services">Services</Link>
+            <Link to="/service">Services</Link>
           </div>
 
           <div className="footer-links-group">
             <h4>Support</h4>
-            <Link to="/help">Help Center</Link>
-            <Link to="/contact">Contact Us</Link>
-            <Link to="/faq">FAQs</Link>
+            <Link to="/">Help Center</Link>
+            <Link to="/">Contact Us</Link>
+            <Link to="/">FAQs</Link>
           </div>
 
           <div className="footer-links-group">
             <h4>Legal</h4>
-            <Link to="/terms">Terms of Service</Link>
-            <Link to="/privacy">Privacy Policy</Link>
-            <Link to="/security">Security</Link>
+            <Link to="/">Terms of Service</Link>
+            <Link to="/">Privacy Policy</Link>
+            <Link to="/">Security</Link>
           </div>
         </div>
 

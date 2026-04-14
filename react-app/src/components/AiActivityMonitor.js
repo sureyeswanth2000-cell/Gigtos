@@ -72,12 +72,24 @@ export default function AiActivityMonitor({ onBookWorker }) {
         const matched = [];
         const seen = new Set();
 
+
+        // Define heavy driver subtypes
+        const HEAVY_DRIVER_SUBTYPES = [
+          'driver-with-private-bus',
+          'driver-with-bulldozer',
+        ];
+
         for (const sType of serviceTypes) {
+          // If heavy driver, expand search radius
+          let radius = NEARBY_RADIUS_KM;
+          if (HEAVY_DRIVER_SUBTYPES.includes(sType)) {
+            radius = 100; // 100km or more for heavy drivers
+          }
           const results = matchNearbyWorkers(all, {
             serviceType: sType,
             lat: location.lat,
             lng: location.lng,
-            radiusKm: NEARBY_RADIUS_KM,
+            radiusKm: radius,
           });
           for (const w of results) {
             if (!seen.has(w.workerId)) {

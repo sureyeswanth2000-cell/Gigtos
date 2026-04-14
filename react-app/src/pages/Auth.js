@@ -6,6 +6,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getAdminRedirectPath, isRegionSuspended } from '../utils/authRouting';
 import { detectCurrentLocation } from '../context/LocationContext';
 import { SPECIAL_JOBS } from '../config/specialJobs';
+import { useToast } from '../context/ToastContext';
 
 const SIGNUP_JOB_TYPES = [
   ...SPECIAL_JOBS.map(sj => sj.id),
@@ -15,6 +16,7 @@ const SIGNUP_JOB_TYPES = [
 function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { addToast } = useToast();
   
   const [phase, setPhase] = useState('login'); 
   const [userType, setUserType] = useState(searchParams.get('mode') || 'user'); 
@@ -124,10 +126,10 @@ function Auth() {
           name,
           email,
           phone,
-          gigTypes: workerGigTypes,
-          area: workerArea,
-          approvalStatus: 'pending',
-          status: 'inactive',
+           gigTypes: workerGigTypes,
+           locationArea: workerArea,
+           approvalStatus: 'pending',
+           status: 'inactive',
           createdAt: new Date(),
           ...loc && { locationLat: loc.lat, locationLng: loc.lng, locationCity: loc.city }
         };
@@ -136,7 +138,7 @@ function Auth() {
         await setDoc(doc(db, 'gig_workers', uid), workerData);
         await setDoc(doc(db, 'workers_by_phone', phone.replace(/[^\d]/g, '').slice(-10)), { email, uid });
         
-        alert('Registration successful! Waiting for approval.');
+        addToast('Registration successful! Waiting for approval.', 'success');
         navigate('/');
       } else {
         await setDoc(doc(db, 'users', uid), { email, createdAt: new Date() });

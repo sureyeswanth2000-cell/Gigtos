@@ -181,34 +181,33 @@
 }
 
 /* ─── Mobile: Horizontal scroll for job cards ────────────── */
-@media (max-width: 700px) {
-  .job-cards-grid {
-    display: flex;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    -webkit-overflow-scrolling: touch;
-    gap: 12px;
-    padding-bottom: 8px;
-    scrollbar-width: none;
-  }
 
-  .job-cards-grid::-webkit-scrollbar {
-    display: none;
-  }
+.job-cards-grid {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  gap: 12px;
+  padding-bottom: 8px;
+  scrollbar-width: none;
+}
 
-  .job-cards-grid .job-card {
-    flex: 0 0 72vw;
-    max-width: 280px;
-    scroll-snap-align: start;
-  }
+.job-cards-grid::-webkit-scrollbar {
+  display: none;
+}
 
-  .job-cards-scroll-wrapper::after {
-    display: block;
-  }
+.job-cards-grid .job-card {
+  flex: 0 0 320px;
+  max-width: 320px;
+  scroll-snap-align: start;
+}
 
-  .job-cards-scroll-hint {
-    display: flex;
-  }
+.job-cards-scroll-wrapper::after {
+  display: block;
+}
+
+.job-cards-scroll-hint {
+  display: flex;
 }
 
 /* ─── Location Bar ───────────────────────────────────────── */

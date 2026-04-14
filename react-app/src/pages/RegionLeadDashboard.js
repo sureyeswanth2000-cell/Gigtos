@@ -170,7 +170,7 @@ export default function RegionLeadDashboard() {
             { label: 'Pro Workers', value: stats.totalGigs, icon: '💼', color: 'var(--success)' },
             { label: 'Approvals', value: stats.pendingApprovals, icon: '⏳', color: 'var(--warning)' },
             { label: 'Active Jobs', value: stats.activeBookings, icon: '⚡', color: 'var(--secondary-green)' },
-            { label: 'Open Disputes', value: stats.openDisputes, icon: '🚨', color: 'var(--error)' },
+            // { label: 'Open Disputes', value: stats.openDisputes, icon: '🚨', color: 'var(--error)' },
           ].map(s => (
             <div key={s.label} className="job-card" style={{ padding: 24, textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>{s.icon}</div>
@@ -186,7 +186,7 @@ export default function RegionLeadDashboard() {
             { id: 'overview', label: 'Monitor', icon: '📊' },
             { id: 'gigs', label: 'Approvals', icon: '🛡️', count: stats.pendingApprovals },
             { id: 'admins', label: 'Masons', icon: '🛠️' },
-            { id: 'disputes', label: 'Disputes', icon: '🚨', count: stats.openDisputes },
+            // { id: 'disputes', label: 'Disputes', icon: '🚨', count: stats.openDisputes },
           ].map(t => (
             <button
               key={t.id}
@@ -308,21 +308,7 @@ export default function RegionLeadDashboard() {
           </div>
         )}
 
-        {activeTab === 'disputes' && (
-          <div className="job-card" style={{ padding: 48 }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: 24, fontWeight: 800 }}>Resolution Queue</h3>
-            <p style={{ color: 'var(--text-muted)', marginBottom: 32 }}>Active disputes requiring oversight.</p>
-            {disputes.length === 0 ? (
-              <div style={{ fontSize: 64, marginBottom: 24, textAlign: 'center' }}>✅</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-                {disputes.map((d) => (
-                  <DisputeCard key={d.id} booking={d} />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Dispute tab and cards removed as per new workflow */}
       </main>
     </div>
   );

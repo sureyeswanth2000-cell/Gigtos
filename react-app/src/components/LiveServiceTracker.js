@@ -96,15 +96,21 @@ export default function LiveServiceTracker({ bookingId, compact = false }) {
         )}
       </div>
 
-      {session.lastLat && session.lastLng && status === 'tracking' && (
-        <a
-          href={`https://www.google.com/maps?q=${session.lastLat},${session.lastLng}`}
-          target="_blank"
-          rel="noreferrer"
-          className="map-link"
-        >
-          📍 View Live Location ↗
-        </a>
+      {status === 'tracking' && (
+        session.lastLat && session.lastLng ? (
+          <a
+            href={`https://www.google.com/maps?q=${session.lastLat},${session.lastLng}`}
+            target="_blank"
+            rel="noreferrer"
+            className="map-link"
+          >
+            📍 View Live Location ↗
+          </a>
+        ) : (
+          <div className="map-link-unavailable" style={{ color: 'var(--text-muted)', marginTop: 8 }}>
+            📍 Live location not available yet.
+          </div>
+        )
       )}
     </div>
   );

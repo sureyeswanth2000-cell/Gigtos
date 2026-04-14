@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, createUserWithEmailAndPassword } from 'firebase/auth';
 import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, getDoc, setDoc, getDocs } from 'firebase/firestore';
+import { useToast } from '../context/ToastContext';
 import MasonDashboard from '../components/MasonDashboard';
 import './Workers.css';
 
 export default function Workers() {
+  const { addToast } = useToast();
   const [user, setUser] = useState(null);
   const [workers, setWorkers] = useState([]);
   const [pendingGigs, setPendingGigs] = useState([]);
@@ -183,15 +185,15 @@ export default function Workers() {
   }, [user, adminRole, childAdminIds, regionArea]);
 
   async function createWorker() {
-    if (!user) return alert('Not authenticated');
-    if (adminRole === 'regionLead') return alert('Region leads cannot create workers directly.');
+    if (!user) return addToast('Not authenticated', 'error');
+    if (adminRole === 'regionLead') return addToast('Region leads cannot create workers directly.', 'warning');
     if (adminRole !== 'admin' && adminRole !== 'superadmin' && adminRole !== 'mason') {
-      return alert('Only admins and masons can create workers');
+      return addToast('Only admins and masons can create workers', 'warning');
     }
-    if (!name.trim()) return alert('Worker name is required');
-    if (!/^[0-9]{10}$/.test(contact)) return alert('Enter valid 10 digit phone');
+    if (!name.trim()) return addToast('Worker name is required', 'warning');
+    if (!/^[0-9]{10}$/.test(contact)) return addToast('Enter valid 10 digit phone', 'warning');
     const parsedEarnings = Number(totalEarnings);
-    if (Number.isNaN(parsedEarnings) || parsedEarnings < 0) return alert('Total earnings must be 0 or more');
+    if (Number.isNaN(parsedEarnings) || parsedEarnings < 0) return addToast('Total earnings must be 0 or more', 'warning');
     try {
       const newWorkerPayload = {
         name, 
@@ -215,9 +217,9 @@ export default function Workers() {
       setCertifications('');
       setBankDetails('');
       setTotalEarnings('0');
-      alert('✅ Worker created successfully!');
+      addToast('✅ Worker created successfully!', 'success');
     } catch (e) { 
-      alert('Error: ' + e.message); 
+      addToast('Error: ' + e.message, 'error'); 
     }
   }
 
@@ -233,7 +235,7 @@ export default function Workers() {
   async function saveWorkerSchema(workerId) {
     const parsedEarnings = Number(editWorkerData.totalEarnings);
     if (Number.isNaN(parsedEarnings) || parsedEarnings < 0) {
-      return alert('Total earnings must be 0 or more');
+      return addToast('Total earnings must be 0 or more', 'warning');
     }
     try {
       await updateDoc(doc(db, 'gig_workers', workerId), {
@@ -250,9 +252,9 @@ export default function Workers() {
 
       setEditingWorkerId(null);
       setEditWorkerData({ certifications: '', bankDetails: '', totalEarnings: '0' });
-      alert('✅ Worker details updated');
+      addToast('✅ Worker details updated', 'success');
     } catch (e) {
-      alert('Error updating worker: ' + e.message);
+      addToast('Error updating worker: ' + e.message, 'error');
     }
   }
 
@@ -260,13 +262,13 @@ export default function Workers() {
     try {
       // Check ownership before toggling
       const workerSnap = await getDoc(doc(db, 'gig_workers', id));
-      if (!workerSnap.exists()) return alert('Worker not found');
+      if (!workerSnap.exists()) return addToast('Worker not found', 'error');
       
       const worker = workerSnap.data();
       
       // Verify ownership (unless superadmin)
       if (adminRole !== 'superadmin' && worker.adminId !== user.uid) {
-        return alert('You can only modify your own workers');
+        return addToast('You can only modify your own workers', 'error');
       }
       
       await updateDoc(doc(db, 'gig_workers', id), { 
@@ -278,7 +280,7 @@ export default function Workers() {
         await upsertWorkerPhoneIndex(id, updatedSnap.data());
       }
     } catch (e) { 
-      alert(e.message); 
+      addToast(e.message, 'error'); 
     }
   }
 
@@ -306,9 +308,9 @@ export default function Workers() {
   }
 
   async function approveWorker(workerId) {
-    if (!user) return alert('Not authenticated');
+    if (!user) return addToast('Not authenticated', 'error');
     const targetAdminId = approvalAssignments[workerId];
-    if (!targetAdminId) return alert('Please select a mason before approval.');
+    if (!targetAdminId) return addToast('Please select a mason before approval.', 'warning');
     try {
       await updateDoc(doc(db, 'gig_workers', workerId), {
         approvalStatus: 'approved',
@@ -322,10 +324,9 @@ export default function Workers() {
       if (updatedSnap.exists()) {
         await upsertWorkerPhoneIndex(workerId, updatedSnap.data());
       }
-
-      alert('✅ Gig approved successfully!');
+      addToast('✅ Gig approved successfully!', 'success');
     } catch (e) {
-      alert('Error approving worker: ' + e.message);
+      addToast('Error approving worker: ' + e.message, 'error');
     }
   }
 
@@ -340,17 +341,16 @@ export default function Workers() {
       if (updatedSnap.exists()) {
         await upsertWorkerPhoneIndex(workerId, updatedSnap.data());
       }
-
-      alert('Worker application rejected.');
+      addToast('Worker application rejected.', 'info');
     } catch (e) {
-      alert('Error rejecting worker: ' + e.message);
+      addToast('Error rejecting worker: ' + e.message, 'error');
     }
   }
 
   async function createChildAdmin() {
-    if (adminRole !== 'regionLead') return alert('Only region leads can create masons.');
-    if (!newAdminName || !newAdminEmail || !newAdminPassword) return alert('Fill all mason fields.');
-    if (newAdminPassword.length < 6) return alert('Password must be at least 6 characters.');
+    if (adminRole !== 'regionLead') return addToast('Only region leads can create masons.', 'warning');
+    if (!newAdminName || !newAdminEmail || !newAdminPassword) return addToast('Fill all mason fields.', 'warning');
+    if (newAdminPassword.length < 6) return addToast('Password must be at least 6 characters.', 'warning');
 
     try {
       const cred = await createUserWithEmailAndPassword(auth, newAdminEmail, newAdminPassword);
@@ -363,12 +363,12 @@ export default function Workers() {
         areaName: regionArea || '',
         createdAt: new Date(),
       });
-      alert('✅ Mason created successfully.');
+      addToast('✅ Mason created successfully.', 'success');
       setNewAdminName('');
       setNewAdminEmail('');
       setNewAdminPassword('');
     } catch (e) {
-      alert('Error creating mason: ' + e.message);
+      addToast('Error creating mason: ' + e.message, 'error');
     }
   }
 

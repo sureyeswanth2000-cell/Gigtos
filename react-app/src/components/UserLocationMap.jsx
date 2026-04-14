@@ -5,7 +5,7 @@ import { useLocation, DEFAULT_RADIUS_KM } from '../context/LocationContext';
  * UserLocationMap – embeddable Leaflet map showing the user's live location
  * with a 20 km radius circle. Loads Leaflet dynamically from CDN.
  */
-export default function UserLocationMap({ height = 280, showRadius = true }) {
+export default function UserLocationMap({ height = 280, showRadius = true, label, onLocationSelect }) {
   const { location, locationLoading } = useLocation();
   const [leafletReady, setLeafletReady] = useState(!!window.L);
   const mapRef = useRef(null);
@@ -78,7 +78,26 @@ export default function UserLocationMap({ height = 280, showRadius = true }) {
         dashArray: '6 4',
       }).addTo(mapInstance.current);
     }
-  }, [leafletReady, location, showRadius]);
+
+    // If selection enabled, add click handler
+    if (onLocationSelect) {
+      const map = mapInstance.current;
+      const handleClick = (e) => {
+        const coords = { lat: e.latlng.lat, lng: e.latlng.lng };
+        L.marker([coords.lat, coords.lng], {
+          icon: L.divIcon({
+            html: '<div class="user-map-marker" style="background:#F59E0B;">📍</div>',
+            className: '',
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
+          }),
+        }).addTo(map);
+        onLocationSelect(coords);
+      };
+      map.on('click', handleClick);
+      return () => map.off('click', handleClick);
+    }
+  }, [leafletReady, location, showRadius, onLocationSelect]);
 
   // Clean up map on unmount
   useEffect(() => {
@@ -100,6 +119,7 @@ export default function UserLocationMap({ height = 280, showRadius = true }) {
 
   return (
     <div className="user-location-map-wrapper">
+      {label && <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>}
       <div
         className="user-location-map"
         ref={mapRef}
@@ -108,6 +128,7 @@ export default function UserLocationMap({ height = 280, showRadius = true }) {
       <div className="user-location-map-caption">
         📍 Showing service area around {location.city || 'your location'} ({DEFAULT_RADIUS_KM} km radius)
       </div>
+      {onLocationSelect && <div style={{ color: '#A259FF', marginTop: 4 }}>Tap on map to select location</div>}
     </div>
   );
 }

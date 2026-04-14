@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocation } from '../context/LocationContext';
 import { ALL_JOBS } from '../utils/jobListBuilder';
+import { getServiceAvailability } from '../utils/availability';
 import JobCard from './JobCard';
 import LocationDetector from './LocationDetector';
 import NearbyMessage from './NearbyMessage';
@@ -20,25 +21,23 @@ export default function JobList({ onBook }) {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    if (!location) return;
+    if (!location || !location.city) return;
 
-    const { lat, lng } = location;
     setAvailableJobIds(null);
     setFetchError(null);
 
-    fetch(`/api/available-jobs?lat=${lat}&lng=${lng}&radius=${GEO_RADIUS_KM}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch available jobs');
-        return res.json();
-      })
+    // Extract area from displayName
+    const area = location.displayName ? location.displayName.split(',')[0].trim() : null;
+
+    getServiceAvailability(location.city, area)
       .then((data) => {
-        // Expect data to be an array of job IDs or { jobs: [...] }
-        const ids = Array.isArray(data) ? data : data.jobs || data.jobIds || [];
-        setAvailableJobIds(new Set(ids.map(String)));
+        setAvailableJobIds(data);
       })
-      .catch(() => {
-        // If API is unavailable, show all jobs (graceful degradation)
-        setAvailableJobIds(new Set(ALL_JOBS.map((j) => j.id)));
+      .catch((err) => {
+        console.error('Availability check failed:', err);
+        const fallback = {};
+        ALL_JOBS.forEach(j => fallback[j.id] = 'city');
+        setAvailableJobIds(fallback);
         setFetchError('Could not load location-based availability. Showing all jobs.');
       });
   }, [location]);
@@ -82,14 +81,23 @@ export default function JobList({ onBook }) {
       ) : (
         <div className="job-cards-scroll-wrapper">
           <div className="job-cards-grid">
-            {filteredJobs.map((job) => (
-              <JobCard
-                key={job.id}
-                job={job}
-                available={availableJobIds === null ? null : availableJobIds.has(job.id)}
-                onBook={onBook || ((j) => navigate(`/service?type=${encodeURIComponent(j.name)}`))}
-              />
-            ))}
+            {filteredJobs.map((job) => {
+              const availLevel = availableJobIds ? (availableJobIds[String(job.id)] || 'none') : null;
+              return (
+                <JobCard
+                  key={job.id}
+                  job={job}
+                  available={availLevel}
+                  onBook={onBook || ((j) => {
+                    if (!j?.name) {
+                      alert('Job information is incomplete. Please try again later.');
+                      return;
+                    }
+                    navigate(`/service?type=${encodeURIComponent(j.name)}`);
+                  })}
+                />
+              );
+            })}
           </div>
           {filteredJobs.length > 2 && (
             <div className="job-cards-scroll-hint">

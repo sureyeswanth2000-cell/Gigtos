@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { isSpecialJob } from '../config/specialJobs';
+import { useToast } from '../context/ToastContext';
 
 /**
  * JobCard – reusable card for displaying a job/service with availability indicator.
@@ -13,10 +14,15 @@ import { isSpecialJob } from '../config/specialJobs';
  */
 export default function JobCard({ job, available = null, onBook, showUpcoming = true }) {
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const hasSpecialPage = isSpecialJob(job.id);
 
   const handleClick = () => {
-    if (available === false) return; // disabled
+    if (available === 'none') return; // disabled
+    if (!job?.id) {
+      addToast('Job information is incomplete. Please try again later.', 'error');
+      return;
+    }
     if (hasSpecialPage) {
       navigate(`/jobs/${job.id}`);
     } else if (onBook) {
@@ -24,8 +30,10 @@ export default function JobCard({ job, available = null, onBook, showUpcoming = 
     }
   };
 
-  const isDisabled = available === false;
+  // For special jobs (like 'driver'), always allow navigation to options page
+  const isDisabled = (available === 'none' || available === false) && !hasSpecialPage;
   const isLoading = available === null;
+  const isNearMe = available === 'area';
 
   return (
     <article className={`job-card${isDisabled ? ' job-card--disabled' : ''}${isLoading ? ' job-card--loading' : ''}`}>
@@ -34,10 +42,13 @@ export default function JobCard({ job, available = null, onBook, showUpcoming = 
         {showUpcoming && job.isUpcoming && (
           <span className="job-badge job-badge--upcoming">Coming Soon</span>
         )}
-        {available === true && (
-          <span className="job-badge job-badge--available">Available</span>
+        {isNearMe && (
+          <span className="job-badge job-badge--near">Near You</span>
         )}
-        {available === false && (
+        {available === 'city' && (
+          <span className="job-badge job-badge--available">Verified</span>
+        )}
+        {(available === 'none' || available === false) && (
           <span className="job-badge job-badge--unavailable">Coming Soon</span>
         )}
       </div>
@@ -52,7 +63,11 @@ export default function JobCard({ job, available = null, onBook, showUpcoming = 
             Coming Soon in Your Area
           </button>
         ) : hasSpecialPage ? (
-          <button className="btn-primary" onClick={handleClick}>
+          <button 
+            className="btn-primary" 
+            onClick={handleClick}
+            style={isNearMe ? { background: 'linear-gradient(135deg, #10b981, #059669)' } : {}}
+          >
             View Options →
           </button>
         ) : (

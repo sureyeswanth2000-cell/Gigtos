@@ -11,6 +11,7 @@ import { rtdb } from '../firebase';
 export default function TrackingMap({ bookingId, consumerLat, consumerLng }) {
   const [workerLoc, setWorkerLoc] = useState(null);
   const [leafletReady, setLeafletReady] = useState(!!window.L);
+  const [eta, setEta] = useState(null);
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const routeLayer = useRef(null);
@@ -37,6 +38,23 @@ export default function TrackingMap({ bookingId, consumerLat, consumerLng }) {
     return () => unsub();
   }, [bookingId]);
 
+  // Calculate ETA (straight-line, Haversine, assume 30km/h)
+  useEffect(() => {
+    if (!workerLoc || !consumerLat || !consumerLng) { setEta(null); return; }
+    const toRad = deg => deg * Math.PI / 180;
+    const R = 6371; // km
+    const dLat = toRad(consumerLat - workerLoc.lat);
+    const dLng = toRad(consumerLng - workerLoc.lng);
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(toRad(workerLoc.lat)) * Math.cos(toRad(consumerLat)) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distanceKm = R * c;
+    const speedKmh = 30; // Assume 30 km/h urban
+    const etaMin = Math.round((distanceKm / speedKmh) * 60);
+    setEta(etaMin);
+  }, [workerLoc, consumerLat, consumerLng]);
+
   // Draw map and route
   useEffect(() => {
     if (!leafletReady || !mapRef.current || !workerLoc || !consumerLat || !consumerLng) return;
@@ -60,9 +78,16 @@ export default function TrackingMap({ bookingId, consumerLat, consumerLng }) {
     <div>
       <div ref={mapRef} style={{ width: '100%', height: 320, borderRadius: 16, marginBottom: 12, background: '#eee' }} />
       {workerLoc && (
-        <div style={{ fontWeight: 700, color: '#A259FF' }}>
-          Worker is en route. Last update: {new Date(workerLoc.timestamp).toLocaleTimeString()}
-        </div>
+        <>
+          <div style={{ fontWeight: 700, color: '#A259FF' }}>
+            Worker is en route. Last update: {new Date(workerLoc.timestamp).toLocaleTimeString()}
+          </div>
+          {eta !== null && (
+            <div style={{ color: '#444', marginTop: 4 }}>
+              Estimated Arrival: <strong>{eta} min{eta === 1 ? '' : 's'}</strong>
+            </div>
+          )}
+        </>
       )}
       {!workerLoc && <div style={{ color: 'var(--text-muted)' }}>Waiting for worker to start travel…</div>}
     </div>

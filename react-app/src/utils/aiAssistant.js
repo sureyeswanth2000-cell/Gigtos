@@ -45,7 +45,6 @@ export const SERVICE_CATALOG = [
     desc: 'Hire a driver who brings their own car for transport or delivery',
     keywords: ['driver', 'car', 'vehicle', 'ride', 'transport', 'delivery', 'cab', 'taxi', 'travel'],
     requiresAsset: true,
-    isUpcoming: true,
   },
   {
     id: 6,
@@ -55,7 +54,6 @@ export const SERVICE_CATALOG = [
     category: 'Transport',
     desc: 'Hire a driver to drive your own vehicle',
     keywords: ['driver', 'chauffeur', 'drive my car', 'personal driver', 'designated driver'],
-    isUpcoming: true,
   },
   {
     id: 7,
@@ -65,7 +63,6 @@ export const SERVICE_CATALOG = [
     category: 'Household Help',
     desc: 'General household help — cleaning, cooking, laundry, errands',
     keywords: ['helper', 'maid', 'cook', 'laundry', 'household', 'home help', 'domestic', 'errand'],
-    isUpcoming: true,
   },
   {
     id: 8,
@@ -75,7 +72,6 @@ export const SERVICE_CATALOG = [
     category: 'Appliance & AC',
     desc: 'AC installation, servicing, gas refill, and repair',
     keywords: ['air conditioner', 'cooling', 'gas refill', 'ac repair', 'ac service', 'split ac', 'window ac', 'ac not working'],
-    isUpcoming: true,
   },
   {
     id: 9,
@@ -85,7 +81,6 @@ export const SERVICE_CATALOG = [
     category: 'Cleaning',
     desc: 'Termite, cockroach, mosquito, and rodent treatment',
     keywords: ['pest', 'termite', 'cockroach', 'mosquito', 'rodent', 'rat', 'ant', 'bug', 'insect'],
-    isUpcoming: true,
   },
   {
     id: 10,
@@ -95,7 +90,6 @@ export const SERVICE_CATALOG = [
     category: 'Appliance & AC',
     desc: 'Washing machine, fridge, microwave, geyser repair',
     keywords: ['appliance', 'washing machine', 'fridge', 'refrigerator', 'microwave', 'geyser', 'oven', 'mixer'],
-    isUpcoming: true,
   },
   {
     id: 11,

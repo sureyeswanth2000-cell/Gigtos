@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import ConsumerAiAssistant from '../components/ConsumerAiAssistant';
@@ -9,8 +9,8 @@ import InstantBookingModal from '../components/InstantBookingModal';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
 import { getSpecialJob } from '../config/specialJobs';
 import { ALL_JOBS } from '../utils/jobListBuilder';
-import { useLocation } from '../context/LocationContext';
 import { getHeroCTAText } from '../utils/abTest';
+import { getServiceAvailability } from '../utils/availability';
 import './Home.css';
 
 const GEO_RADIUS_KM = 10;
@@ -39,22 +39,23 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!location) return;
+    if (!location || !location.city) return;
 
-    const { lat, lng } = location;
     setAvailableJobIds(null);
+    
+    // Extract area from displayName if possible
+    // e.g. "Indiranagar, Bengaluru, ..." -> "Indiranagar"
+    const area = location.displayName ? location.displayName.split(',')[0].trim() : null;
 
-    fetch(`/api/available-jobs?lat=${lat}&lng=${lng}&radius=${GEO_RADIUS_KM}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch available jobs');
-        return res.json();
-      })
-      .then((data) => {
-        const ids = Array.isArray(data) ? data : data.jobs || data.jobIds || [];
-        setAvailableJobIds(new Set(ids.map(String)));
+    getServiceAvailability(location.city, area)
+      .then((availabilityMap) => {
+        setAvailableJobIds(availabilityMap);
       })
       .catch(() => {
-        setAvailableJobIds(new Set(ALL_JOBS.map((j) => j.id)));
+        // Fallback: assume everything is available if check fails
+        const fallback = {};
+        ALL_JOBS.forEach(j => fallback[j.id] = 'city');
+        setAvailableJobIds(fallback);
       });
   }, [location]);
 
@@ -91,7 +92,7 @@ export default function Home() {
   ];
 
   const handleBookService = (job) => {
-    const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
+    const isAvailable = availableJobIds && availableJobIds[String(job.id)] && availableJobIds[String(job.id)] !== 'none';
     if (!isAvailable) return;
 
     if (!auth.currentUser) {
@@ -182,7 +183,8 @@ export default function Home() {
 
         <div className="services-grid">
           {visibleServices.map((job) => {
-            const isAvailable = availableJobIds === null || availableJobIds.has(String(job.id));
+            const availLevel = availableJobIds ? availableJobIds[String(job.id)] : 'none';
+            const isAvailable = availLevel === 'area' || availLevel === 'city';
             const isCheckingAvailability = availableJobIds === null && location;
 
             return (
@@ -192,7 +194,9 @@ export default function Home() {
                   {!isAvailable ? (
                     <span className="coming-soon-chip">Coming Soon</span>
                   ) : (
-                    <span className="verified-chip">{job.isUpcoming ? 'Soon' : 'Verified'}</span>
+                    <span className="verified-chip">
+                      {availLevel === 'area' ? 'Near You' : 'Verified'}
+                    </span>
                   )}
                 </div>
                 <h3>{job.name}</h3>
@@ -202,6 +206,9 @@ export default function Home() {
                     className="btn-primary" 
                     onClick={() => handleBookService(job)} 
                     disabled={!isAvailable || isCheckingAvailability}
+                    style={{
+                      background: availLevel === 'area' ? 'linear-gradient(135deg, #10b981, #059669)' : ''
+                    }}
                   >
                     {!isAvailable ? 'Notify Me' : (isCheckingAvailability ? 'Checking...' : (job.isSpecial ? 'Options' : 'Book Now'))}
                   </button>
@@ -307,19 +314,51 @@ export default function Home() {
 
             {selectedService.isSpecial ? (
               <div className="query-list">
-                {(getSpecialJob(selectedService.id)?.subtypes || []).map((subtype) => (
-                  <button
-                    key={subtype.id}
-                    onClick={() => setSelectedSubtype(subtype)}
-                    className={selectedSubtype?.id === subtype.id ? 'active' : ''}
-                  >
-                    <span className="subtype-icon">{subtype.icon}</span>
-                    <div className="subtype-info">
-                      <strong>{subtype.label}</strong>
-                      <p>{subtype.desc}</p>
-                    </div>
-                  </button>
-                ))}
+                {(getSpecialJob(selectedService.id)?.subtypes || []).map((subtype) => {
+                  const subAvail = availableJobIds ? availableJobIds[subtype.id] : 'none';
+                  const isSubAvailable = subAvail === 'area' || subAvail === 'city';
+
+                  return (
+                    <button
+                      key={subtype.id}
+                      onClick={() => setSelectedSubtype(subtype)}
+                      className={`${selectedSubtype?.id === subtype.id ? 'active' : ''}${!isSubAvailable ? ' disabled' : ''}`}
+                      disabled={!isSubAvailable}
+                      style={{
+                        position: 'relative',
+                        opacity: isSubAvailable ? 1 : 0.6
+                      }}
+                    >
+                      <span className="subtype-icon">{subtype.icon}</span>
+                      <div className="subtype-info">
+                        <strong>{subtype.label}</strong>
+                        <p>{subtype.desc}</p>
+                        {!isSubAvailable && (
+                          <span style={{ 
+                            fontSize: '10px', 
+                            color: 'var(--primary-purple)', 
+                            fontWeight: 'bold',
+                            display: 'block',
+                            marginTop: '4px'
+                          }}>
+                            Coming Soon in {cityName}
+                          </span>
+                        )}
+                        {subAvail === 'area' && (
+                          <span style={{ 
+                            fontSize: '10px', 
+                            color: '#10b981', 
+                            fontWeight: 'bold',
+                            display: 'block',
+                            marginTop: '4px'
+                          }}>
+                            ✓ Available Near You
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <div className="modal-benefits">

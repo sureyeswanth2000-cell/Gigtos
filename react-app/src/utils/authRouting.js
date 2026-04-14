@@ -3,7 +3,7 @@ export function getAdminRedirectPath(adminData) {
 
   if (role === 'superadmin') return '/admin/super';
   if (role === 'regionLead' || role === 'region-lead') return '/admin/region-lead';
-  if (role === 'mason') return '/mason/dashboard';
+  if (role === 'mason' || role === 'admin') return '/admin/bookings';
   return '/admin/bookings';
 }
 

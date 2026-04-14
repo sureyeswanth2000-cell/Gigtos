@@ -28,6 +28,7 @@ import { acceptQuote as applyAcceptedQuote } from '../utils/bookingWorkflow';
 import LiveServiceTracker from '../components/LiveServiceTracker';
 import TrackingMap from '../components/TrackingMap';
 import UserDisputePhotoUpload from '../components/UserDisputePhotoUpload';
+import { useToast } from '../context/ToastContext';
 import './MyBookings.css';
 
 // UI CONFIG: Color mapping for visual differentiation of booking states
@@ -68,6 +69,7 @@ const USE_FREE_PLAN_MODE = true;
 
 export default function MyBookings() {
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const [user, setUser] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -180,7 +182,8 @@ export default function MyBookings() {
       }
     }
 
-    throw new Error(`Spark fallback not implemented for ${method}`);
+    alert(`This action ('${method}') is not available on the current plan or is not yet implemented. Please contact support or try again later.`);
+    return;
   };
 
   const callBackend = async (method, data) => {
@@ -188,7 +191,7 @@ export default function MyBookings() {
       try {
         await runSparkFallback(method, data);
       } catch (fallbackErr) {
-        alert('Action failed: ' + fallbackErr.message);
+        addToast('Action failed: ' + fallbackErr.message, 'error');
         throw fallbackErr;
       }
       return;
@@ -201,7 +204,7 @@ export default function MyBookings() {
       try {
         await runSparkFallback(method, data);
       } catch (fallbackErr) {
-        alert('Action failed: ' + (fallbackErr.message || e.message));
+        addToast('Action failed: ' + (fallbackErr.message || e.message), 'error');
         throw fallbackErr;
       }
     }
@@ -280,7 +283,7 @@ export default function MyBookings() {
       pdf.text(`Generated: ${new Date().toLocaleString('en-IN')}`, startX, y);
       pdf.save(`invoice-${invoice.invoiceNo}.pdf`);
     } catch (e) {
-      alert('Unable to generate PDF right now.');
+      addToast('Unable to generate PDF right now.', 'error');
     }
   };
 
@@ -295,7 +298,7 @@ export default function MyBookings() {
     if (!window.confirm('Confirm job is done?')) return;
     try {
       await callBackend('updateBookingStatus', { bookingId: id, action: 'user_confirm_completion' });
-      alert('✓ Service confirmed complete!');
+      addToast('Service confirmed complete!', 'success');
     } catch (e) {}
   }
 
@@ -311,29 +314,29 @@ export default function MyBookings() {
       setEditingId(null);
       setEditData({});
     } catch (e) {
-      alert('Failed: ' + e.message);
+      addToast('Failed: ' + e.message, 'error');
     } finally {
       setUpdating(false);
     }
   }
 
   async function submitRating(id) {
-    if (!selectedStar) { alert('Please select a star rating'); return; }
+    if (!selectedStar) { addToast('Please select a star rating', 'warning'); return; }
     try {
       await callBackend('updateBookingStatus', { bookingId: id, action: 'user_rate', extraArgs: { rating: selectedStar } });
       setRatingId(null);
       setReviewText('');
       setSelectedStar(0);
       if (selectedStar === 1) {
-        alert('⚠️ A dispute has been automatically raised due to your 1-star rating.');
+        addToast('A dispute has been automatically raised due to your 1-star rating.', 'warning', 5000);
       } else {
-        alert('✓ Thank you for your rating!');
+        addToast('Thank you for your rating!', 'success');
       }
     } catch (e) {}
   }
 
   async function submitDispute(id) {
-    if (!disputeReason.trim()) { alert('Please describe the issue'); return; }
+    if (!disputeReason.trim()) { addToast('Please describe the issue', 'warning'); return; }
     try {
       // Attach userDisputePhotos to dispute object
       await callBackend('updateBookingStatus', {
@@ -344,7 +347,7 @@ export default function MyBookings() {
       setDisputeId(null);
       setDisputeReason('');
       setUserDisputePhotos([]);
-      alert('✓ Dispute submitted. Admin will review shortly.');
+      addToast('Dispute submitted. Admin will review shortly.', 'success');
     } catch (e) {}
   }
 
@@ -363,7 +366,7 @@ export default function MyBookings() {
     if (!window.confirm(`Accept quote from ${quote.adminName} for ₹${finalPrice}?`)) return;
     try {
       await callBackend('acceptQuote', { bookingId: id, adminId: quote.adminId });
-      alert('✓ Quote accepted!');
+      addToast('Quote accepted!', 'success');
     } catch (e) {}
   }
 
@@ -403,12 +406,7 @@ export default function MyBookings() {
         <span className="meta-item">Updated: {fmt(booking.updatedAt)}</span>
       </div>
 
-      {booking.dispute?.status === 'open' && (
-        <div className="alert-message error">🚨 Dispute raised: "{booking.dispute.reason}"</div>
-      )}
-      {booking.dispute?.status === 'resolved' && (
-        <div className="alert-message success">✓ Dispute resolved</div>
-      )}
+      {/* Dispute alerts hidden as per new workflow */}
 
       {editingId === booking.id ? (
         <div className="edit-panel">
@@ -531,19 +529,7 @@ export default function MyBookings() {
         </div>
       )}
 
-      {/* PANEL: Support Intervention (Dispute) */}
-      {disputeId === booking.id && (
-        <div className="premium-panel dispute-panel">
-          <div className="panel-header error">🚨 Raise a Dispute</div>
-          <textarea value={disputeReason} onChange={e => setDisputeReason(e.target.value)}
-            placeholder="Describe the issue in detail…" rows={3} className="premium-textarea" />
-          <UserDisputePhotoUpload bookingId={booking.id} onUploaded={setUserDisputePhotos} />
-          <div className="panel-actions">
-            <button className="btn-secondary" onClick={() => setDisputeId(null)}>Cancel</button>
-            <button className="btn-danger" onClick={() => submitDispute(booking.id)}>Submit Dispute</button>
-          </div>
-        </div>
-      )}
+      {/* Dispute panel hidden as per new workflow. Dispute is only auto-raised on 1-star rating. */}
 
       {invoiceBookingId === booking.id && (() => {
         const invoice = buildInvoiceData(booking);

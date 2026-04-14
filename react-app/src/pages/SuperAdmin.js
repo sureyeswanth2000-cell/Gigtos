@@ -3,8 +3,10 @@ import { collection, onSnapshot, updateDoc, doc, query, where, orderBy, setDoc }
 import { httpsCallable } from 'firebase/functions';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db, functionsInstance } from '../firebase';
+import { useToast } from '../context/ToastContext';
 
 export default function SuperAdmin() {
+    const { addToast } = useToast();
     const [admins, setAdmins] = useState([]);
     const [escalatedBookings, setEscalatedBookings] = useState([]);
     const [allDisputes, setAllDisputes] = useState([]);
@@ -81,18 +83,18 @@ export default function SuperAdmin() {
     const suspendRegion = async (adminId) => {
         if (!window.confirm('Suspend this region lead? Their workers will not receive new assignments.')) return;
         await updateDoc(doc(db, 'admins', adminId), { regionStatus: 'suspended' });
-        alert('Region lead suspended.');
+        addToast('Region lead suspended.', 'info');
     };
 
     const reinstateRegion = async (adminId) => {
         await updateDoc(doc(db, 'admins', adminId), { regionStatus: 'active', probationStatus: false });
-        alert('Region lead reinstated.');
+        addToast('Region lead reinstated.', 'success');
     };
 
     const markWorkerFraud = async (workerId) => {
         if (!window.confirm('Mark this worker as fraudulent?')) return;
         await updateDoc(doc(db, 'gig_workers', workerId), { isFraud: true, status: 'inactive' });
-        alert('Worker marked as fraud.');
+        addToast('Worker marked as fraud.', 'warning');
     };
 
     const resolveEscalatedDispute = async (booking, decision) => {
@@ -104,24 +106,24 @@ export default function SuperAdmin() {
                 action: 'admin_resolve_dispute',
                 extraArgs: { decision }
             });
-            alert('✅ Dispute resolved');
-        } catch (err) { alert('Error: ' + err.message); }
+            addToast('✅ Dispute resolved', 'success');
+        } catch (err) { addToast('Error: ' + err.message, 'error'); }
     };
 
     const assignAdminToRegionLead = async (adminId, regionLeadId) => {
-        if (!adminId || !regionLeadId) return alert('Please select both admin and region lead');
+        if (!adminId || !regionLeadId) return addToast('Please select both admin and region lead', 'warning');
         try {
             await updateDoc(doc(db, 'admins', adminId), { parentAdminId: regionLeadId });
-            alert('✅ Admin assigned');
-        } catch (err) { alert('Error: ' + err.message); }
+            addToast('✅ Admin assigned', 'success');
+        } catch (err) { addToast('Error: ' + err.message, 'error'); }
     };
 
     const unassignAdminFromRegionLead = async (adminId) => {
         if (!window.confirm('Remove this admin from the region lead?')) return;
         try {
             await updateDoc(doc(db, 'admins', adminId), { parentAdminId: null });
-            alert('✅ Admin unassigned');
-        } catch (err) { alert('Error: ' + err.message); }
+            addToast('✅ Admin unassigned', 'success');
+        } catch (err) { addToast('Error: ' + err.message, 'error'); }
     };
 
     const createRegionAdmin = async (e) => {

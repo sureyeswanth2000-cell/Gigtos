@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
 import { SPECIAL_JOBS } from '../config/specialJobs';
 import './WorkerRegistration.css';
@@ -42,6 +44,10 @@ export default function WorkerRegistration({ onSubmit }) {
   const [submitted, setSubmitted] = useState(false);
   const [search, setSearch] = useState('');
   const [validationMsg, setValidationMsg] = useState('');
+  const [licenseFile, setLicenseFile] = useState(null);
+  const [licenseUploading, setLicenseUploading] = useState(false);
+  const [licenseUrl, setLicenseUrl] = useState('');
+  const [licenseError, setLicenseError] = useState('');
 
   const toggleJob = (job) => {
     setValidationMsg('');
@@ -58,14 +64,43 @@ export default function WorkerRegistration({ onSubmit }) {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (selected.length === 0) {
       setValidationMsg('Please select at least one job type.');
       return;
     }
+    const hasDriver = selected.some(j => j.id === 'driver');
+    if (hasDriver && !licenseUrl) {
+      setValidationMsg('Please upload your driver license image.');
+      return;
+    }
     setSubmitted(true);
-    if (onSubmit) onSubmit(selected);
+    if (onSubmit) onSubmit({ jobs: selected, licenseUrl });
+  };
+
+  const handleLicenseChange = (e) => {
+    setLicenseFile(e.target.files[0]);
+    setLicenseError('');
+  };
+
+  const uploadLicense = async () => {
+    if (!licenseFile) {
+      setLicenseError('Please select a license image.');
+      return;
+    }
+    setLicenseUploading(true);
+    setLicenseError('');
+    try {
+      const fileRef = ref(storage, `workerLicenses/${licenseFile.name}`);
+      await uploadBytes(fileRef, licenseFile);
+      const url = await getDownloadURL(fileRef);
+      setLicenseUrl(url);
+    } catch (e) {
+      setLicenseError('Upload failed. Try again.');
+    } finally {
+      setLicenseUploading(false);
+    }
   };
 
   const filteredOptions = ALL_JOB_OPTIONS.filter((job) => {
@@ -141,6 +176,24 @@ export default function WorkerRegistration({ onSubmit }) {
         />
 
         <form onSubmit={handleSubmit}>
+          {/* Show license upload if Driver is selected */}
+          {selected.some(j => j.id === 'driver') && (
+            <div className="worker-reg-license-upload">
+              <label htmlFor="license-upload">Upload Driver License (required):</label>
+              <input
+                id="license-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleLicenseChange}
+                disabled={licenseUploading}
+              />
+              <button type="button" onClick={uploadLicense} disabled={licenseUploading || !licenseFile} style={{marginLeft:8}}>
+                {licenseUploading ? 'Uploading...' : 'Upload License'}
+              </button>
+              {licenseUrl && <span style={{color:'green',marginLeft:8}}>Uploaded ✓</span>}
+              {licenseError && <div style={{color:'red'}}>{licenseError}</div>}
+            </div>
+          )}
           <div className="worker-reg-grid">
             {filteredOptions.map((job) => {
               const isChecked = !!selected.find((j) => j.id === job.id);

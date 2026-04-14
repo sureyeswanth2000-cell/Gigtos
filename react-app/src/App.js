@@ -18,7 +18,12 @@ import Chat from './pages/Chat';
 import SuperAdmin from './pages/SuperAdmin';
 import RegionLeadDashboard from './pages/RegionLeadDashboard';
 import WorkerDashboard from './pages/worker/WorkerDashboard';
+import Jobs from './pages/Jobs';
+import JobDetail from './pages/JobDetail';
 import { LocationProvider } from './context/LocationContext';
+import { ToastProvider } from './context/ToastContext';
+import RideBooking from './components/RideBooking';
+import RideTracking from './components/RideTracking';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -99,36 +104,43 @@ function App() {
 
   return (
     <BrowserRouter basename="/Gigtos">
-      <LocationProvider>
-        <Header />
-        <main style={{ minHeight: '70vh' }}>
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={user ? (isAdmin || isWorker ? <Navigate to={getPostLoginRedirect()} /> : <Home />) : <Home />} />
-            <Route path="/auth" element={user ? <Navigate to={getPostLoginRedirect()} /> : <Auth />} />
+      <ToastProvider>
+        <LocationProvider>
+          <Header />
+          <main style={{ minHeight: '70vh' }}>
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/" element={user ? (isAdmin || isWorker ? <Navigate to={getPostLoginRedirect()} /> : <Home />) : <Home />} />
+              <Route path="/auth" element={user ? <Navigate to={getPostLoginRedirect()} /> : <Auth />} />
 
-            {/* Protected User Routes */}
-            <Route path="/service" element={<ProtectedRoute><Service /></ProtectedRoute>} />
-            <Route path="/my-bookings" element={<ProtectedRoute><MyBookings /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-            <Route path="/complete-profile-phone" element={<ProtectedRoute><CompleteProfilePhone /></ProtectedRoute>} />
+              {/* Protected User Routes */}
+              <Route path="/service" element={<ProtectedRoute><Service /></ProtectedRoute>} />
+              <Route path="/my-bookings" element={<ProtectedRoute><MyBookings /></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+              <Route path="/complete-profile-phone" element={<ProtectedRoute><CompleteProfilePhone /></ProtectedRoute>} />
+              <Route path="/jobs" element={<Jobs />} />
+              <Route path="/jobs/:jobId" element={<JobDetail />} />
+              {/* Ride Booking Route */}
+              <Route path="/ride-booking" element={<ProtectedRoute><RideBooking /></ProtectedRoute>} />
+              <Route path="/ride-tracking/:rideId" element={<ProtectedRoute><RideTracking /></ProtectedRoute>} />
 
-            {/* Protected Admin Routes */}
-            <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
-            <Route path="/admin/workers" element={<ProtectedRoute requireAdmin><Workers /></ProtectedRoute>} />
-            <Route path="/admin/bookings" element={<ProtectedRoute requireAdmin><AdminBookings /></ProtectedRoute>} />
-            <Route path="/admin/region-lead" element={<ProtectedRoute requireAdmin><RegionLeadDashboard /></ProtectedRoute>} />
+              {/* Protected Admin Routes */}
+              <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
+              <Route path="/admin/workers" element={<ProtectedRoute requireAdmin><Workers /></ProtectedRoute>} />
+              <Route path="/admin/bookings" element={<ProtectedRoute requireAdmin><AdminBookings /></ProtectedRoute>} />
+              <Route path="/admin/region-lead" element={<ProtectedRoute requireAdmin><RegionLeadDashboard /></ProtectedRoute>} />
 
-            {/* Protected Worker Route */}
-            <Route path="/worker/dashboard" element={<ProtectedRoute requireWorker><WorkerDashboard /></ProtectedRoute>} />
+              {/* Protected Worker Route */}
+              <Route path="/worker/dashboard" element={<ProtectedRoute requireWorker><WorkerDashboard /></ProtectedRoute>} />
 
-            {/* Protected SuperAdmin Route */}
-            <Route path="/admin/super" element={<ProtectedRoute requireSuperAdmin><SuperAdmin /></ProtectedRoute>} />
-          </Routes>
-        </main>
-        <Footer />
-      </LocationProvider>
+              {/* Protected SuperAdmin Route */}
+              <Route path="/admin/super" element={<ProtectedRoute requireSuperAdmin><SuperAdmin /></ProtectedRoute>} />
+            </Routes>
+          </main>
+          <Footer />
+        </LocationProvider>
+      </ToastProvider>
     </BrowserRouter>
   );
 }

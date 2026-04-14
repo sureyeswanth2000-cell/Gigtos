@@ -52,6 +52,7 @@ export default function Profile() {
             email: user.email || "",
             phone: "",
             locationCity: "",
+            locationArea: "",
             locationLat: null,
             locationLng: null,
           });
@@ -91,6 +92,7 @@ export default function Profile() {
           return {
             ...prev,
             locationCity: detectedLocation.city || prev.locationCity,
+            locationArea: detectedLocation.displayName ? detectedLocation.displayName.split(',')[0].trim() : prev.locationArea,
             locationLat: detectedLocation.lat ?? prev.locationLat,
             locationLng: detectedLocation.lng ?? prev.locationLng,
           };
@@ -125,6 +127,7 @@ export default function Profile() {
         phone: profileData.phone,
         email: user.email,
         locationCity: profileData.locationCity || "",
+        locationArea: profileData.locationArea || "",
         locationLat: profileData.locationLat || null,
         locationLng: profileData.locationLng || null,
         updatedAt: new Date()
@@ -275,6 +278,18 @@ export default function Profile() {
                   value={profileData.locationCity}
                   onChange={(e) => setProfileData({ ...profileData, locationCity: e.target.value })}
                   placeholder="Enter your city"
+                  style={{
+                    flex: 1, fontSize: '14px', padding: '6px 8px',
+                    border: '1px solid #c4b5fd', borderRadius: '6px',
+                    background: '#fff', color: '#1f2937',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                <input
+                  type="text"
+                  value={profileData.locationArea}
+                  onChange={(e) => setProfileData({ ...profileData, locationArea: e.target.value })}
+                  placeholder="Enter area (e.g. Indiranagar)"
                   style={{
                     flex: 1, fontSize: '14px', padding: '6px 8px',
                     border: '1px solid #c4b5fd', borderRadius: '6px',

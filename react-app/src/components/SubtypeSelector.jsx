@@ -27,20 +27,20 @@ export default function SubtypeSelector({ subtypes = [], available = null, onSel
     <div className="subtype-grid">
       {subtypes.map((subtype) => {
         const isNearby = available === null || available.has(subtype.id);
-        const isComingSoon = subtype.comingSoon === true;
-        const isDisabled = !isNearby || isComingSoon;
+        const isUnavailable = subtype.comingSoon === true;
+        const isDisabled = !isNearby || isUnavailable;
         return (
           <button
             key={subtype.id}
             className={`subtype-card${isDisabled ? ' subtype-card--disabled' : ''}`}
             onClick={() => !isDisabled && onSelect && onSelect(subtype)}
             disabled={isDisabled}
-            title={isComingSoon ? 'Coming soon' : isNearby ? subtype.desc : 'Coming soon in your area'}
+            title={isNearby && !isUnavailable ? subtype.desc : 'All workers are occupied. Please check again shortly.'}
           >
             <span className="subtype-icon">{subtype.icon}</span>
             <span className="subtype-label">{subtype.label}</span>
-            {isComingSoon || !isNearby ? (
-              <span className="job-badge job-badge--upcoming">Coming Soon</span>
+            {isUnavailable || !isNearby ? (
+              <span className="job-badge job-badge--upcoming">Occupied</span>
             ) : (
               <span className="job-badge job-badge--available">Available</span>
             )}

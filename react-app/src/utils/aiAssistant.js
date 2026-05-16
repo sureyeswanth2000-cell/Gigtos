@@ -474,8 +474,8 @@ function haversineKm(lat1, lng1, lat2, lng2) {
  *
  * The AI calls this function every time a user message is processed to
  * determine whether the requested service is available nearby. If no
- * workers are within `radiusKm`, the AI informs the user that the
- * service will come to their area soon.
+ * workers are within `radiusKm`, the AI informs the user that workers
+ * are occupied right now and asks them to check again shortly.
  *
  * @param {object}   params
  * @param {string}   params.serviceName   – the service the user is asking about
@@ -528,7 +528,7 @@ export function checkServiceNearby({
   return {
     isNearby: false,
     nearbyCount: 0,
-    message: `📍 ${serviceName} service is not available in your area yet. Don't worry — the service will come to your area soon! We're expanding rapidly. You can still book and we'll connect you with the nearest available worker.`,
+    message: `${serviceName} workers are occupied right now in your area. Please check again shortly or try another nearby service.`,
   };
 }
 
@@ -663,7 +663,7 @@ export function buildLocalAssistantFallback({ message = '', selectedService = ''
     if (matchedService) {
       const insight = getInsightForService(insights, matchedService.name);
       const priceInfo = insight ? ` Typical pricing: ${formatPriceInsight(insight)}.` : '';
-      const upcomingNote = matchedService.isUpcoming ? ' (Coming soon — stay tuned!)' : '';
+      const upcomingNote = matchedService.isUpcoming ? ' (Workers are not available right now. Please check again shortly.)' : '';
       return `${matchedService.icon} **${matchedService.name}**: ${matchedService.desc}.${priceInfo}${upcomingNote} Would you like to book this service?`;
     }
     return `We offer a variety of services! Currently available: ${activeNames}. Tell me which one you'd like to know more about, or describe your problem and I'll match you with the right service.`;
@@ -701,7 +701,7 @@ export function buildLocalAssistantFallback({ message = '', selectedService = ''
   if (/(available|availability|open|ready|free|nearby)/i.test(lowerMessage)) {
     const matchedService = findRelevantService(message);
     if (matchedService) {
-      const upcomingNote = matchedService.isUpcoming ? ' This service is coming soon — you can sign up to be notified!' : ' Workers are standing by.';
+      const upcomingNote = matchedService.isUpcoming ? ' Workers for this service are not available right now. Please check again shortly.' : ' Workers are standing by.';
       return `${matchedService.name} is on Gigtos!${upcomingNote} Would you like to book or learn more?`;
     }
     return `Currently available: ${activeNames}. Tell me which service you need and I'll check availability in your area!`;

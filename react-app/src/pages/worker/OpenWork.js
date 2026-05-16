@@ -100,7 +100,7 @@ export default function OpenWork() {
           <div className="empty-state">
             <div className="empty-icon">📭</div>
             <h3>No open jobs</h3>
-            <p>No jobs available in your area right now. Check back soon!</p>
+            <p>No jobs available in your area right now. Please check again shortly.</p>
           </div>
         ) : (
           filtered.map(job => (

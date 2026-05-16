@@ -235,7 +235,7 @@ describe('checkServiceNearby', () => {
     });
     expect(result.isNearby).toBe(false);
     expect(result.nearbyCount).toBe(0);
-    expect(result.message).toContain('will come to your area soon');
+    expect(result.message).toContain('workers are occupied right now');
   });
 
   it('ignores unavailable workers', () => {
@@ -293,7 +293,7 @@ describe('checkServiceNearby', () => {
     });
     expect(result.isNearby).toBe(false);
     expect(result.nearbyCount).toBe(0);
-    expect(result.message).toContain('will come to your area soon');
+    expect(result.message).toContain('workers are occupied right now');
   });
 
   it('counts multiple nearby workers', () => {
@@ -326,7 +326,7 @@ describe('buildLocalAssistantFallback with nearbyCheck', () => {
   const notNearby = {
     isNearby: false,
     nearbyCount: 0,
-    message: '📍 Plumber service is not available in your area yet. Don\'t worry — the service will come to your area soon! We\'re expanding rapidly. You can still book and we\'ll connect you with the nearest available worker.',
+    message: 'Plumber workers are occupied right now in your area. Please check again shortly or try another nearby service.',
   };
 
   const isNearby = {
@@ -341,7 +341,7 @@ describe('buildLocalAssistantFallback with nearbyCheck', () => {
       nearbyCheck: notNearby,
     });
     expect(reply).toContain('Plumber');
-    expect(reply).toContain('will come to your area soon');
+    expect(reply).toContain('workers are occupied right now');
   });
 
   it('does not append proximity notice when service is nearby', () => {
@@ -350,7 +350,7 @@ describe('buildLocalAssistantFallback with nearbyCheck', () => {
       nearbyCheck: isNearby,
     });
     expect(reply).toContain('Plumber');
-    expect(reply).not.toContain('will come to your area soon');
+    expect(reply).not.toContain('workers are occupied right now');
   });
 
   it('appends proximity notice for urgent requests when not nearby', () => {
@@ -360,7 +360,7 @@ describe('buildLocalAssistantFallback with nearbyCheck', () => {
     });
     expect(reply).toContain('urgent');
     expect(reply).toContain('Plumber');
-    expect(reply).toContain('will come to your area soon');
+    expect(reply).toContain('workers are occupied right now');
   });
 
   it('appends proximity notice to catch-all service match when not nearby', () => {
@@ -369,7 +369,7 @@ describe('buildLocalAssistantFallback with nearbyCheck', () => {
       nearbyCheck: notNearby,
     });
     expect(reply).toContain('Plumber');
-    expect(reply).toContain('will come to your area soon');
+    expect(reply).toContain('workers are occupied right now');
   });
 
   it('works normally without nearbyCheck (backwards compatible)', () => {
@@ -377,6 +377,6 @@ describe('buildLocalAssistantFallback with nearbyCheck', () => {
       message: 'book a plumber',
     });
     expect(reply).toContain('Plumber');
-    expect(reply).not.toContain('will come to your area soon');
+    expect(reply).not.toContain('workers are occupied right now');
   });
 });

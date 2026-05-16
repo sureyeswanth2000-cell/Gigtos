@@ -249,7 +249,7 @@
   text-transform: uppercase;
 }
 
-.coming-soon-chip {
+.availability-chip {
   background: var(--warning-bg);
   color: var(--warning);
   padding: 4px 12px;

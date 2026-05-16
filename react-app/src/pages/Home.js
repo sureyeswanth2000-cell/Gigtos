@@ -15,6 +15,23 @@ import './Home.css';
 
 const GEO_RADIUS_KM = 10;
 
+function isMaidOrCoreHelp(job) {
+  const text = `${job?.name || ''} ${job?.category || ''} ${(job?.keywords || []).join(' ')}`.toLowerCase();
+  return /(maid|helper|household|home help|kitchen|clean|bathroom|bedroom|laundry|cook)/.test(text);
+}
+
+function getAvailabilityLevel(availabilityMap, job) {
+  if (!availabilityMap) return null;
+  return availabilityMap[String(job.id)] || availabilityMap[job.name] || 'none';
+}
+
+function shouldShowHomeService(job, availabilityMap) {
+  const isCoreHelp = isMaidOrCoreHelp(job);
+  if (!availabilityMap) return !job.isUpcoming || isCoreHelp;
+  const level = getAvailabilityLevel(availabilityMap, job);
+  return level === 'area' || level === 'city' || isCoreHelp;
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const [selectedService, setSelectedService] = useState(null);
@@ -92,7 +109,8 @@ export default function Home() {
   ];
 
   const handleBookService = (job) => {
-    const isAvailable = availableJobIds && availableJobIds[String(job.id)] && availableJobIds[String(job.id)] !== 'none';
+    const availLevel = getAvailabilityLevel(availableJobIds, job);
+    const isAvailable = availLevel === 'area' || availLevel === 'city';
     if (!isAvailable) return;
 
     if (!auth.currentUser) {
@@ -106,7 +124,10 @@ export default function Home() {
 
   const handleHeroSearchSubmit = (event) => {
     event.preventDefault();
-    const first = visibleServices[0];
+    const first = visibleHomeServices.find((job) => {
+      const level = getAvailabilityLevel(availableJobIds, job);
+      return level === 'area' || level === 'city';
+    });
     if (first) handleBookService(first);
   };
 
@@ -138,6 +159,7 @@ export default function Home() {
       || (job.keywords || []).some((kw) => kw.toLowerCase().includes(query))
     );
   });
+  const visibleHomeServices = visibleServices.filter((job) => shouldShowHomeService(job, availableJobIds));
 
   return (
     <div className="home-page">
@@ -207,17 +229,20 @@ export default function Home() {
         </div>
 
         <div className="services-grid">
-          {visibleServices.map((job) => {
-            const availLevel = availableJobIds ? availableJobIds[String(job.id)] : 'none';
+          {visibleHomeServices.map((job) => {
+            const availLevel = getAvailabilityLevel(availableJobIds, job);
             const isAvailable = availLevel === 'area' || availLevel === 'city';
             const isCheckingAvailability = availableJobIds === null && location;
+            const isOccupied = !isCheckingAvailability && !isAvailable && isMaidOrCoreHelp(job);
 
             return (
-              <article key={job.id} className={`service-card${!isAvailable ? ' service-card--disabled' : ''}`}>
+              <article key={job.id} className={`service-card${!isAvailable ? ' service-card--disabled' : ''}${isOccupied ? ' service-card--occupied' : ''}`}>
                 <div className="service-top">
                   <span className="service-icon" role="img" aria-label={job.name}>{job.icon || '🔧'}</span>
-                  {!isAvailable ? (
-                    <span className="coming-soon-chip">Coming Soon</span>
+                  {isOccupied ? (
+                    <span className="availability-chip">Occupied</span>
+                  ) : !isAvailable ? (
+                    <span className="availability-chip">Checking</span>
                   ) : (
                     <span className="verified-chip">
                       {availLevel === 'area' ? 'Near You' : 'Verified'}
@@ -225,7 +250,7 @@ export default function Home() {
                   )}
                 </div>
                 <h3>{job.name}</h3>
-                <p>{job.desc}</p>
+                <p>{isOccupied ? 'All workers are occupied right now. Please check again shortly.' : job.desc}</p>
                 <div className="service-card-actions">
                   <button 
                     className="btn-primary" 
@@ -235,7 +260,7 @@ export default function Home() {
                       background: availLevel === 'area' ? 'linear-gradient(135deg, #10b981, #059669)' : ''
                     }}
                   >
-                    {!isAvailable ? 'Notify Me' : (isCheckingAvailability ? 'Checking...' : (job.isSpecial ? 'Options' : 'Book Now'))}
+                    {isOccupied ? 'All workers occupied' : (!isAvailable ? 'Checking...' : (isCheckingAvailability ? 'Checking...' : (job.isSpecial ? 'Options' : 'Book Now')))}
                   </button>
                 </div>
               </article>
@@ -243,7 +268,7 @@ export default function Home() {
           })}
         </div>
 
-        {visibleServices.length === 0 && (
+        {visibleHomeServices.length === 0 && (
           <div className="no-services-note">
             No services found. Try asking our <strong>Gito AI</strong> for a custom quote.
           </div>
@@ -366,7 +391,7 @@ export default function Home() {
                             display: 'block',
                             marginTop: '4px'
                           }}>
-                            Coming Soon in {cityName}
+                            All workers are occupied in {cityName}. Please check again shortly.
                           </span>
                         )}
                         {subAvail === 'area' && (

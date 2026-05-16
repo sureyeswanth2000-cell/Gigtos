@@ -58,6 +58,8 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] Use max score `1000`.
 - [x] Worker starts at `500`.
 - [x] Consumer starts at `0`.
+- [ ] Add a humane SocioScore floor rule: once a consumer/worker has reached an active marketplace score, inactivity decay or normal penalties must never push the displayed finalized score below `450`; if risk is serious, use booking restrictions, review, and recovery missions instead of showing a demoralizing sub-450 score.
+- [ ] Revisit Copper tier wording after the 450 floor: Copper should become a monitored/recovery state at the floor or for reviewed high-risk behavior, not a public shame score that hurts returning inactive users.
 - [ ] Store every score change in `score_events`:
   - actorId
   - actorRole

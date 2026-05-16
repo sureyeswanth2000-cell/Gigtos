@@ -9,6 +9,17 @@ import NearbyMessage from './NearbyMessage';
 
 const GEO_RADIUS_KM = 20;
 
+function isMaidOrCoreHelp(job) {
+  const text = `${job?.name || ''} ${job?.category || ''} ${(job?.keywords || []).join(' ')}`.toLowerCase();
+  return /(maid|helper|household|home help|kitchen|clean|bathroom|bedroom|laundry|cook)/.test(text);
+}
+
+function shouldShowConsumerJob(job, availabilityMap) {
+  if (!availabilityMap) return !job.isUpcoming || isMaidOrCoreHelp(job);
+  const level = availabilityMap[String(job.id)] || 'none';
+  return level === 'area' || level === 'city' || isMaidOrCoreHelp(job);
+}
+
 /**
  * JobList – geo-filtered list of available jobs.
  * Queries the backend for available jobs within 20km of the user's location.
@@ -42,7 +53,7 @@ export default function JobList({ onBook }) {
       });
   }, [location]);
 
-  const filteredJobs = ALL_JOBS.filter((job) => {
+  const filteredJobs = ALL_JOBS.filter((job) => shouldShowConsumerJob(job, availableJobIds)).filter((job) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return job.name.toLowerCase().includes(q) || job.desc.toLowerCase().includes(q) || (job.category || '').toLowerCase().includes(q);

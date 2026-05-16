@@ -145,7 +145,7 @@ export default function AiActivityMonitor({ onBookWorker }) {
 
         {!loading && workers.length === 0 && (
           <div className="ai-empty">
-            No workers available within {NEARBY_RADIUS_KM} km right now. Check back soon or browse services below.
+            No workers available within {NEARBY_RADIUS_KM} km right now. Please check again shortly or browse services below.
           </div>
         )}
 

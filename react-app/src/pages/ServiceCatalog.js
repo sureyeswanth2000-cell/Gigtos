@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { getRecruitableServices, getLaunchServices, SERVICE_ICON_LABELS } from '../utils/serviceCatalog';
+import { getLaunchServices, getRecruitableServices, SERVICE_ICON_LABELS } from '../utils/serviceCatalog';
 import { formatPriceBand, getSuggestedPriceBand } from '../utils/priceIntelligence';
 import './ServiceCatalog.css';
 
@@ -107,7 +107,7 @@ export default function ServiceCatalog() {
                   <div className="service-card-image">
                     <img src={SERVICE_IMAGES[service.id]} alt="" loading="lazy" />
                     <span>{SERVICE_ICON_LABELS[service.icon] || service.category}</span>
-                    <em>{isLaunch ? 'Verified MVP' : 'Recruiting'}</em>
+                    <em>Verified</em>
                   </div>
                   <div className="service-card-body">
                     <div className="service-catalog-card-top">
@@ -116,7 +116,7 @@ export default function ServiceCatalog() {
                         <strong>{service.name}</strong>
                       </div>
                       <em className={isLaunch ? 'launch' : ''}>
-                        {isLaunch ? 'Ready' : 'Soon'}
+                        {isLaunch ? 'Area ready' : 'City-wide'}
                       </em>
                     </div>
                     <div className="service-catalog-meta">

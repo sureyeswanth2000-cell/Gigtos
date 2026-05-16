@@ -1,0 +1,92 @@
+.super-admin-shell {
+  min-height: 100vh;
+  background: var(--bg-main);
+  padding: 48px 32px 96px;
+}
+
+.super-admin-main {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.super-admin-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+  margin-bottom: 42px;
+}
+
+.super-admin-hero h1 {
+  margin: 0;
+  font-size: clamp(34px, 4vw, 48px);
+  letter-spacing: 0;
+}
+
+.super-admin-hero p {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.super-admin-health-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  padding: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.super-admin-health-pill span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  border-radius: 8px;
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  padding: 0 18px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.super-admin-health-pill button {
+  border: none;
+  border-radius: 8px;
+  background: var(--primary-purple);
+  color: white;
+  min-height: 48px;
+  padding: 0 22px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.super-admin-shell .job-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.super-admin-shell .input-field {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-main);
+  padding: 12px 14px;
+}
+
+@media (max-width: 850px) {
+  .super-admin-shell {
+    padding: 32px 16px 96px;
+  }
+
+  .super-admin-hero,
+  .super-admin-health-pill {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

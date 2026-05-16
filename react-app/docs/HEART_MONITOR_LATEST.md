@@ -1,7 +1,7 @@
 # Heart Monitor Latest
 
-- Run ID: 2026-05-16T14-59-34-207Z
-- Time: 2026-05-16T15:00:09.344Z
+- Run ID: 2026-05-16T17-53-42-545Z
+- Time: 2026-05-16T17:55:03.528Z
 - Status: PASS
 - Scope: local base smoke plus built route/asset checks, dev-auth UI interactions, and optional non-payment live/staging checks when GIGTOS_SMOKE_URL is set. Razorpay/payment checks and production cleanup are excluded.
 
@@ -12,19 +12,19 @@
 - Result: PASS
 - Expected: success
 - Exit code: 0
-- Duration: 4533 ms
+- Duration: 21149 ms
 
 ```text
 > gigto-react@0.1.0 smoke:booking
 > react-scripts test src/__tests__/basicBookingSmoke.test.js --watchAll=false
 PASS src/__tests__/basicBookingSmoke.test.js
   basic booking smoke loop
-    √ runs consumer booking to worker completion photo to consumer rating and score event (4 ms)
-    √ keeps dev bypass disabled unless explicitly enabled (9 ms)
+    √ runs consumer booking to worker completion photo to consumer rating and score event (11 ms)
+    √ keeps dev bypass disabled unless explicitly enabled (25 ms)
 Test Suites: 1 passed, 1 total
 Tests:       2 passed, 2 total
 Snapshots:   0 total
-Time:        0.982 s, estimated 1 s
+Time:        2.3 s
 Ran all test suites matching /src\\__tests__\\basicBookingSmoke.test.js/i.
 ```
 
@@ -33,7 +33,7 @@ Ran all test suites matching /src\\__tests__\\basicBookingSmoke.test.js/i.
 - Result: PASS
 - Expected: success
 - Exit code: 0
-- Duration: 638 ms
+- Duration: 1427 ms
 
 ```text
 Warning: REACT_APP_ENABLE_DEV_BYPASS=true. This is allowed for local build only; production deploy uses build:prod.
@@ -44,7 +44,7 @@ Warning: REACT_APP_ENABLE_DEV_BYPASS=true. This is allowed for local build only;
 - Result: PASS
 - Expected: failure
 - Exit code: 1
-- Duration: 655 ms
+- Duration: 2678 ms
 
 ```text
 Production deploy build blocked: REACT_APP_ENABLE_DEV_BYPASS=true. Disable dev bypass before production deploy.
@@ -55,7 +55,7 @@ Production deploy build blocked: REACT_APP_ENABLE_DEV_BYPASS=true. Disable dev b
 - Result: PASS
 - Expected: success
 - Exit code: 0
-- Duration: 20481 ms
+- Duration: 45003 ms
 
 ```text
 > gigto-react@0.1.0 build:prod
@@ -63,18 +63,18 @@ Production deploy build blocked: REACT_APP_ENABLE_DEV_BYPASS=true. Disable dev b
 Creating an optimized production build...
 Compiled successfully.
 File sizes after gzip:
-  286.09 kB (+2.18 kB)  build\static\js\main.3eed2da2.js
-  128.17 kB             build\static\js\389.65760ce4.chunk.js
-  46.35 kB              build\static\js\239.c5533e99.chunk.js
-  42.9 kB               build\static\js\455.10703399.chunk.js
-  15.63 kB (+334 B)     build\static\css\main.e41e394b.css
-  8.73 kB               build\static\js\977.c6e18bef.chunk.js
+  287.5 kB (+1.46 kB)  build\static\js\main.d4d603ef.js
+  128.17 kB            build\static\js\389.65760ce4.chunk.js
+  46.35 kB             build\static\js\239.c5533e99.chunk.js
+  42.9 kB              build\static\js\455.10703399.chunk.js
+  17.5 kB (+1.87 kB)   build\static\css\main.ade39fc9.css
+  8.73 kB              build\static\js\977.c6e18bef.chunk.js
 The project was built assuming it is hosted at /Gigtos/.
 You can control this with the homepage field in your package.json.
 The build folder is ready to be deployed.
 Find out more about deployment here:
   https://cra.link/deployment
-(node:15728) [DEP0176] DeprecationWarning: fs.F_OK is deprecated, use fs.constants.F_OK instead
+(node:16032) [DEP0176] DeprecationWarning: fs.F_OK is deprecated, use fs.constants.F_OK instead
 (Use `node --trace-deprecation ...` to show where the warning was created)
 ```
 
@@ -83,7 +83,7 @@ Find out more about deployment here:
 - Result: PASS
 - Expected: success
 - Exit code: 0
-- Duration: 1713 ms
+- Duration: 2100 ms
 
 ```text
 PASS Route /Gigtos/auth - 200 text/html; charset=utf-8
@@ -102,8 +102,8 @@ PASS Route /Gigtos/worker/history - 200 text/html; charset=utf-8
 PASS Route /Gigtos/operator - 200 text/html; charset=utf-8
 PASS Route /Gigtos/admin/bookings - 200 text/html; charset=utf-8
 PASS Route /Gigtos/admin/super - 200 text/html; charset=utf-8
-PASS Asset /Gigtos/static/js/main.3eed2da2.js - 200 application/javascript; charset=utf-8
-PASS Asset /Gigtos/static/css/main.e41e394b.css - 200 text/css; charset=utf-8
+PASS Asset /Gigtos/static/js/main.d4d603ef.js - 200 application/javascript; charset=utf-8
+PASS Asset /Gigtos/static/css/main.ade39fc9.css - 200 text/css; charset=utf-8
 ```
 
 ### 6. Dev-auth UI smoke: consumer service page and worker dashboard interactions
@@ -111,7 +111,7 @@ PASS Asset /Gigtos/static/css/main.e41e394b.css - 200 text/css; charset=utf-8
 - Result: PASS
 - Expected: success
 - Exit code: 0
-- Duration: 5616 ms
+- Duration: 6780 ms
 
 ```text
       at render (node_modules/@testing-library/react/dist/pure.js:247:10)
@@ -123,14 +123,14 @@ PASS Asset /Gigtos/static/css/main.e41e394b.css - 200 text/css; charset=utf-8
       at runCLI (node_modules/@jest/core/build/cli/index.js:173:3)
 PASS src/__tests__/devAuthUiSmoke.test.js
   dev-auth UI smoke
-    √ opens the protected service booking screen as a dev consumer and updates smart match (252 ms)
-    √ opens the public service catalog with launch and recruitable services (52 ms)
-    √ opens the protected worker dashboard as a dev worker and reaches completion-photo modal (78 ms)
-    √ opens the protected field operator console as a dev field operator (83 ms)
+    √ opens the protected service booking screen as a dev consumer and updates smart match (329 ms)
+    √ opens the public service catalog with launch and recruitable services (85 ms)
+    √ opens the protected worker dashboard as a dev worker and reaches completion-photo modal (121 ms)
+    √ opens the protected field operator console as a dev field operator (124 ms)
 Test Suites: 1 passed, 1 total
 Tests:       4 passed, 4 total
 Snapshots:   0 total
-Time:        2.082 s, estimated 4 s
+Time:        2.569 s, estimated 8 s
 Ran all test suites matching /src\\__tests__\\devAuthUiSmoke.test.js/i.
 ```
 
@@ -139,7 +139,7 @@ Ran all test suites matching /src\\__tests__\\devAuthUiSmoke.test.js/i.
 - Result: PASS
 - Expected: success
 - Exit code: 0
-- Duration: 1499 ms
+- Duration: 1844 ms
 
 ```text
 > gigto-react@0.1.0 smoke:live

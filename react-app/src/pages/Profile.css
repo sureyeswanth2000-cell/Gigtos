@@ -7,9 +7,9 @@
 }
 
 .profile-page {
-  max-width: 1120px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 30px 20px 80px;
+  padding: 48px 48px 96px;
   color: var(--text-main);
 }
 
@@ -26,8 +26,13 @@
   justify-content: space-between;
   align-items: center;
   gap: 24px;
-  padding: 30px;
-  margin-bottom: 18px;
+  padding: 0;
+  margin-bottom: 24px;
+  min-height: 260px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(20, 28, 43, 0.1), rgba(248, 249, 255, 0.9)),
+    url('https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1600&q=80') center/cover;
 }
 
 .profile-kicker {
@@ -54,6 +59,13 @@
   margin: 10px 0 0;
   color: var(--text-muted);
   max-width: 680px;
+}
+
+.profile-hero > div:first-child {
+  align-self: end;
+  width: 100%;
+  padding: 108px 32px 32px;
+  background: linear-gradient(180deg, transparent, var(--bg-surface));
 }
 
 .profile-readiness {
@@ -100,13 +112,13 @@
 
 .profile-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 24px;
   align-items: start;
 }
 
 .profile-card {
-  padding: 22px;
+  padding: 28px;
 }
 
 .profile-card-header {
@@ -353,12 +365,21 @@
 
 @media (max-width: 620px) {
   .profile-page {
-    padding: 18px 12px 80px;
+    padding: 18px 20px 96px;
   }
 
   .profile-hero,
   .profile-card {
-    padding: 18px;
+    padding: 20px;
+  }
+
+  .profile-hero {
+    min-height: 210px;
+    padding: 0;
+  }
+
+  .profile-hero > div:first-child {
+    padding: 90px 20px 20px;
   }
 
   .profile-form-grid,

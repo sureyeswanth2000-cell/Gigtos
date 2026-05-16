@@ -9,11 +9,10 @@ export default function Footer() {
           {/* Brand Info */}
           <div className="footer-brand">
             <div className="footer-logo">
-              <span className="logo-icon">🏠</span>
               <span className="logo-text">Gigtos</span>
             </div>
             <p className="footer-tagline">
-              Connecting skilled workers with opportunities. The future of the gig economy, built for speed and trust.
+              A premium marketplace for verified local services, built for security, quality, and trust in every booking.
             </p>
             <div className="footer-socials">
               <a href="https://x.com" target="_blank" rel="noreferrer" className="social-link">𝕏</a>
@@ -57,16 +56,16 @@ export default function Footer() {
       <style>{`
         .premium-footer {
           margin-top: 100px;
-          background: var(--glass-bg);
-          backdrop-filter: var(--glass-blur);
-          border-top: 1px solid var(--glass-border);
-          padding: 80px 24px 40px;
+          background: var(--bg-soft);
+          backdrop-filter: none;
+          border-top: 1px solid var(--border-light);
+          padding: 72px 48px 40px;
           position: relative;
           z-index: 10;
         }
 
         .footer-container {
-          max-width: 1200px;
+          max-width: 1280px;
           margin: 0 auto;
         }
 
@@ -94,7 +93,7 @@ export default function Footer() {
           font-weight: 800;
           font-size: 24px;
           color: var(--primary-purple);
-          letter-spacing: -0.5px;
+          letter-spacing: 0;
         }
 
         .footer-tagline {

@@ -5,6 +5,7 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db, functionsInstance } from '../firebase';
 import { useToast } from '../context/ToastContext';
 import { buildCopperMonitorSummary } from '../utils/socioScore';
+import './SuperAdmin.css';
 
 export default function SuperAdmin() {
     const { addToast } = useToast();
@@ -197,21 +198,19 @@ export default function SuperAdmin() {
     };
 
     return (
-        <div className="dash-container" style={{ minHeight: '100vh', background: 'var(--bg-main)', padding: '40px 20px' }}>
-            <main style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div className="super-admin-shell dash-container">
+            <main className="super-admin-main">
                 
                 {/* Global Header */}
-                <header style={{ 
-                    background: 'var(--primary-purple-glow)', 
-                    backdropFilter: 'var(--glass-blur)',
-                    border: '1px solid var(--primary-purple)',
-                    borderRadius: 'var(--radius-xl)',
-                    padding: '48px',
-                    marginBottom: '40px',
-                    boxShadow: 'var(--glass-shadow)'
-                }}>
-                    <h1 style={{ fontSize: 'var(--font-xl)', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>SuperAdmin Control Center</h1>
-                    <p style={{ color: 'var(--text-muted)', fontWeight: 600, marginTop: 12 }}>Governance & Global Logistics Oversight</p>
+                <header className="super-admin-hero">
+                    <div>
+                        <h1>Super Admin Overview</h1>
+                        <p>System performance, trust controls, and global ecosystem health.</p>
+                    </div>
+                    <div className="super-admin-health-pill">
+                        <span>System Status: Optimal</span>
+                        <button type="button">Export Report</button>
+                    </div>
                 </header>
 
                 {/* Summary Grid */}

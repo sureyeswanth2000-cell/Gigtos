@@ -60,9 +60,9 @@ export default function Home() {
   }, [location]);
 
   const trustPillars = [
-    '🛡️ Identity Verified Pro\'s',
-    '💰 Transparent Pre-quotes',
-    '⚡ On-demand Response',
+    'Identity verified workers',
+    'Transparent price guidance',
+    'On-demand response',
   ];
 
   const steps = [
@@ -144,16 +144,16 @@ export default function Home() {
       {/* Hero Section */}
       <section className="hero-shell" id="discover">
         <div className="hero-intro">
-          <span className="eyebrow">Local Network: {cityName}</span>
-          <h1>Premium Home Services, Booked in Minutes.</h1>
+          <span className="eyebrow">Gigtos verified marketplace</span>
+          <h1>Find Verified Service Providers</h1>
           <p className="hero-subtext">
-            Connecting you with top-tier verified professionals for any task, with instant transparent quotes.
+            Expert-led, secure, and simple booking for maid help, cleaning, repair, and emergency work near {cityName}.
           </p>
           <form className="hero-service-search" onSubmit={handleHeroSearchSubmit}>
             <input
               value={serviceSearch}
               onChange={(event) => setServiceSearch(event.target.value)}
-              placeholder="What do you need today?"
+              placeholder="What service do you need?"
               aria-label="Search and book a service"
             />
             <button type="submit">Book</button>
@@ -166,6 +166,16 @@ export default function Home() {
             {trustPillars.map((pillar) => (
               <span key={pillar} className="trust-pill">{pillar}</span>
             ))}
+          </div>
+        </div>
+        <div className="hero-media" aria-hidden="true">
+          <img
+            src="https://images.unsplash.com/photo-1600880292203-757bb62b4baf?auto=format&fit=crop&w=1000&q=80"
+            alt=""
+          />
+          <div className="hero-proof-card">
+            <strong>10,000+ verified pros</strong>
+            <span>Quality checked before every marketplace launch.</span>
           </div>
         </div>
       </section>

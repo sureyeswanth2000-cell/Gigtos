@@ -112,7 +112,6 @@ export default function Header() {
     <header className="premium-header">
       {/* Logo */}
       <Link to="/" className="header-logo">
-        <span className="logo-icon">🏠</span>
         <span className="logo-text">Gigtos</span>
       </Link>
 
@@ -150,8 +149,9 @@ export default function Header() {
           <>
             {/* Desktop Quick Nav */}
             <nav className="desktop-nav">
-              <Link to="/" className="nav-link">Home</Link>
-              <Link to="/services" className="nav-link">Services</Link>
+              <Link to="/services" className="nav-link">Find Services</Link>
+              <Link to="/#how-it-works" className="nav-link">How it Works</Link>
+              <Link to="/profile" className="nav-link">Verify Identity</Link>
               {!isWorker && (
                 <Link to="/jobs" className="nav-link">Browse Jobs</Link>
               )}
@@ -250,24 +250,24 @@ export default function Header() {
           </>
         ) : (
           <button className="login-btn" onClick={() => navigate('/auth')}>
-            🔐 Login
+            Sign In
           </button>
         )}
       </div>
 
       <style>{`
         .premium-header {
-          padding: 12px 24px;
-          background: var(--glass-bg);
-          backdrop-filter: var(--glass-blur);
-          border-bottom: 1px solid var(--glass-border);
+          padding: 18px 48px;
+          background: var(--bg-surface);
+          backdrop-filter: none;
+          border-bottom: 1px solid var(--border-light);
           display: flex;
           justify-content: space-between;
           align-items: center;
           position: sticky;
           top: 0;
           z-index: 1000;
-          box-shadow: var(--glass-shadow);
+          box-shadow: none;
           transition: all var(--motion-base);
         }
 
@@ -280,9 +280,9 @@ export default function Header() {
 
         .logo-text {
           font-weight: 800;
-          font-size: 24px;
+          font-size: 30px;
           color: var(--primary-purple);
-          letter-spacing: -1px;
+          letter-spacing: 0;
         }
 
         .header-actions {
@@ -301,7 +301,7 @@ export default function Header() {
           position: relative;
           background: var(--bg-surface);
           border: 1px solid var(--border-light);
-          border-radius: 8px;
+          border-radius: 999px;
           padding: 6px;
           box-shadow: var(--shadow-sm);
         }
@@ -320,8 +320,8 @@ export default function Header() {
         .header-search button[type="submit"] {
           border: none;
           border-radius: 7px;
-          background: var(--text-main);
-          color: var(--bg-surface);
+          background: var(--primary-purple);
+          color: white;
           font-size: 12px;
           font-weight: 800;
           padding: 8px 12px;
@@ -376,7 +376,7 @@ export default function Header() {
 
         .nav-link {
           color: var(--text-main);
-          font-size: 14px;
+          font-size: 16px;
           font-weight: 600;
           opacity: 0.8;
           transition: opacity 0.2s;
@@ -512,7 +512,7 @@ export default function Header() {
 
         .login-btn {
           padding: 8px 20px;
-          background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark));
+          background: var(--primary-purple);
           color: white;
           border: none;
           border-radius: var(--radius-pill);

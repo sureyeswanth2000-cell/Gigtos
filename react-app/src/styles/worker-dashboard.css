@@ -1,13 +1,13 @@
 /* Worker Dashboard CSS */
 :root {
-  --primary-purple: #A259FF;
-  --purple-dark: #7C3AED;
+  --primary-purple: #7a2ad6;
+  --purple-dark: #641fb5;
   --purple-light: #EDE9FE;
   --purple-mid: #C4B5FD;
-  --worker-bg: #F5F3FF;
+  --worker-bg: #f8f9ff;
   --card-bg: #FFFFFF;
-  --text-main: #1F1144;
-  --text-sub: #6B7280;
+  --text-main: #141c2b;
+  --text-sub: #554d5f;
   --green-active: #10B981;
   --green-light: #D1FAE5;
   --red-inactive: #EF4444;
@@ -16,8 +16,8 @@
   --orange-light: #FEF3C7;
   --card-shadow: 0 2px 12px rgba(162,89,255,0.10);
   --card-shadow-hover: 0 8px 24px rgba(162,89,255,0.18);
-  --border-radius: 14px;
-  --border-color: #E9D5FF;
+  --border-radius: 8px;
+  --border-color: #d6c9e0;
 }
 
 [data-theme='dark'] {
@@ -43,9 +43,9 @@
 }
 
 .worker-container {
-  max-width: 480px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 32px 24px;
 }
 
 .worker-page-topbar {
@@ -77,18 +77,18 @@
 }
 
 .worker-header-section {
-  background: linear-gradient(135deg, #7C3AED 0%, #A259FF 100%);
+  background: var(--primary-purple);
   color: white;
   padding: 24px 20px 32px;
-  border-radius: 0 0 20px 20px;
-  margin: -16px -16px 20px;
+  border-radius: 8px;
+  margin: 0 0 20px;
 }
 
 .worker-command-strip {
   display: grid;
   grid-template-columns: 1.35fr 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 14px;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
 .worker-command-strip button,
@@ -480,13 +480,13 @@
 /* Nav Cards Grid */
 .nav-cards-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 10px;
   margin-bottom: 16px;
 }
 .nav-card {
   background: var(--card-bg);
-  border-radius: 14px;
+  border-radius: 8px;
   padding: 16px 8px;
   display: flex;
   flex-direction: column;
@@ -621,6 +621,23 @@
   border-radius: 4px;
   height: 8px;
   overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .worker-container {
+    max-width: 480px;
+    padding: 16px;
+  }
+
+  .worker-header-section {
+    margin: -16px -16px 20px;
+    border-radius: 0 0 20px 20px;
+  }
+
+  .worker-command-strip {
+    grid-template-columns: 1.35fr 1fr 1fr;
+    gap: 8px;
+  }
 }
 
 [data-theme='dark'] .worker-page,

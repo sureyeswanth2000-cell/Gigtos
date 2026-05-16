@@ -7,6 +7,7 @@ import { getAdminRedirectPath, isRegionSuspended } from '../utils/authRouting';
 import { detectCurrentLocation } from '../context/LocationContext';
 import { SPECIAL_JOBS } from '../config/specialJobs';
 import { useToast } from '../context/ToastContext';
+import './Auth.css';
 
 const SIGNUP_JOB_TYPES = [
   ...SPECIAL_JOBS.map(sj => sj.id),
@@ -181,7 +182,7 @@ function Auth() {
   };
 
   return (
-    <div style={{ 
+    <div className="auth-page" style={{ 
       minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',
@@ -192,7 +193,15 @@ function Auth() {
       overflow: 'hidden'
     }}>
       {/* Dynamic Background Elements */}
-      <div style={{ 
+      <section className="auth-visual-panel" aria-hidden="true">
+        <div>
+          <span>Identity Verified</span>
+          <h2>Connect with trusted local professionals.</h2>
+          <p>Gigtos keeps login simple for consumers and gives workers a clean path into verified marketplace work.</p>
+        </div>
+      </section>
+
+      <div className="auth-card" style={{ 
         position: 'absolute', 
         top: '10%', 
         left: '10%', 

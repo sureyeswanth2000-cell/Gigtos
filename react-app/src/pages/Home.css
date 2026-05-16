@@ -452,3 +452,107 @@
   .hero-actions .primary-btn, .hero-actions .secondary-btn { width: 100%; }
   .services-section, .steps-section, .testimonials-section, .why-section { padding: 40px var(--space-6); }
 }
+
+/* Stitch marketplace alignment */
+.home-page {
+  max-width: 1480px;
+}
+
+.home-page::before,
+.home-page::after,
+.hero-shell::after {
+  display: none;
+}
+
+.hero-shell {
+  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 68px 0;
+}
+
+.hero-intro {
+  align-items: flex-start;
+}
+
+.hero-intro h1 {
+  max-width: 13ch;
+  font-size: clamp(42px, 6vw, 72px);
+  line-height: 1;
+  letter-spacing: 0;
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.hero-service-search button {
+  background: var(--primary-purple);
+  color: white;
+}
+
+.trust-row {
+  justify-content: flex-start;
+}
+
+.hero-media {
+  position: relative;
+  min-height: 520px;
+  border-radius: 16px;
+  overflow: hidden;
+  align-self: stretch;
+  box-shadow: var(--shadow-lg);
+}
+
+.hero-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.hero-proof-card {
+  position: absolute;
+  left: 32px;
+  right: 32px;
+  bottom: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-main);
+  padding: 18px 22px;
+  box-shadow: var(--shadow-md);
+}
+
+.hero-proof-card strong,
+.hero-proof-card span {
+  display: block;
+}
+
+.hero-proof-card span {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.services-section,
+.steps-section,
+.testimonials-section,
+.why-section {
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+@media (max-width: 1100px) {
+  .hero-shell {
+    grid-template-columns: 1fr;
+    padding: 48px 0;
+  }
+
+  .hero-media {
+    min-height: 360px;
+  }
+}

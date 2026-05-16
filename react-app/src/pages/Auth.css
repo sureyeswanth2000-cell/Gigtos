@@ -1,0 +1,101 @@
+.auth-page {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(440px, 0.78fr) !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  padding: 0 !important;
+  background: var(--bg-surface) !important;
+  overflow: auto !important;
+}
+
+.auth-page > div[style*="filter"] {
+  display: none !important;
+}
+
+.auth-visual-panel {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-end;
+  padding: 60px;
+  color: white;
+  background:
+    linear-gradient(180deg, rgba(20, 28, 43, 0.05), rgba(122, 42, 214, 0.72)),
+    url('https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1400&q=80') center/cover;
+}
+
+.auth-visual-panel > div {
+  max-width: 620px;
+}
+
+.auth-visual-panel span {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.18);
+  margin-bottom: 24px;
+  font-weight: 900;
+}
+
+.auth-visual-panel h2 {
+  color: white;
+  font-size: clamp(42px, 6vw, 68px);
+  line-height: 1.05;
+  letter-spacing: 0;
+  margin: 0 0 18px;
+}
+
+.auth-visual-panel p {
+  max-width: 560px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 20px;
+  line-height: 1.6;
+}
+
+.auth-card {
+  align-self: center !important;
+  justify-self: center !important;
+  width: min(520px, calc(100% - 48px)) !important;
+  max-width: 520px !important;
+  padding: 44px !important;
+  border-radius: 8px !important;
+  background: var(--bg-surface) !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  text-align: left !important;
+}
+
+.auth-card h1 {
+  color: var(--primary-purple) !important;
+  letter-spacing: 0 !important;
+}
+
+.auth-card input,
+.auth-card select {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-light) !important;
+  border-radius: 8px !important;
+}
+
+.auth-card .btn-primary {
+  border-radius: 8px !important;
+  background: var(--primary-purple) !important;
+}
+
+@media (max-width: 900px) {
+  .auth-page {
+    grid-template-columns: 1fr !important;
+    padding: 32px 18px !important;
+  }
+
+  .auth-visual-panel {
+    display: none;
+  }
+
+  .auth-card {
+    width: min(640px, 100%) !important;
+    padding: 30px !important;
+    border: 1px solid var(--border-light) !important;
+    box-shadow: var(--shadow-sm) !important;
+  }
+}

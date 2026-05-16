@@ -1099,6 +1099,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] Add dark/light-mode contrast hardening so legacy inline dashboard text remains readable in dark mode.
 - [x] Field Operator App: add full verification queue, dispute queue, worker checks, and quality notes beyond the current admin/superadmin polish layer.
 - [x] Add backend contract scaffolds for worker availability, worker matching/assignment candidates, live tracking, support tickets, wallet dues, and operator quality notes.
+- [ ] Discuss and redesign the home-page `Ask Gito AI` / `Nearby Workers` panel: current UI feels raw/default, prompt chips look like browser buttons, spacing is too heavy, and the section should become a premium quick-action surface with polished chips, clearer selected state, compact mobile behavior, and stronger worker-availability context.
 
 ## Safety And Policy
 

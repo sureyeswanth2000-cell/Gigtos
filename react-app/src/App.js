@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -34,7 +34,22 @@ import RideBooking from './components/RideBooking';
 import RideTracking from './components/RideTracking';
 import { getDevBypassUserFromSearch, isDevBypassEnabled } from './utils/devBypass';
 
+const PROJECT_BASE_PATH = '/Gigtos';
+
+function normalizeProjectRouteForHashRouter() {
+  if (typeof window === 'undefined') return;
+  const { pathname, search, hash } = window.location;
+  if (hash && hash.startsWith('#/')) return;
+  const basePath = PROJECT_BASE_PATH;
+  const isProjectPath = pathname === basePath || pathname === `${basePath}/` || pathname.startsWith(`${basePath}/`);
+  if (!isProjectPath) return;
+  const routePath = pathname.slice(basePath.length) || '/';
+  if (routePath === '/' && !search) return;
+  window.history.replaceState(null, '', `${basePath}/#${routePath}${search}`);
+}
+
 function App() {
+  normalizeProjectRouteForHashRouter();
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -131,7 +146,7 @@ function App() {
   };
 
   return (
-    <BrowserRouter basename="/Gigtos">
+    <HashRouter>
       <ToastProvider>
         <LocationProvider>
           <Header />
@@ -177,7 +192,7 @@ function App() {
           <Footer />
         </LocationProvider>
       </ToastProvider>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 

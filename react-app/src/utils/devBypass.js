@@ -57,7 +57,7 @@ export function getDevBypassUser(role, env = process.env) {
 }
 
 export function getDevBypassRoleFromSearch(search = '') {
-  const params = new URLSearchParams(search || '');
+  const params = new URLSearchParams(search || getCurrentRouteSearch());
   return params.get('devAuth') || params.get('devRole') || '';
 }
 
@@ -65,4 +65,13 @@ export function getDevBypassUserFromSearch(search = '', env = process.env) {
   const role = getDevBypassRoleFromSearch(search);
   if (!role) return null;
   return getDevBypassUser(role, env);
+}
+
+export function getCurrentRouteSearch() {
+  if (typeof window === 'undefined') return '';
+  if (window.location.search) return window.location.search;
+  const hash = window.location.hash || '';
+  const queryStart = hash.indexOf('?');
+  if (queryStart === -1) return '';
+  return hash.slice(queryStart);
 }

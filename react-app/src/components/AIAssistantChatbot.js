@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { auth, db } from '../firebase';
+import { getCurrentRouteSearch } from '../utils/devBypass';
 import { doc, getDoc, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, setDoc, updateDoc, increment } from 'firebase/firestore';
 import styled, { keyframes, createGlobalStyle } from 'styled-components';
 
@@ -244,7 +245,7 @@ function AIAssistantChatbot() {
   async function saveInternalPriceSuggestion(suggestedPrice) {
     try {
       const user = auth.currentUser;
-      const urlParams = new URLSearchParams(window.location.search);
+      const urlParams = new URLSearchParams(getCurrentRouteSearch());
       const bookingId = urlParams.get('bookingId');
       const serviceType = document.title.split('|')[0].trim(); // Extract service type from title if possible
 

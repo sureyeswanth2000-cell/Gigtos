@@ -201,7 +201,7 @@ function Auth() {
         </div>
       </section>
 
-      <div className="auth-card" style={{ 
+      <div className="auth-orb auth-orb--primary" style={{ 
         position: 'absolute', 
         top: '10%', 
         left: '10%', 
@@ -213,7 +213,7 @@ function Auth() {
         borderRadius: '50%',
         zIndex: 0
       }} />
-      <div style={{ 
+      <div className="auth-orb auth-orb--secondary" style={{ 
         position: 'absolute', 
         bottom: '10%', 
         right: '10%', 
@@ -226,7 +226,7 @@ function Auth() {
         zIndex: 0
       }} />
 
-      <div style={{ 
+      <div className="auth-card" style={{ 
         width: '100%',
         maxWidth: '460px', 
         padding: '48px', 

@@ -8,7 +8,7 @@
   overflow: auto !important;
 }
 
-.auth-page > div[style*="filter"] {
+.auth-orb {
   display: none !important;
 }
 

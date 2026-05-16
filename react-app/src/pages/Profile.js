@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { auth, db } from "../firebase";
-import { doc, getDoc, setDoc, collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, query, setDoc, where } from "firebase/firestore";
 import { useLocation as useUserLocation } from "../context/LocationContext";
+import { getDevBypassUserFromSearch, isDevBypassEnabled } from "../utils/devBypass";
+import "./Profile.css";
 
 export default function Profile() {
   const [profileData, setProfileData] = useState({
@@ -9,6 +12,7 @@ export default function Profile() {
     email: "",
     phone: "",
     locationCity: "",
+    locationArea: "",
     locationLat: null,
     locationLng: null,
   });
@@ -19,44 +23,48 @@ export default function Profile() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [cashbacks, setCashbacks] = useState([]);
-
   const userDetectRef = useRef(false);
-
+  const routeLocation = useLocation();
+  const devUser = useMemo(
+    () => (isDevBypassEnabled() ? getDevBypassUserFromSearch(routeLocation.search) : null),
+    [routeLocation.search]
+  );
   const { location: detectedLocation, detectLocation, locationLoading, locationError } = useUserLocation() || {};
 
   useEffect(() => {
     const loadProfile = async () => {
       try {
+        if (devUser) {
+          setIsAdmin(devUser.role === "superadmin" || devUser.role === "field_operator");
+          setProfileData({
+            name: devUser.name || "",
+            email: devUser.email || "",
+            phone: devUser.phone || "",
+            locationCity: devUser.city || "",
+            locationArea: devUser.address || devUser.area || "",
+            locationLat: devUser.lat || null,
+            locationLng: devUser.lng || null,
+          });
+          return;
+        }
+
         const user = auth.currentUser;
         if (!user) return;
 
-        // Check if admin
         const adminDoc = await getDoc(doc(db, "admins", user.uid));
         setIsAdmin(adminDoc.exists());
 
-        // Load user profile
         const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setProfileData({
-            name: data.name || "",
-            email: user.email || "",
-            phone: data.phone || "",
-            locationCity: data.locationCity || "",
-            locationLat: data.locationLat || null,
-            locationLng: data.locationLng || null,
-          });
-        } else {
-          setProfileData({
-            name: "",
-            email: user.email || "",
-            phone: "",
-            locationCity: "",
-            locationArea: "",
-            locationLat: null,
-            locationLng: null,
-          });
-        }
+        const data = userDoc.exists() ? userDoc.data() : {};
+        setProfileData({
+          name: data.name || "",
+          email: user.email || data.email || "",
+          phone: data.phone || "",
+          locationCity: data.locationCity || "",
+          locationArea: data.locationArea || "",
+          locationLat: data.locationLat || null,
+          locationLng: data.locationLng || null,
+        });
       } catch (err) {
         setError(err.message);
       } finally {
@@ -65,63 +73,71 @@ export default function Profile() {
     };
 
     loadProfile();
-  }, []);
+  }, [devUser]);
 
-  /* ── Cashback wallet listener ── */
   useEffect(() => {
     const user = auth.currentUser;
-    if (!user) return;
-    const q = query(collection(db, 'cashbacks'), where('userId', '==', user.uid));
-    const unsub = onSnapshot(q, snap => {
+    if (!user) return undefined;
+    const q = query(collection(db, "cashbacks"), where("userId", "==", user.uid));
+    return onSnapshot(q, snap => {
       setCashbacks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return unsub;
+    }, () => {});
   }, []);
+
+  useEffect(() => {
+    if (!detectedLocation) return;
+    setProfileData(prev => {
+      if (!userDetectRef.current && prev.locationCity) return prev;
+      userDetectRef.current = false;
+      return {
+        ...prev,
+        locationCity: detectedLocation.city || prev.locationCity,
+        locationArea: detectedLocation.displayName ? detectedLocation.displayName.split(",")[0].trim() : prev.locationArea,
+        locationLat: detectedLocation.lat ?? prev.locationLat,
+        locationLng: detectedLocation.lng ?? prev.locationLng,
+      };
+    });
+  }, [detectedLocation]);
+
+  const activeCashbacks = useMemo(() => cashbacks.filter(c => c.cashbackStatus === "active"), [cashbacks]);
+  const totalActive = useMemo(() => activeCashbacks.reduce((sum, c) => sum + (c.cashbackAmount || 0), 0), [activeCashbacks]);
+  const expiredCount = cashbacks.filter(c => c.cashbackStatus === "expired").length;
+  const usedCount = cashbacks.filter(c => c.cashbackStatus === "used").length;
+  const completionItems = [
+    { label: "Name", done: Boolean(profileData.name) },
+    { label: "Phone", done: Boolean(profileData.phone) },
+    { label: "City", done: Boolean(profileData.locationCity) },
+  ];
+  const completionScore = Math.round((completionItems.filter(i => i.done).length / completionItems.length) * 100);
 
   const handleDetectAndSetLocation = () => {
     userDetectRef.current = true;
     if (detectLocation) detectLocation();
   };
 
-  // Sync detected location into profile when it changes
-  useEffect(() => {
-    if (detectedLocation) {
-      setProfileData((prev) => {
-        if (userDetectRef.current || !prev.locationCity) {
-          userDetectRef.current = false;
-          return {
-            ...prev,
-            locationCity: detectedLocation.city || prev.locationCity,
-            locationArea: detectedLocation.displayName ? detectedLocation.displayName.split(',')[0].trim() : prev.locationArea,
-            locationLat: detectedLocation.lat ?? prev.locationLat,
-            locationLng: detectedLocation.lng ?? prev.locationLng,
-          };
-        }
-        return prev;
-      });
-    }
-  }, [detectedLocation]);
-
   const handleSave = async () => {
     setError("");
     setSuccess("");
 
-    // Validation
     if (!profileData.name || !profileData.phone) {
-      setError("Name and phone number are required");
+      setError("Name and phone number are required.");
       return;
     }
 
-    if (profileData.phone.length < 10) {
-      setError("Please enter a valid phone number");
+    if (profileData.phone.replace(/[^\d]/g, "").length < 10) {
+      setError("Please enter a valid phone number.");
       return;
     }
 
     setSaving(true);
-
     try {
+      if (devUser) {
+        setSuccess("Profile preview updated locally.");
+        setEditing(false);
+        return;
+      }
+
       const user = auth.currentUser;
-      // Use setDoc with merge=true to create if missing, update if exists
       await setDoc(doc(db, "users", user.uid), {
         name: profileData.name,
         phone: profileData.phone,
@@ -130,10 +146,10 @@ export default function Profile() {
         locationArea: profileData.locationArea || "",
         locationLat: profileData.locationLat || null,
         locationLng: profileData.locationLng || null,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }, { merge: true });
 
-      setSuccess("Profile updated successfully!");
+      setSuccess("Profile updated successfully.");
       setEditing(false);
     } catch (err) {
       setError(err.message);
@@ -142,338 +158,170 @@ export default function Profile() {
     }
   };
 
-  if (loading) {
-    return <div style={{ padding: "24px", textAlign: "center", color: "#4b5563" }}>Loading profile...</div>;
-  }
+  if (loading) return <div className="profile-loading">Loading profile...</div>;
 
   return (
-    <div style={{ maxWidth: "620px", margin: "20px auto", padding: "24px 18px 90px", color: '#1f2937' }}>
-      <h2 style={{ marginBottom: "8px", fontSize: '34px', fontFamily: 'Manrope, Inter, sans-serif' }}>My Profile</h2>
-      <p style={{ margin: '0 0 16px 0', color: '#4b5563', fontSize: '14px' }}>Keep your contact details up to date for faster booking confirmations.</p>
-
-      {error && (
-        <div style={{
-          padding: "12px",
-          marginBottom: "15px",
-          backgroundColor: "#fee",
-          border: "1px solid #fcc",
-          borderRadius: "4px",
-          color: "#c00",
-          fontSize: "14px"
-        }}>
-          ⚠️ {error}
+    <div className="profile-page">
+      <section className="profile-hero">
+        <div>
+          <span className="profile-kicker">Account readiness</span>
+          <h1>My Profile</h1>
+          <p>Save the details that make booking fast: name, phone, service area, and wallet benefits.</p>
         </div>
-      )}
-
-      {success && (
-        <div style={{
-          padding: "12px",
-          marginBottom: "15px",
-          backgroundColor: "#efe",
-          border: "1px solid #cfc",
-          borderRadius: "4px",
-          color: "#060",
-          fontSize: "14px"
-        }}>
-          ✓ {success}
+        <div className="profile-readiness">
+          <strong>{completionScore}%</strong>
+          <span>Ready</span>
         </div>
-      )}
+      </section>
 
-      <div style={{
-        padding: "20px",
-        border: "1px solid #d6d8de",
-        borderRadius: "12px",
-        backgroundColor: "#fff",
-        boxShadow: '0 10px 24px rgba(17,24,39,0.08)'
-      }}>
-        {isAdmin && (
-          <div style={{
-            padding: "12px",
-            marginBottom: "20px",
-            backgroundColor: "#e8f4f8",
-            border: "1px solid #b3e5fc",
-            borderRadius: "4px",
-            color: "#01579b",
-            fontSize: "13px"
-          }}>
-            Admin Account
-          </div>
-        )}
+      {error && <div className="profile-alert profile-alert-error">{error}</div>}
+      {success && <div className="profile-alert profile-alert-success">{success}</div>}
 
-        {editing ? (
-          <>
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
-                Name:
-              </label>
-              <input
-                type="text"
-                value={profileData.name}
-                onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box"
-                }}
-              />
+      <section className="profile-grid">
+        <div className="profile-card profile-main-card">
+          <div className="profile-card-header">
+            <div>
+              <span className="profile-kicker">Saved contact</span>
+              <h2>Booking identity</h2>
             </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
-                Email:
-              </label>
-              <input
-                type="email"
-                value={profileData.email}
-                disabled
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  backgroundColor: "#f0f0f0",
-                  cursor: "not-allowed"
-                }}
-              />
-              <small style={{ color: "#666" }}>Email cannot be changed</small>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
-                Phone Number:
-              </label>
-              <input
-                type="tel"
-                value={profileData.phone}
-                onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                placeholder="Enter your 10-digit phone number"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box"
-                }}
-              />
-            </div>
-
-            {/* Location section in edit mode – detect or manually enter */}
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
-                Location:
-              </label>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '10px', background: '#f3e8ff', borderRadius: '8px',
-                border: '1px solid #c4b5fd'
-              }}>
-                <input
-                  type="text"
-                  value={profileData.locationCity}
-                  onChange={(e) => setProfileData({ ...profileData, locationCity: e.target.value })}
-                  placeholder="Enter your city"
-                  style={{
-                    flex: 1, fontSize: '14px', padding: '6px 8px',
-                    border: '1px solid #c4b5fd', borderRadius: '6px',
-                    background: '#fff', color: '#1f2937',
-                    boxSizing: 'border-box'
-                  }}
-                />
-                <input
-                  type="text"
-                  value={profileData.locationArea}
-                  onChange={(e) => setProfileData({ ...profileData, locationArea: e.target.value })}
-                  placeholder="Enter area (e.g. Indiranagar)"
-                  style={{
-                    flex: 1, fontSize: '14px', padding: '6px 8px',
-                    border: '1px solid #c4b5fd', borderRadius: '6px',
-                    background: '#fff', color: '#1f2937',
-                    boxSizing: 'border-box'
-                  }}
-                />
-                <button
-                  onClick={handleDetectAndSetLocation}
-                  disabled={locationLoading}
-                  style={{
-                    padding: '6px 14px', fontSize: '13px', fontWeight: 600,
-                    background: locationLoading ? '#c4b5fd' : '#A259FF', color: '#fff', border: 'none',
-                    borderRadius: '6px', cursor: locationLoading ? 'not-allowed' : 'pointer',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {locationLoading ? '⏳ Detecting…' : '📍 Detect Location'}
-                </button>
-              </div>
-              {locationError && (
-                <small style={{ color: '#c00', display: 'block', marginTop: '6px', fontSize: '12px' }}>
-                  ⚠️ {locationError}. Please enter your city manually or allow location access and try again.
-                </small>
-              )}
-            </div>
-
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  backgroundColor: saving ? "#ccc" : "#057A31",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: saving ? "not-allowed" : "pointer",
-                  fontWeight: "bold"
-                }}
-              >
-                {saving ? "Saving..." : "Save Changes"}
-              </button>
-              <button
-                onClick={() => setEditing(false)}
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  backgroundColor: "#4B5563",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "bold"
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div style={{ marginBottom: "15px" }}>
-              <span style={{ fontWeight: "bold", color: "#666" }}>Name:</span>
-              <p style={{ margin: "5px 0 0 0", fontSize: "16px" }}>{profileData.name || "Not set"}</p>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <span style={{ fontWeight: "bold", color: "#666" }}>Email:</span>
-              <p style={{ margin: "5px 0 0 0", fontSize: "16px" }}>{profileData.email}</p>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <span style={{ fontWeight: "bold", color: "#666" }}>Phone:</span>
-              <p style={{ margin: "5px 0 0 0", fontSize: "16px" }}>{profileData.phone || "Not set"}</p>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <span style={{ fontWeight: "bold", color: "#666" }}>Location:</span>
-              <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>
-                {profileData.locationCity || "Not set"}
-              </p>
-              {profileData.locationLat && profileData.locationLng && (
-                <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#7C3AED", fontWeight: 500 }}>
-                  📍 {profileData.locationLat.toFixed(4)}, {profileData.locationLng.toFixed(4)}
-                </p>
-              )}
-            </div>
-
-            <button
-              onClick={() => setEditing(true)}
-              style={{
-                width: "100%",
-                padding: "10px",
-                backgroundColor: "#057A31",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "bold",
-                marginTop: "10px"
-              }}
-            >
-              Edit Profile
+            <button className="profile-secondary-action" onClick={() => setEditing(prev => !prev)}>
+              {editing ? "View" : "Edit"}
             </button>
-          </>
-        )}
-      </div>
+          </div>
 
-      {/* ═══ Cashback Wallet ═══ */}
-      {!isAdmin && (
-        <div style={{
-          marginTop: '20px', padding: '20px', border: '1px solid #d6d8de',
-          borderRadius: '12px', backgroundColor: '#fff', boxShadow: '0 10px 24px rgba(17,24,39,0.08)'
-        }}>
-          <h3 style={{ margin: '0 0 16px 0', fontSize: '20px', color: '#1f2937', fontFamily: 'Manrope, Inter, sans-serif' }}>Cashback Wallet</h3>
+          {isAdmin && <div className="profile-admin-badge">Admin account</div>}
 
-          {(() => {
-            const activeCashbacks = cashbacks.filter(c => c.cashbackStatus === 'active');
-            const totalActive = activeCashbacks.reduce((sum, c) => sum + (c.cashbackAmount || 0), 0);
-            const expiredCashbacks = cashbacks.filter(c => c.cashbackStatus === 'expired');
-            const usedCashbacks = cashbacks.filter(c => c.cashbackStatus === 'used');
+          {editing ? (
+            <>
+              <div className="profile-form-grid">
+                <label className="profile-field">
+                  <span>Name</span>
+                  <input value={profileData.name} onChange={e => setProfileData({ ...profileData, name: e.target.value })} />
+                </label>
+                <label className="profile-field">
+                  <span>Email</span>
+                  <input value={profileData.email} disabled />
+                  <small>Email cannot be changed here.</small>
+                </label>
+                <label className="profile-field">
+                  <span>Phone number</span>
+                  <input
+                    type="tel"
+                    value={profileData.phone}
+                    onChange={e => setProfileData({ ...profileData, phone: e.target.value })}
+                    placeholder="Enter your 10-digit phone number"
+                  />
+                </label>
+              </div>
 
-            return (
-              <>
-                {/* Balance */}
-                <div style={{
-                  textAlign: 'center', padding: '16px', marginBottom: '16px',
-                  background: totalActive > 0 ? 'linear-gradient(135deg, #ecfdf5, #d1fae5)' : '#f8fafc',
-                  borderRadius: '12px', border: `1px solid ${totalActive > 0 ? '#86efac' : '#e2e8f0'}`,
-                }}>
-                  <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 'bold' }}>Available Balance</div>
-                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: totalActive > 0 ? '#166534' : '#94a3b8' }}>₹{totalActive}</div>
+              <div className="profile-location-panel">
+                <div>
+                  <strong>Service location</strong>
+                  <span>Use GPS or save city and area manually.</span>
                 </div>
+                <div className="profile-location-grid">
+                  <input
+                    value={profileData.locationCity}
+                    onChange={e => setProfileData({ ...profileData, locationCity: e.target.value })}
+                    placeholder="City"
+                  />
+                  <input
+                    value={profileData.locationArea}
+                    onChange={e => setProfileData({ ...profileData, locationArea: e.target.value })}
+                    placeholder="Area, e.g. Indiranagar"
+                  />
+                  <button type="button" onClick={handleDetectAndSetLocation} disabled={locationLoading}>
+                    {locationLoading ? "Detecting..." : "Detect location"}
+                  </button>
+                </div>
+                {locationError && <small className="profile-location-error">{locationError}. You can enter city manually.</small>}
+              </div>
 
-                {/* Active cashbacks list */}
-                {activeCashbacks.length > 0 && (
-                  <div style={{ marginBottom: '12px' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>Active Cashbacks:</div>
-                    {activeCashbacks.map(cb => {
-                      const expiry = cb.cashbackExpiryDate?.toDate ? cb.cashbackExpiryDate.toDate() : new Date(cb.cashbackExpiryDate);
-                      const daysLeft = Math.max(0, Math.ceil((expiry - new Date()) / (1000 * 60 * 60 * 24)));
-                      return (
-                        <div key={cb.id} style={{
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                          padding: '10px 12px', background: 'white', borderRadius: '8px',
-                          border: '1px solid #e2e8f0', marginBottom: '6px',
-                        }}>
-                          <div>
-                            <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#166534' }}>₹{cb.cashbackAmount}</div>
-                            <div style={{ fontSize: '11px', color: '#64748b' }}>Expires: {expiry.toLocaleDateString('en-IN')}</div>
-                          </div>
-                          <span style={{
-                            padding: '3px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold',
-                            background: daysLeft <= 3 ? '#fef2f2' : '#ecfdf5',
-                            color: daysLeft <= 3 ? '#dc2626' : '#166534',
-                          }}>
-                            {daysLeft <= 0 ? 'Expiring today' : `${daysLeft}d left`}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Summary */}
-                {(expiredCashbacks.length > 0 || usedCashbacks.length > 0) && (
-                  <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
-                    {usedCashbacks.length > 0 && `${usedCashbacks.length} used`}
-                    {usedCashbacks.length > 0 && expiredCashbacks.length > 0 && ' · '}
-                    {expiredCashbacks.length > 0 && `${expiredCashbacks.length} expired`}
-                  </div>
-                )}
-
-                {cashbacks.length === 0 && (
-                  <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', padding: '12px' }}>
-                    No cashbacks yet. Complete bookings to earn ₹9 cashback each!
-                  </div>
-                )}
-              </>
-            );
-          })()}
+              <div className="profile-actions">
+                <button className="profile-primary-action" onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving..." : "Save changes"}
+                </button>
+                <button className="profile-secondary-action" onClick={() => setEditing(false)}>Cancel</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="profile-detail-grid">
+                <div><span>Name</span><strong>{profileData.name || "Not set"}</strong></div>
+                <div><span>Email</span><strong>{profileData.email || "Not set"}</strong></div>
+                <div><span>Phone</span><strong>{profileData.phone || "Not set"}</strong></div>
+                <div>
+                  <span>Location</span>
+                  <strong>{[profileData.locationArea, profileData.locationCity].filter(Boolean).join(", ") || "Not set"}</strong>
+                  {profileData.locationLat && profileData.locationLng && (
+                    <small>{profileData.locationLat.toFixed(4)}, {profileData.locationLng.toFixed(4)}</small>
+                  )}
+                </div>
+              </div>
+              <button className="profile-primary-action profile-full-width" onClick={() => setEditing(true)}>Edit profile</button>
+            </>
+          )}
         </div>
+
+        <aside className="profile-card profile-status-card">
+          <span className="profile-kicker">Fast booking checks</span>
+          <h2>Profile strength</h2>
+          <div className="profile-check-list">
+            {completionItems.map(item => (
+              <div key={item.label} className={item.done ? "done" : ""}>
+                <span>{item.done ? "Ready" : "Needed"}</span>
+                <strong>{item.label}</strong>
+              </div>
+            ))}
+          </div>
+        </aside>
+      </section>
+
+      {!isAdmin && (
+        <section className="profile-card profile-wallet-card">
+          <div className="profile-card-header">
+            <div>
+              <span className="profile-kicker">Digital wallet</span>
+              <h2>Cashback Wallet</h2>
+            </div>
+          </div>
+
+          <div className={totalActive > 0 ? "wallet-balance wallet-balance-active" : "wallet-balance"}>
+            <span>Available balance</span>
+            <strong>Rs {totalActive}</strong>
+          </div>
+
+          {activeCashbacks.length > 0 ? (
+            <div className="cashback-list">
+              <h3>Active cashbacks</h3>
+              {activeCashbacks.map(cb => {
+                const expiry = cb.cashbackExpiryDate?.toDate ? cb.cashbackExpiryDate.toDate() : new Date(cb.cashbackExpiryDate);
+                const daysLeft = Math.max(0, Math.ceil((expiry - new Date()) / (1000 * 60 * 60 * 24)));
+                return (
+                  <div key={cb.id} className="cashback-row">
+                    <div>
+                      <strong>Rs {cb.cashbackAmount}</strong>
+                      <span>Expires: {expiry.toLocaleDateString("en-IN")}</span>
+                    </div>
+                    <em className={daysLeft <= 3 ? "cashback-expiring" : ""}>
+                      {daysLeft <= 0 ? "Expiring today" : `${daysLeft}d left`}
+                    </em>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="wallet-empty">No cashbacks yet. Complete bookings to unlock wallet benefits.</div>
+          )}
+
+          {(usedCount > 0 || expiredCount > 0) && (
+            <div className="cashback-summary">
+              {usedCount > 0 && `${usedCount} used`}
+              {usedCount > 0 && expiredCount > 0 && " / "}
+              {expiredCount > 0 && `${expiredCount} expired`}
+            </div>
+          )}
+        </section>
       )}
     </div>
   );

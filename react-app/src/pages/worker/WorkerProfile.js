@@ -53,9 +53,9 @@ export default function WorkerProfile() {
   return (
     <div className="worker-page">
       <div className="worker-container">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <Link to="/worker/dashboard" style={{ color: '#A259FF', textDecoration: 'none', fontSize: 20 }}>←</Link>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1F1144' }}>👤 My Profile</h2>
+        <div className="worker-page-topbar">
+          <Link to="/worker/dashboard" className="worker-back-link" aria-label="Back to worker dashboard">←</Link>
+          <h2 className="worker-page-title">My Profile</h2>
         </div>
 
         {/* Profile Header */}

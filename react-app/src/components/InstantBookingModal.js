@@ -204,8 +204,8 @@ export default function InstantBookingModal({ worker, userData, onClose, onBooke
 
               {[
                 { label: `Service: ${displayInfo.serviceType}`, value: `₹${displayInfo.fixedRate.toLocaleString('en-IN')}` },
-                { label: 'Platform Fee (15%)', value: `₹${displayInfo.platformFee.toLocaleString('en-IN')}` },
-                { label: 'Insurance & Taxes', value: `₹${displayInfo.paymentCharge.toLocaleString('en-IN')}` },
+                { label: 'Gigtos booking fee', value: `₹${displayInfo.platformFee.toLocaleString('en-IN')}` },
+                ...(displayInfo.paymentCharge > 0 ? [{ label: 'Payment/insurance charges', value: `₹${displayInfo.paymentCharge.toLocaleString('en-IN')}` }] : []),
               ].map((row) => (
                 <div key={row.label} style={{
                   display: 'flex', justifyContent: 'space-between',

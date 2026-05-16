@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { auth, db } from '../../firebase';
 import { doc, getDoc, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { calculateFinalPrice } from '../../utils/pricing';
 
 export default function WorkerFixedRateForm({ workerData }) {
   const [rate, setRate] = useState('');
@@ -16,6 +17,7 @@ export default function WorkerFixedRateForm({ workerData }) {
   const [toast, setToast] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const toastTimeoutRef = useRef(null);
+  const pricePreview = rate && Number(rate) >= 100 ? calculateFinalPrice(Number(rate)) : null;
 
   // Load existing rate on mount
   useEffect(() => {
@@ -167,16 +169,16 @@ export default function WorkerFixedRateForm({ workerData }) {
         <span style={{ fontSize: 14, color: '#6B7280' }}>/day</span>
       </div>
 
-      {rate && Number(rate) >= 100 && (
+      {pricePreview && (
         <div style={{
           background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8,
           padding: '8px 12px', marginBottom: 12, fontSize: 13,
         }}>
           <div style={{ color: '#15803D', fontWeight: 600 }}>
-            Customer pays: ₹{Math.round(Number(rate) * 1.15 * 1.02 * 100) / 100}
+            Customer pays: ₹{pricePreview.finalTotal.toLocaleString('en-IN')}
           </div>
           <div style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>
-            Your rate ₹{rate} + 15% platform fee + 2% payment charges
+            Your rate ₹{rate} + Gigtos booking fee ₹{pricePreview.platformFee.toLocaleString('en-IN')}
           </div>
         </div>
       )}

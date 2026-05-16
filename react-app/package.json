@@ -18,9 +18,16 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "build:prod": "node scripts/guardProductionBuild.js --production && react-scripts build",
+    "smoke:serve": "node scripts/staticSmokeServer.js",
+    "smoke:routes": "node scripts/runRouteSmoke.js",
+    "smoke:live": "node scripts/runLiveSmoke.js",
+    "smoke:heart": "node scripts/runHeartSmoke.js",
+    "smoke:dev-ui": "react-scripts test src/__tests__/devAuthUiSmoke.test.js --watchAll=false",
     "test": "react-scripts test",
+    "smoke:booking": "react-scripts test src/__tests__/basicBookingSmoke.test.js --watchAll=false",
     "eject": "react-scripts eject",
-    "predeploy": "npm run build",
+    "predeploy": "npm run build:prod",
     "deploy": "gh-pages -d build"
   },
   "browserslist": {

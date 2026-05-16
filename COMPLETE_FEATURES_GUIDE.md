@@ -33,7 +33,7 @@
 ### 3. Quote Presets with Editable Add-ons
 - Mason quote form supports service-based presets (plumber/electrician/carpenter/painter).
 - Optional add-on amount can be included before final quote submission.
-- Final customer total still applies 15% + 2% pricing model.
+- Final customer total uses worker amount plus the current Gigtos booking fee.
 
 ### 4. Advanced Search and Filters
 - Admin/RegionLead/Mason booking list supports text search, service filter, worker filter, date range, and delayed-only toggle.

@@ -26,7 +26,7 @@ Source of truth compared: `COMPLETE_FEATURES_GUIDE.md` vs current code in `react
 
 4. Quote productivity enhancements
 - Added service-based quote presets with editable addon amount.
-- Pricing still applies platform fee (15%) + payment charges (2%) consistently.
+- Pricing now uses the booking-fee model: worker amount plus the current Gigtos booking fee.
 
 5. Search and filters for operations teams
 - Added admin booking filters: search, service, worker, date range, delayed-only.

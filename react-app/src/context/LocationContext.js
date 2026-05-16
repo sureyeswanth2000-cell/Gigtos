@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { getDevBypassUserFromSearch, isDevBypassEnabled } from '../utils/devBypass';
 
 const LocationContext = createContext(null);
 
@@ -170,6 +171,24 @@ export function LocationProvider({ children }) {
 
   // On mount, check auth state and decide how to load location.
   useEffect(() => {
+    if (isDevBypassEnabled()) {
+      try {
+        const devUser = getDevBypassUserFromSearch(window.location.search);
+        if (devUser?.lat && devUser?.lng) {
+          setLocation({
+            lat: devUser.lat,
+            lng: devUser.lng,
+            city: devUser.city || null,
+            source: 'dev-bypass',
+          });
+          setLocationLoading(false);
+          return undefined;
+        }
+      } catch {
+        // Fall through to normal location loading.
+      }
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (authChecked.current) return; // Only run once
       authChecked.current = true;
@@ -236,7 +255,9 @@ export function LocationProvider({ children }) {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
   }, [detectLocation]);
 
   /**

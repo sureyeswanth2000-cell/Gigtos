@@ -9,6 +9,7 @@ import Auth from './pages/Auth';
 import CompleteProfilePhone from './pages/CompleteProfilePhone';
 import Home from './pages/Home';
 import Service from './pages/Service';
+import ServiceCatalog from './pages/ServiceCatalog';
 import MyBookings from './pages/MyBookings';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
@@ -16,14 +17,22 @@ import Workers from './pages/Workers';
 import AdminBookings from './pages/AdminBookings';
 import Chat from './pages/Chat';
 import SuperAdmin from './pages/SuperAdmin';
+import FieldOperator from './pages/FieldOperator';
 import RegionLeadDashboard from './pages/RegionLeadDashboard';
 import WorkerDashboard from './pages/worker/WorkerDashboard';
+import OpenWork from './pages/worker/OpenWork';
+import FutureWork from './pages/worker/FutureWork';
+import WorkerProfile from './pages/worker/WorkerProfile';
+import WorkerSupport from './pages/worker/WorkerSupport';
+import WorkerMap from './pages/worker/WorkerMap';
+import WorkHistory from './pages/worker/WorkHistory';
 import Jobs from './pages/Jobs';
 import JobDetail from './pages/JobDetail';
 import { LocationProvider } from './context/LocationContext';
 import { ToastProvider } from './context/ToastContext';
 import RideBooking from './components/RideBooking';
 import RideTracking from './components/RideTracking';
+import { getDevBypassUserFromSearch, isDevBypassEnabled } from './utils/devBypass';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -35,6 +44,24 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (isDevBypassEnabled()) {
+      try {
+        const devUser = getDevBypassUserFromSearch(window.location.search);
+        if (devUser) {
+          setUser(devUser);
+          setIsAdmin(devUser.role === 'superadmin' || devUser.role === 'field_operator');
+          setIsWorker(devUser.role === 'worker');
+          setAdminRole(devUser.role === 'superadmin' ? 'superadmin' : devUser.role === 'field_operator' ? 'field_operator' : null);
+          setIsSuperAdmin(devUser.role === 'superadmin');
+          setIsRegionLead(false);
+          setLoading(false);
+          return undefined;
+        }
+      } catch {
+        // Fall back to Firebase auth when the local bypass URL is malformed.
+      }
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -92,6 +119,7 @@ function App() {
   // Determine redirect path based on role
   const getAdminRedirect = () => {
     if (isSuperAdmin) return "/admin/super";
+    if (adminRole === 'field_operator') return "/operator";
     if (isRegionLead) return "/admin/region-lead";
     return "/admin/bookings";
   };
@@ -112,6 +140,7 @@ function App() {
               {/* Public Routes */}
               <Route path="/" element={user ? (isAdmin || isWorker ? <Navigate to={getPostLoginRedirect()} /> : <Home />) : <Home />} />
               <Route path="/auth" element={user ? <Navigate to={getPostLoginRedirect()} /> : <Auth />} />
+              <Route path="/services" element={<ServiceCatalog />} />
 
               {/* Protected User Routes */}
               <Route path="/service" element={<ProtectedRoute><Service /></ProtectedRoute>} />
@@ -130,9 +159,16 @@ function App() {
               <Route path="/admin/workers" element={<ProtectedRoute requireAdmin><Workers /></ProtectedRoute>} />
               <Route path="/admin/bookings" element={<ProtectedRoute requireAdmin><AdminBookings /></ProtectedRoute>} />
               <Route path="/admin/region-lead" element={<ProtectedRoute requireAdmin><RegionLeadDashboard /></ProtectedRoute>} />
+              <Route path="/operator" element={<ProtectedRoute requireAdmin><FieldOperator /></ProtectedRoute>} />
 
               {/* Protected Worker Route */}
               <Route path="/worker/dashboard" element={<ProtectedRoute requireWorker><WorkerDashboard /></ProtectedRoute>} />
+              <Route path="/worker/open-work" element={<ProtectedRoute requireWorker><OpenWork /></ProtectedRoute>} />
+              <Route path="/worker/future-work" element={<ProtectedRoute requireWorker><FutureWork /></ProtectedRoute>} />
+              <Route path="/worker/profile" element={<ProtectedRoute requireWorker><WorkerProfile /></ProtectedRoute>} />
+              <Route path="/worker/support" element={<ProtectedRoute requireWorker><WorkerSupport /></ProtectedRoute>} />
+              <Route path="/worker/map" element={<ProtectedRoute requireWorker><WorkerMap /></ProtectedRoute>} />
+              <Route path="/worker/history" element={<ProtectedRoute requireWorker><WorkHistory /></ProtectedRoute>} />
 
               {/* Protected SuperAdmin Route */}
               <Route path="/admin/super" element={<ProtectedRoute requireSuperAdmin><SuperAdmin /></ProtectedRoute>} />

@@ -1,4 +1,5 @@
 import { calculateFinalPrice } from './pricing';
+import { buildRatingScoreEvents } from './socioScore';
 
 export function submitQuote(booking, { adminId, adminName, basePrice }) {
   if (!booking) throw new Error('Booking is required');
@@ -67,14 +68,43 @@ export function startWork(booking) {
   return { ...booking, status: 'in_progress' };
 }
 
-export function markFinished(booking) {
+export function markFinished(booking, { afterPhotoUrls = [] } = {}) {
   if (!booking) throw new Error('Booking is required');
   if (booking.status !== 'in_progress') throw new Error('Work must be in progress');
-  return { ...booking, status: 'awaiting_confirmation' };
+  if (!Array.isArray(afterPhotoUrls) || afterPhotoUrls.length === 0) {
+    throw new Error('Completion photo is required');
+  }
+
+  return {
+    ...booking,
+    status: 'awaiting_confirmation',
+    afterPhotos: [...(booking.afterPhotos || []), ...afterPhotoUrls],
+    statusUpdatedAt: new Date(),
+  };
 }
 
 export function confirmCompletion(booking) {
   if (!booking) throw new Error('Booking is required');
   if (booking.status !== 'awaiting_confirmation') throw new Error('Booking must await confirmation');
   return { ...booking, status: 'completed' };
+}
+
+export function rateCompletedBooking(booking, { rating, workerOldScore = 500, consumerOldScore = 0 }) {
+  if (!booking) throw new Error('Booking is required');
+  if (booking.status !== 'completed') throw new Error('Booking must be completed before rating');
+  if (booking.rating) throw new Error('Booking is already rated');
+
+  const scoreEvents = buildRatingScoreEvents({
+    booking,
+    rating,
+    workerOldScore,
+    consumerOldScore,
+  });
+
+  return {
+    ...booking,
+    rating,
+    scoreEvents,
+    updatedAt: new Date(),
+  };
 }

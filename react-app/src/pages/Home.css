@@ -93,6 +93,39 @@
   margin-bottom: var(--space-12);
 }
 
+.hero-service-search {
+  width: min(720px, 100%);
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  margin-bottom: var(--space-6);
+}
+
+.hero-service-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  padding: 14px 16px;
+  outline: none;
+  font-size: 16px;
+}
+
+.hero-service-search button {
+  border: none;
+  border-radius: 7px;
+  padding: 0 24px;
+  background: var(--text-main);
+  color: var(--bg-surface);
+  font-weight: 900;
+  cursor: pointer;
+}
+
 .hero-actions .primary-btn {
   padding: 16px 40px;
   font-size: 16px;

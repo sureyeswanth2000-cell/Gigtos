@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth, db } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -10,6 +10,9 @@ import WorkerFixedRateForm from '../../components/worker/WorkerFixedRateForm';
 import WorkerBottomNav from '../../components/worker/WorkerBottomNav';
 import WorkerLocationTracker from '../../components/worker/WorkerLocationTracker';
 import QuoteModal from '../../components/worker/QuoteModal';
+import CompleteJobModal from '../../components/worker/CompleteJobModal';
+import SocioScoreSpeedometer from '../../components/SocioScoreSpeedometer';
+import { getDevBypassUserFromSearch, isDevBypassEnabled } from '../../utils/devBypass';
 import '../../styles/worker-dashboard.css';
 
 const NAV_CARDS = [
@@ -49,7 +52,7 @@ function openDirections(job) {
 /** Workflow step config for live job action buttons */
 const WORKFLOW_STEPS = {
   assigned: { next: 'in_progress', label: '▶ Start Work', style: 'btn-primary' },
-  in_progress: { next: 'completed', label: '✅ Mark Complete', style: 'btn-success' },
+  in_progress: { next: 'awaiting_confirmation', label: '✅ Mark Complete', style: 'btn-success' },
 };
 
 export default function WorkerDashboard() {
@@ -62,12 +65,42 @@ export default function WorkerDashboard() {
   const [nearbyJobs, setNearbyJobs] = useState([]);
   const [jobsLoading, setJobsLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState(null);
+  const [completingJob, setCompletingJob] = useState(null);
   const [updatingJobId, setUpdatingJobId] = useState(null);
   const [toast, setToast] = useState(null);
   const toastTimeoutRef = useRef(null);
   const navigate = useNavigate();
+  const devWorker = useMemo(
+    () => (isDevBypassEnabled() ? getDevBypassUserFromSearch(window.location.search) : null),
+    []
+  );
 
   useEffect(() => {
+    if (devWorker?.role === 'worker') {
+      const baseJob = {
+        id: 'dev-live-job-1',
+        title: 'Home Helper',
+        serviceType: 'Home Helper',
+        area: 'Indiranagar',
+        customerName: 'Dev Consumer',
+        status: 'assigned',
+        budget: 700,
+      };
+      setWorker({
+        ...devWorker,
+        uid: devWorker.uid,
+        rating: 4.8,
+        locationLat: devWorker.lat,
+        locationLng: devWorker.lng,
+      });
+      setLiveJobs([baseJob]);
+      setFutureJobs([{ ...baseJob, id: 'dev-future-job-1', status: 'confirmed', scheduledAt: Date.now() + 86400000 }]);
+      setNearbyJobs([{ ...baseJob, id: 'dev-open-job-1', status: 'open' }]);
+      setLoading(false);
+      setJobsLoading(false);
+      return undefined;
+    }
+
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) { navigate('/auth'); return; }
       try {
@@ -109,7 +142,7 @@ export default function WorkerDashboard() {
       }
     });
     return () => unsub();
-  }, [navigate]);
+  }, [navigate, devWorker]);
 
   const handleStatusChange = useCallback((active) => {
     setIsActive(active);
@@ -132,9 +165,16 @@ export default function WorkerDashboard() {
 
   /** Update a live job's status (Start → In Progress → Complete) */
   const handleJobStatusUpdate = useCallback(async (job, nextStatus) => {
+    if (nextStatus === 'awaiting_confirmation') {
+      setCompletingJob(job);
+      return;
+    }
+
     setUpdatingJobId(job.id);
     try {
-      await updateDoc(doc(db, 'bookings', job.id), { status: nextStatus });
+      if (!devWorker?.uid) {
+        await updateDoc(doc(db, 'bookings', job.id), { status: nextStatus });
+      }
       if (nextStatus === 'completed') {
         // Move from live to neither (completed)
         setLiveJobs(prev => prev.filter(j => j.id !== job.id));
@@ -230,6 +270,28 @@ export default function WorkerDashboard() {
             </p>
           </div>
         )}
+
+        <div className="worker-command-strip" aria-label="Worker quick actions">
+          <button type="button" onClick={() => setIsActive(prev => !prev)}>
+            <strong>{isActive ? 'Online' : 'Go Online'}</strong>
+            <span>{isActive ? 'Accepting nearby work' : 'Start receiving jobs'}</span>
+          </button>
+          <Link to="/worker/open-work">
+            <strong>{nearbyJobs.length}</strong>
+            <span>Open jobs</span>
+          </Link>
+          <Link to="/worker/future-work">
+            <strong>{futureJobs.length}</strong>
+            <span>Upcoming</span>
+          </Link>
+        </div>
+
+        <SocioScoreSpeedometer
+          score={worker?.socioScore || 500}
+          role="worker"
+          guildScore={worker?.guildScore || null}
+          events={worker?.scoreEvents || []}
+        />
 
         {/* ─── Active Status ─── */}
         <ActiveStatusButton onStatusChange={handleStatusChange} />
@@ -432,6 +494,18 @@ export default function WorkerDashboard() {
           job={selectedJob}
           onClose={() => setSelectedJob(null)}
           onSubmit={handleSendQuote}
+        />
+      )}
+
+      {completingJob && (
+        <CompleteJobModal
+          job={completingJob}
+          onClose={() => setCompletingJob(null)}
+          onCompleted={() => {
+            setLiveJobs(prev => prev.filter(j => j.id !== completingJob.id));
+            setCompletingJob(null);
+            showToast('Completion photo uploaded. Waiting for consumer confirmation.', 'success');
+          }}
         />
       )}
 

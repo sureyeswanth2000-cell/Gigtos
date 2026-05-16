@@ -4,6 +4,7 @@ import { httpsCallable } from 'firebase/functions';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db, functionsInstance } from '../firebase';
 import { useToast } from '../context/ToastContext';
+import { buildCopperMonitorSummary } from '../utils/socioScore';
 
 export default function SuperAdmin() {
     const { addToast } = useToast();
@@ -14,6 +15,13 @@ export default function SuperAdmin() {
     const [allUsers, setAllUsers] = useState([]);
     const [allWorkers, setAllWorkers] = useState([]);
     const [activeTab, setActiveTab] = useState('escalations');
+    const [copperSettings, setCopperSettings] = useState({
+        threshold: 450,
+        recoveryDiscountPercent: 10,
+        alertFrequencyHours: 24,
+        scoreDropSensitivity: 60,
+        cityEnabled: true,
+    });
     
     // ── Filter states ──
     const [filterSearch, setFilterSearch] = useState('');
@@ -147,10 +155,29 @@ export default function SuperAdmin() {
         finally { setCreateLoading(false); }
     };
 
+    const saveCopperSettings = async () => {
+        try {
+            await setDoc(doc(db, 'platform_settings', 'copper_monitoring'), {
+                ...copperSettings,
+                updatedAt: new Date(),
+                updatedBy: uid || null,
+            }, { merge: true });
+            addToast('Copper monitoring settings saved.', 'success');
+        } catch (err) {
+            addToast('Error: ' + err.message, 'error');
+        }
+    };
+
     /* ── Derived data ── */
     const regionLeads = admins.filter(a => a.role === 'regionLead');
     const childAdmins = admins.filter(a => ['admin', 'mason'].includes(a.role) && !!a.parentAdminId);
     const unassignedAdmins = admins.filter(a => ['admin', 'mason'].includes(a.role) && !a.parentAdminId);
+    const copperSummary = buildCopperMonitorSummary({
+        consumers: allUsers.map(u => ({ ...u, score: u.socioScore || u.trustScore || 0 })),
+        workers: allWorkers.map(w => ({ ...w, score: w.socioScore || 0 })),
+        guilds: [],
+        threshold: Number(copperSettings.threshold || 450),
+    });
     
     const getScoreColor = (score) => {
         if (score >= 80) return 'var(--success)';
@@ -210,6 +237,7 @@ export default function SuperAdmin() {
                         { id: 'escalations', label: 'Escalations', icon: '🚨', count: escalatedBookings.length },
                         { id: 'disputes', label: 'Disputes', icon: '⚠️' },
                         { id: 'work-status', label: 'Monitor', icon: '🔍' },
+                        { id: 'copper', label: 'Copper', icon: '⚙️' },
                         { id: 'regions', label: 'Performance', icon: '📊' },
                         { id: 'admin-workers', label: 'Infrastructure', icon: '👥' },
                         { id: 'create', label: 'Setup', icon: '➕' },
@@ -325,6 +353,89 @@ export default function SuperAdmin() {
                                 </div>
                                 <button type="submit" disabled={createLoading} className="btn-primary" style={{ padding: 20 }}>{createLoading ? 'Provisioning...' : 'Confirm Provisioning'}</button>
                             </form>
+                        </div>
+                    )}
+
+                    {activeTab === 'copper' && (
+                        <div className="job-card" style={{ padding: 32 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20, marginBottom: 28 }}>
+                                <div>
+                                    <h3 style={{ margin: '0 0 8px 0', fontSize: 22, fontWeight: 900 }}>Copper Monitoring Controls</h3>
+                                    <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                                        Watch low-score consumers, workers, and guilds closely while always showing a clear recovery path.
+                                    </p>
+                                </div>
+                                <button onClick={saveCopperSettings} className="btn-primary" style={{ padding: '12px 20px', whiteSpace: 'nowrap' }}>
+                                    Save Controls
+                                </button>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 28 }}>
+                                <div style={{ background: 'var(--bg-soft)', padding: 18, borderRadius: 12 }}>
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 900 }}>COPPER CONSUMERS</div>
+                                    <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--warning)' }}>{copperSummary.copperConsumersCount}</div>
+                                </div>
+                                <div style={{ background: 'var(--bg-soft)', padding: 18, borderRadius: 12 }}>
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 900 }}>COPPER WORKERS</div>
+                                    <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--warning)' }}>{copperSummary.copperWorkersCount}</div>
+                                </div>
+                                <div style={{ background: 'var(--bg-soft)', padding: 18, borderRadius: 12 }}>
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 900 }}>COPPER GUILDS</div>
+                                    <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--warning)' }}>{copperSummary.copperGuildsCount}</div>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18, marginBottom: 24 }}>
+                                <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                    Copper score threshold
+                                    <input
+                                        type="number"
+                                        className="input-field"
+                                        value={copperSettings.threshold}
+                                        onChange={e => setCopperSettings({ ...copperSettings, threshold: Number(e.target.value) })}
+                                    />
+                                </label>
+                                <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                    Recovery discount %
+                                    <input
+                                        type="number"
+                                        className="input-field"
+                                        value={copperSettings.recoveryDiscountPercent}
+                                        onChange={e => setCopperSettings({ ...copperSettings, recoveryDiscountPercent: Number(e.target.value) })}
+                                    />
+                                </label>
+                                <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                    Monitor every hours
+                                    <input
+                                        type="number"
+                                        className="input-field"
+                                        value={copperSettings.alertFrequencyHours}
+                                        onChange={e => setCopperSettings({ ...copperSettings, alertFrequencyHours: Number(e.target.value) })}
+                                    />
+                                </label>
+                                <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                    Score-drop sensitivity
+                                    <input
+                                        type="number"
+                                        className="input-field"
+                                        value={copperSettings.scoreDropSensitivity}
+                                        onChange={e => setCopperSettings({ ...copperSettings, scoreDropSensitivity: Number(e.target.value) })}
+                                    />
+                                </label>
+                            </div>
+
+                            <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontWeight: 800, marginBottom: 24 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={copperSettings.cityEnabled}
+                                    onChange={e => setCopperSettings({ ...copperSettings, cityEnabled: e.target.checked })}
+                                />
+                                Enable Copper monitoring for active launch cities
+                            </label>
+
+                            <div style={{ background: 'var(--success-bg)', color: 'var(--success)', padding: 18, borderRadius: 12, lineHeight: 1.6, fontWeight: 700 }}>
+                                Recovery rule: Copper users and workers must see exact reasons, next clean actions, and the shortest honest path back to Silver.
+                            </div>
                         </div>
                     )}
 

@@ -805,7 +805,7 @@ export default function AdminBookings() {
   /**
    * Action: Admin sets a price quote for the job.
    * Logic: Appends to a "quotes" array so multiple admins can bid.
-   * Pricing: Automatically adds 15% platform fee + 2% payment charges to base amount.
+   * Pricing: Adds the current Gigtos booking fee to the worker-entered amount.
    */
   const setPriceQuote = async (bookingId) => {
     const enteredBase = Number(quotes[bookingId] || 0);
@@ -816,9 +816,9 @@ export default function AdminBookings() {
       return;
     }
 
-    // Calculate final price with platform fee (15%) and payment charges (2%)
+    // Calculate final price with the current booking-fee model.
     const pricing = calculateFinalPrice(basePrice);
-    const confirmMsg = `Submit quote with following breakdown?\n\nBase Amount: ₹${pricing.baseAmount}\nPlatform Fee (15%): ₹${pricing.platformFee}\nPayment Charges (2%): ₹${pricing.paymentCharge}\n\n════════════════════\nFinal Total for Customer: ₹${pricing.finalTotal}\n\nYou will receive: ₹${pricing.baseAmount}`;
+    const confirmMsg = `Submit quote with following breakdown?\n\nWorker Amount: ₹${pricing.baseAmount}\nGigtos Booking Fee: ₹${pricing.platformFee}\n\n════════════════════\nFinal Total for Customer: ₹${pricing.finalTotal}\n\nWorker receives: ₹${pricing.workerReceives}`;
     
     if (!window.confirm(confirmMsg)) {
       return;

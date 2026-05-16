@@ -104,6 +104,12 @@ export default function Home() {
     setShowModal(true);
   };
 
+  const handleHeroSearchSubmit = (event) => {
+    event.preventDefault();
+    const first = visibleServices[0];
+    if (first) handleBookService(first);
+  };
+
   const confirmBooking = () => {
     if (selectedService) {
       if (selectedService.isSpecial && selectedSubtype) {
@@ -143,6 +149,15 @@ export default function Home() {
           <p className="hero-subtext">
             Connecting you with top-tier verified professionals for any task, with instant transparent quotes.
           </p>
+          <form className="hero-service-search" onSubmit={handleHeroSearchSubmit}>
+            <input
+              value={serviceSearch}
+              onChange={(event) => setServiceSearch(event.target.value)}
+              placeholder="What do you need today?"
+              aria-label="Search and book a service"
+            />
+            <button type="submit">Book</button>
+          </form>
           <div className="hero-actions">
             <button className="btn-primary" onClick={() => scrollToSection('services')}>{getHeroCTAText()}</button>
             <button className="btn-secondary" onClick={() => scrollToSection('how-it-works')}>See How it Works</button>

@@ -1,73 +1,76 @@
-/**
- * PRICING UTILITY TESTS
- * Tests for pricing calculations with platform fees and payment charges
- */
+import {
+  calculateConsumerPlatformFee,
+  calculateFinalPrice,
+  formatPriceBreakdown,
+} from './pricing';
 
-import { calculateFinalPrice, formatPriceBreakdown } from './pricing';
+describe('calculateConsumerPlatformFee', () => {
+  test('uses INR 19 for bookings up to INR 500', () => {
+    expect(calculateConsumerPlatformFee(400)).toBe(19);
+    expect(calculateConsumerPlatformFee(500)).toBe(19);
+  });
+
+  test('uses INR 29 for bookings from INR 501 to INR 1000', () => {
+    expect(calculateConsumerPlatformFee(501)).toBe(29);
+    expect(calculateConsumerPlatformFee(800)).toBe(29);
+    expect(calculateConsumerPlatformFee(1000)).toBe(29);
+  });
+
+  test('uses INR 19 plus 2 percent above INR 1000', () => {
+    expect(calculateConsumerPlatformFee(1200)).toBe(43);
+    expect(calculateConsumerPlatformFee(2500)).toBe(69);
+  });
+});
 
 describe('calculateFinalPrice', () => {
-  test('calculates correct pricing for base amount 1000', () => {
-    const result = calculateFinalPrice(1000);
-    
-    expect(result.baseAmount).toBe(1000);
-    expect(result.platformFee).toBe(150); // 15% of 1000
-    expect(result.platformFeePercent).toBe(15);
-    expect(result.amountAfterMarkup).toBe(1150); // 1000 + 150
-    expect(result.paymentCharge).toBe(23); // 2% of 1150
-    expect(result.paymentChargePercent).toBe(2);
-    expect(result.finalTotal).toBe(1173); // 1150 + 23
+  test('calculates no-commission pricing for base amount 400', () => {
+    const result = calculateFinalPrice(400);
+
+    expect(result.baseAmount).toBe(400);
+    expect(result.platformFee).toBe(19);
+    expect(result.platformFeePercent).toBe(0);
+    expect(result.paymentCharge).toBe(0);
+    expect(result.finalTotal).toBe(419);
+    expect(result.workerReceives).toBe(400);
   });
 
-  test('calculates correct pricing for base amount 500', () => {
-    const result = calculateFinalPrice(500);
-    
-    expect(result.baseAmount).toBe(500);
-    expect(result.platformFee).toBe(75); // 15% of 500
-    expect(result.amountAfterMarkup).toBe(575); // 500 + 75
-    expect(result.paymentCharge).toBe(11.5); // 2% of 575
-    expect(result.finalTotal).toBe(586.5); // 575 + 11.5
+  test('calculates no-commission pricing for base amount 800', () => {
+    const result = calculateFinalPrice(800);
+
+    expect(result.baseAmount).toBe(800);
+    expect(result.platformFee).toBe(29);
+    expect(result.amountAfterMarkup).toBe(829);
+    expect(result.finalTotal).toBe(829);
+    expect(result.workerReceives).toBe(800);
   });
 
-  test('handles decimal base amounts correctly', () => {
-    const result = calculateFinalPrice(99.99);
-    
-    expect(result.baseAmount).toBe(99.99);
-    expect(result.platformFee).toBe(15); // 15% rounded
-    expect(result.amountAfterMarkup).toBe(114.99);
-    expect(result.paymentCharge).toBe(2.3); // 2% rounded
-    expect(result.finalTotal).toBe(117.29);
+  test('calculates no-commission pricing for base amount 1200', () => {
+    const result = calculateFinalPrice(1200);
+
+    expect(result.baseAmount).toBe(1200);
+    expect(result.platformFee).toBe(43);
+    expect(result.platformFeePercent).toBe(2);
+    expect(result.finalTotal).toBe(1243);
+    expect(result.workerReceives).toBe(1200);
   });
 
-  test('throws error for invalid base amount (zero)', () => {
+  test('throws error for invalid base amount', () => {
     expect(() => calculateFinalPrice(0)).toThrow('Invalid base amount');
-  });
-
-  test('throws error for invalid base amount (negative)', () => {
     expect(() => calculateFinalPrice(-100)).toThrow('Invalid base amount');
-  });
-
-  test('throws error for invalid base amount (NaN)', () => {
     expect(() => calculateFinalPrice('invalid')).toThrow('Invalid base amount');
   });
 
   test('accepts string numbers and converts them', () => {
     const result = calculateFinalPrice('1000');
-    expect(result.finalTotal).toBe(1173);
+    expect(result.finalTotal).toBe(1029);
   });
 });
 
 describe('formatPriceBreakdown', () => {
   test('formats breakdown string correctly', () => {
     const formatted = formatPriceBreakdown(1000);
-    expect(formatted).toContain('Base: ₹1000');
-    expect(formatted).toContain('Platform Fee (15%): ₹150');
-    expect(formatted).toContain('Payment Charges (2%): ₹23');
-    expect(formatted).toContain('Total: ₹1173');
-  });
-
-  test('formats breakdown for different amount', () => {
-    const formatted = formatPriceBreakdown(500);
-    expect(formatted).toContain('Base: ₹500');
-    expect(formatted).toContain('Total: ₹586.5');
+    expect(formatted).toContain('Worker price: ₹1000');
+    expect(formatted).toContain('Gigtos booking fee: ₹29');
+    expect(formatted).toContain('Total: ₹1029');
   });
 });

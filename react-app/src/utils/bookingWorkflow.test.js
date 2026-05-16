@@ -5,6 +5,7 @@ import {
   startWork,
   markFinished,
   confirmCompletion,
+  rateCompletedBooking,
 } from './bookingWorkflow';
 
 describe('booking workflow integration', () => {
@@ -25,11 +26,11 @@ describe('booking workflow integration', () => {
 
     expect(quoted.quotes).toHaveLength(1);
     expect(quoted.quotes[0].price).toBe(1000);
-    expect(quoted.quotes[0].finalPrice).toBe(1173);
+    expect(quoted.quotes[0].finalPrice).toBe(1029);
 
     const accepted = acceptQuote(quoted, 'a1');
     expect(accepted.status).toBe('accepted');
-    expect(accepted.acceptedQuote.finalPrice).toBe(1173);
+    expect(accepted.acceptedQuote.finalPrice).toBe(1029);
 
     const assigned = assignWorker(accepted, {
       id: 'w1',
@@ -42,11 +43,18 @@ describe('booking workflow integration', () => {
     const started = startWork(assigned);
     expect(started.status).toBe('in_progress');
 
-    const awaiting = markFinished(started);
+    const awaiting = markFinished(started, { afterPhotoUrls: ['https://example.com/after.jpg'] });
     expect(awaiting.status).toBe('awaiting_confirmation');
+    expect(awaiting.afterPhotos).toContain('https://example.com/after.jpg');
 
     const completed = confirmCompletion(awaiting);
     expect(completed.status).toBe('completed');
+
+    const rated = rateCompletedBooking(completed, { rating: 5 });
+    expect(rated.rating).toBe(5);
+    expect(rated.scoreEvents).toHaveLength(2);
+    expect(rated.scoreEvents[0].actorRole).toBe('worker');
+    expect(rated.scoreEvents[0].delta).toBe(15);
   });
 
   it('updates existing quote from same admin', () => {
@@ -65,12 +73,13 @@ describe('booking workflow integration', () => {
     expect(updated.quotes).toHaveLength(1);
     expect(updated.quotes[0].adminId).toBe('a1');
     expect(updated.quotes[0].price).toBe(600);
-    expect(updated.quotes[0].finalPrice).toBe(703.8);
+    expect(updated.quotes[0].finalPrice).toBe(629);
   });
 
   it('enforces valid status order', () => {
     expect(() => startWork({ status: 'pending' })).toThrow('Booking must be assigned first');
     expect(() => markFinished({ status: 'assigned' })).toThrow('Work must be in progress');
+    expect(() => markFinished({ status: 'in_progress' })).toThrow('Completion photo is required');
     expect(() => confirmCompletion({ status: 'assigned' })).toThrow('Booking must await confirmation');
   });
 });

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getAdminRedirectPath, isRegionSuspended } from '../utils/authRouting';
@@ -34,6 +34,35 @@ function Auth() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const finishConsumerLogin = async (firebaseUser) => {
+    const userRef = doc(db, 'users', firebaseUser.uid);
+    const existing = await getDoc(userRef);
+    if (!existing.exists()) {
+      await setDoc(userRef, {
+        email: firebaseUser.email || '',
+        name: firebaseUser.displayName || '',
+        phone: firebaseUser.phoneNumber || '',
+        authProvider: 'google',
+        createdAt: new Date(),
+      });
+    }
+    navigate(firebaseUser.phoneNumber ? '/' : '/complete-profile-phone');
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      const userCred = await signInWithPopup(auth, provider);
+      await finishConsumerLogin(userCred.user);
+    } catch (err) {
+      setError(err.message || 'Google sign-in failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleUnifiedLogin = async (e) => {
     e.preventDefault();
@@ -221,7 +250,7 @@ function Auth() {
           {phase === 'login' ? 'Gigtos' : 'Join Us'}
         </h1>
         <p style={{ color: 'var(--text-muted)', marginBottom: '40px', fontSize: '16px', fontWeight: '500' }}>
-          {phase === 'login' ? 'The future of gig work is here.' : 'Create your professional profile.'}
+          {phase === 'login' ? 'Book faster with Google or phone.' : 'Create your professional profile.'}
         </p>
 
         {error && (
@@ -243,17 +272,45 @@ function Auth() {
           </div>
         )}
 
+        {phase === 'login' && (
+          <div style={{ display: 'grid', gap: 10, marginBottom: 24 }}>
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '14px 18px',
+                borderRadius: 8,
+                border: '1px solid var(--border-light)',
+                background: 'var(--bg-surface)',
+                color: 'var(--text-main)',
+                fontWeight: 900,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                boxShadow: 'var(--shadow-sm)'
+              }}
+            >
+              Continue with Google
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>
+              <span style={{ flex: 1, height: 1, background: 'var(--border-light)' }} />
+              Phone or email
+              <span style={{ flex: 1, height: 1, background: 'var(--border-light)' }} />
+            </div>
+          </div>
+        )}
+
         <form onSubmit={phase === 'login' ? handleUnifiedLogin : handleSignup}>
           {phase === 'login' ? (
             <div style={{ marginBottom: '24px', textAlign: 'left' }}>
               <label style={{ display: 'block', marginBottom: '10px', fontWeight: '700', fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Email or Phone
+                Phone number or email
               </label>
               <input
                 type="text"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="name@email.com or phone"
+                placeholder="10-digit phone or name@email.com"
                 className="input-field"
                 style={{
                   width: '100%', padding: '16px 20px', background: 'var(--bg-soft)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', fontSize: '16px', color: 'var(--text-main)', outline: 'none', transition: 'all 0.2s', boxSizing: 'border-box'
@@ -330,7 +387,7 @@ function Auth() {
           )}
 
           <button type="submit" disabled={loading} className="btn-primary" style={{ width: '100%', padding: '18px', fontSize: '18px', marginBottom: '28px' }}>
-            {loading ? 'Processing...' : (phase === 'login' ? 'Sign In' : 'Create Account')}
+            {loading ? 'Processing...' : (phase === 'login' ? 'Continue' : 'Create Account')}
           </button>
 
           <div style={{ fontSize: '15px', color: 'var(--text-muted)', fontWeight: '500' }}>

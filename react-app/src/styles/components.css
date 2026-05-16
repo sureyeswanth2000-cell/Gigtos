@@ -497,3 +497,47 @@
     display: none;
   }
 }
+
+/* Dark-mode hardening for older inline-styled dashboards. */
+[data-theme='dark'] .dash-container,
+[data-theme='dark'] .dash-container * {
+  color: var(--text-main);
+}
+
+[data-theme='dark'] .dash-container p,
+[data-theme='dark'] .dash-container small,
+[data-theme='dark'] .dash-container [style*="#6B7280"],
+[data-theme='dark'] .dash-container [style*="#64748b"],
+[data-theme='dark'] .dash-container [style*="#475569"],
+[data-theme='dark'] .dash-container [style*="#94a3b8"],
+[data-theme='dark'] .dash-container [style*="#666"] {
+  color: var(--text-muted) !important;
+}
+
+[data-theme='dark'] .dash-container [style*="#1F1144"],
+[data-theme='dark'] .dash-container [style*="#1a0533"],
+[data-theme='dark'] .dash-container [style*="#1f2937"],
+[data-theme='dark'] .dash-container [style*="#111827"] {
+  color: var(--text-main) !important;
+}
+
+[data-theme='dark'] .dash-container .job-card,
+[data-theme='dark'] .dash-container [style*="background: '#fff'"],
+[data-theme='dark'] .dash-container [style*="backgroundColor: '#fff'"],
+[data-theme='dark'] .dash-container [style*="background: white"] {
+  background: var(--bg-surface) !important;
+  border-color: var(--border-light) !important;
+}
+
+[data-theme='dark'] input,
+[data-theme='dark'] textarea,
+[data-theme='dark'] select {
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+  border-color: var(--border-light);
+}
+
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder {
+  color: var(--text-muted);
+}

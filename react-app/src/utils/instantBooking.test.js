@@ -24,11 +24,10 @@ describe('buildWorkerAvailability', () => {
     expect(result.workerId).toBe('w1');
     expect(result.workerName).toBe('Ravi Kumar');
     expect(result.fixedRate).toBe(600);
-    // 600 + 15% = 690 + 2% = 703.80
-    expect(result.finalPrice).toBe(703.8);
+    expect(result.finalPrice).toBe(629);
     expect(result.isAvailable).toBe(true);
     expect(result.pricing).toBeDefined();
-    expect(result.pricing.platformFeePercent).toBe(15);
+    expect(result.pricing.platformFeePercent).toBe(0);
   });
 
   it('throws when workerId is missing', () => {
@@ -156,8 +155,7 @@ describe('createInstantBooking', () => {
     expect(booking.workerName).toBe('Ravi Kumar');
     expect(booking.fixedRate).toBe(600);
     expect(booking.acceptedQuote.price).toBe(600);
-    // 600 * 1.15 = 690 * 1.02 = 703.80
-    expect(booking.acceptedQuote.finalPrice).toBe(703.8);
+    expect(booking.acceptedQuote.finalPrice).toBe(629);
     expect(booking.serviceType).toBe('Electrician');
     expect(booking.isScheduled).toBe(false);
     expect(booking.userId).toBe('u1');
@@ -223,7 +221,7 @@ describe('getWorkerDisplayInfo', () => {
 
     expect(info.workerName).toBe('Ravi Kumar');
     expect(info.fixedRate).toBe(500);
-    expect(info.finalPrice).toBe(586.5); // 500 * 1.15 * 1.02
+    expect(info.finalPrice).toBe(519);
     expect(info.rating).toBe(4.5);
     expect(info.distanceKm).toBe(3.2);
     // Phone must NOT be present

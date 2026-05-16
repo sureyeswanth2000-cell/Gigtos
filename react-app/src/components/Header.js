@@ -7,6 +7,8 @@ import { db } from '../firebase';
 import LocationBar from './LocationBar';
 import ThemeToggle from './ThemeToggle';
 import { useTheme } from '../context/ThemeContext';
+import { getDevBypassUserFromSearch, isDevBypassEnabled } from '../utils/devBypass';
+import { getServiceOptions } from '../utils/serviceCatalog';
 
 export default function Header() {
   const { theme } = useTheme();
@@ -20,8 +22,40 @@ export default function Header() {
   const [isWorker, setIsWorker] = React.useState(false);
   const [adminRole, setAdminRole] = React.useState(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [serviceQuery, setServiceQuery] = React.useState('');
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const services = React.useMemo(() => getServiceOptions(), []);
+  const serviceMatches = React.useMemo(() => {
+    const query = serviceQuery.trim().toLowerCase();
+    if (!query) return services.slice(0, 6);
+    return services
+      .filter((service) =>
+        service.name.toLowerCase().includes(query) ||
+        service.category.toLowerCase().includes(query) ||
+        service.iconLabel.toLowerCase().includes(query)
+      )
+      .slice(0, 7);
+  }, [serviceQuery, services]);
 
   React.useEffect(() => {
+    if (isDevBypassEnabled()) {
+      try {
+        const devUser = getDevBypassUserFromSearch(window.location.search);
+        if (devUser) {
+          setUser(devUser);
+          setIsAdmin(devUser.role === 'superadmin' || devUser.role === 'field_operator');
+          setIsWorker(devUser.role === 'worker');
+          setAdminRole(devUser.role);
+          setIsSuperAdmin(devUser.role === 'superadmin');
+          setIsRegionLead(false);
+          setIsMason(false);
+          return undefined;
+        }
+      } catch {
+        // Use normal auth if the local bypass URL is invalid.
+      }
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -61,6 +95,18 @@ export default function Header() {
     setMenuOpen(false);
   };
 
+  const openService = (serviceName) => {
+    setServiceQuery('');
+    setSearchOpen(false);
+    setMenuOpen(false);
+    navigate(`/service?type=${encodeURIComponent(serviceName)}`);
+  };
+
+  const handleSearchSubmit = (event) => {
+    event.preventDefault();
+    if (serviceMatches[0]) openService(serviceMatches[0].name);
+  };
+
   return (
     <>
     <header className="premium-header">
@@ -69,6 +115,32 @@ export default function Header() {
         <span className="logo-icon">🏠</span>
         <span className="logo-text">Gigtos</span>
       </Link>
+
+      <form className="header-search" onSubmit={handleSearchSubmit}>
+        <input
+          value={serviceQuery}
+          onFocus={() => setSearchOpen(true)}
+          onChange={(event) => {
+            setServiceQuery(event.target.value);
+            setSearchOpen(true);
+          }}
+          placeholder="Search maid, cleaning, electrician..."
+          aria-label="Search services"
+        />
+        <button type="submit">Search</button>
+        {searchOpen && (
+          <div className="header-search-results">
+            {serviceMatches.length > 0 ? serviceMatches.map((service) => (
+              <button key={service.id} type="button" onMouseDown={() => openService(service.name)}>
+                <span>{service.name}</span>
+                <small>{service.category}</small>
+              </button>
+            )) : (
+              <div className="header-search-empty">No service found</div>
+            )}
+          </div>
+        )}
+      </form>
 
       {/* Navigation & Theme */}
       <div className="header-actions">
@@ -79,6 +151,7 @@ export default function Header() {
             {/* Desktop Quick Nav */}
             <nav className="desktop-nav">
               <Link to="/" className="nav-link">Home</Link>
+              <Link to="/services" className="nav-link">Services</Link>
               {!isWorker && (
                 <Link to="/jobs" className="nav-link">Browse Jobs</Link>
               )}
@@ -87,6 +160,10 @@ export default function Header() {
               {isSuperAdmin ? (
                 <Link to="/admin/super" className="role-pill super-admin">
                   🛡️ SuperAdmin
+                </Link>
+              ) : adminRole === 'field_operator' ? (
+                <Link to="/operator" className="role-pill admin-role">
+                  Field Operator
                 </Link>
               ) : isRegionLead ? (
                 <Link to="/admin/region-lead" className="role-pill region-lead">
@@ -129,6 +206,9 @@ export default function Header() {
                     <Link to="/" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">
                       🏠 Home
                     </Link>
+                    <Link to="/services" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">
+                      Services
+                    </Link>
                     {!isWorker && (
                       <Link to="/jobs" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">
                         💼 Browse Jobs
@@ -139,7 +219,7 @@ export default function Header() {
                         <Link to="/my-bookings" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">
                           📅 My Bookings
                         </Link>
-                        <Link to={isSuperAdmin ? "/admin/super" : isRegionLead ? "/admin/region-lead" : isMason ? "/mason/dashboard" : "/admin"} onClick={() => setMenuOpen(false)} className="menu-item mobile-item highlighted">
+                        <Link to={isSuperAdmin ? "/admin/super" : adminRole === 'field_operator' ? "/operator" : isRegionLead ? "/admin/region-lead" : isMason ? "/mason/dashboard" : "/admin"} onClick={() => setMenuOpen(false)} className="menu-item mobile-item highlighted">
                           Dashboard
                         </Link>
                       </>
@@ -209,6 +289,83 @@ export default function Header() {
           display: flex;
           align-items: center;
           gap: 24px;
+        }
+
+        .header-search {
+          flex: 1;
+          max-width: 560px;
+          min-width: 260px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          position: relative;
+          background: var(--bg-surface);
+          border: 1px solid var(--border-light);
+          border-radius: 8px;
+          padding: 6px;
+          box-shadow: var(--shadow-sm);
+        }
+
+        .header-search input {
+          flex: 1;
+          min-width: 0;
+          border: none;
+          outline: none;
+          background: transparent;
+          color: var(--text-main);
+          font-size: 14px;
+          padding: 8px 10px;
+        }
+
+        .header-search button[type="submit"] {
+          border: none;
+          border-radius: 7px;
+          background: var(--text-main);
+          color: var(--bg-surface);
+          font-size: 12px;
+          font-weight: 800;
+          padding: 8px 12px;
+          cursor: pointer;
+        }
+
+        .header-search-results {
+          position: absolute;
+          top: calc(100% + 8px);
+          left: 0;
+          right: 0;
+          background: var(--bg-surface);
+          border: 1px solid var(--border-light);
+          border-radius: 8px;
+          box-shadow: var(--shadow-lg);
+          overflow: hidden;
+          z-index: 1200;
+        }
+
+        .header-search-results button {
+          width: 100%;
+          border: none;
+          background: transparent;
+          color: var(--text-main);
+          padding: 12px 14px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          cursor: pointer;
+          border-bottom: 1px solid var(--border-light);
+        }
+
+        .header-search-results button:hover {
+          background: var(--bg-soft);
+        }
+
+        .header-search-results small,
+        .header-search-empty {
+          color: var(--text-muted);
+          font-size: 12px;
+        }
+
+        .header-search-empty {
+          padding: 14px;
         }
 
         .desktop-nav {
@@ -375,7 +532,22 @@ export default function Header() {
         @media (max-width: 768px) {
           .desktop-nav { display: none; }
           .mobile-only-links { display: block; }
-          .premium-header { padding: 10px 16px; }
+          .premium-header {
+            padding: 10px 14px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+          }
+          .header-search {
+            order: 3;
+            grid-column: 1 / -1;
+            min-width: 0;
+            max-width: none;
+          }
+          .header-actions {
+            gap: 10px;
+            justify-content: flex-end;
+          }
         }
       `}</style>
     </header>

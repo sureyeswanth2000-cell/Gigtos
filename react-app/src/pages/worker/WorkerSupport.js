@@ -24,9 +24,9 @@ export default function WorkerSupport() {
   return (
     <div className="worker-page">
       <div className="worker-container" style={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexShrink: 0 }}>
-          <Link to="/worker/dashboard" style={{ color: '#A259FF', textDecoration: 'none', fontSize: 20 }}>←</Link>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1F1144' }}>💬 Chat with Support</h2>
+        <div className="worker-page-topbar" style={{ flexShrink: 0 }}>
+          <Link to="/worker/dashboard" className="worker-back-link" aria-label="Back to worker dashboard">←</Link>
+          <h2 className="worker-page-title">Chat with Support</h2>
         </div>
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <ChatInterface workerName={workerName} />

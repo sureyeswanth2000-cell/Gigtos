@@ -10,28 +10,44 @@
  * - Validates profile completeness before allowing document creation in Firestore.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { collection, addDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import './Service.css';
+import { getDevBypassUserFromSearch, isDevBypassEnabled } from '../utils/devBypass';
+import { getServiceByName, getServiceOptions } from '../utils/serviceCatalog';
+import { formatPriceBand, getSuggestedPriceBand } from '../utils/priceIntelligence';
 
 const serviceIcons = {
+  'Home Helper': '🏠',
+  'Kitchen Help': '🍳',
+  'House Cleaning': '🧹',
+  'Kitchen Cleaning': '✨',
+  'Bathroom Cleaning': '🛁',
+  'Bedroom Cleaning': '🛏️',
+  'Full House Cleaning': '🏡',
   'Plumber': '🧰',
   'Electrician': '⚡',
   'Carpenter': '🪛',
   'Painter': '🎨'
 };
 
+getServiceOptions().forEach((service) => {
+  if (!serviceIcons[service.name]) serviceIcons[service.name] = service.iconLabel;
+});
+
 function getSmartMatchRecommendation(serviceType, details, estimatedDays) {
   const text = (details || '').toLowerCase();
   const isUrgent = /(urgent|asap|immediately|leak|sparking|short\s?circuit|burst)/.test(text);
   const complex = /(full|complete|renovation|rewire|repaint|replace|major)/.test(text) || Number(estimatedDays) > 2;
+  const service = getServiceByName(serviceType);
 
   const urgency = isUrgent ? 'High' : complex ? 'Medium' : 'Normal';
   const visitWindow = isUrgent ? '30-90 mins' : '2-6 hours';
+  const priceBand = getSuggestedPriceBand({ serviceType, urgency, estimatedDays });
 
   let budgetRange = '₹700 - ₹1,800';
   if (serviceType === 'Electrician') budgetRange = complex ? '₹1,400 - ₹4,500' : '₹900 - ₹2,200';
@@ -39,15 +55,18 @@ function getSmartMatchRecommendation(serviceType, details, estimatedDays) {
   if (serviceType === 'Carpenter') budgetRange = complex ? '₹1,800 - ₹6,000' : '₹1,000 - ₹2,800';
   if (serviceType === 'Painter') budgetRange = complex ? '₹2,200 - ₹8,000' : '₹1,200 - ₹3,200';
 
+  budgetRange = formatPriceBand(priceBand);
+
   const confidence = isUrgent ? 92 : complex ? 87 : 81;
 
   const reasons = [
     `Matched to ${serviceType} based on your request details`,
     isUrgent ? 'Detected urgent keywords and prioritized nearby availability' : 'No emergency risk keywords found',
     complex ? 'Estimated multi-step work scope' : 'Estimated quick-resolution job scope',
+    service.rareService ? 'Rare service can expand to city-wide matching when area supply is low' : 'Area and 10 km matching is preferred for this service',
   ];
 
-  return { urgency, visitWindow, budgetRange, confidence, reasons };
+  return { urgency, visitWindow, budgetRange, priceBand, matchingScope: service.matchingScope, confidence, reasons };
 }
 
 export default function Service() {
@@ -56,7 +75,7 @@ export default function Service() {
   // URL search params to get the service category (Plumber, etc.)
   const params = new URLSearchParams(location.search);
   // Default to URL type, then check location state if it's a rebooking
-  const [selectedType, setSelectedType] = useState(location.state?.serviceType || params.get('type') || 'Plumber');
+  const [selectedType, setSelectedType] = useState(location.state?.serviceType || params.get('type') || 'Home Helper');
   // Navigation hook for redirection
   const navigate = useNavigate();
 
@@ -81,11 +100,23 @@ export default function Service() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false); // Loading state for photo upload
   const [issueDetails, setIssueDetails] = useState('');
   const [smartMatch, setSmartMatch] = useState(() => getSmartMatchRecommendation(selectedType, '', 1));
+  const devUser = useMemo(
+    () => (isDevBypassEnabled() ? getDevBypassUserFromSearch(location.search) : null),
+    [location.search]
+  );
 
   // Effect to load existing user profile data from Firestore on mount
   useEffect(() => {
     const loadUserData = async () => {
       try {
+        if (devUser?.role === 'consumer') {
+          setName(devUser.name || '');
+          setAddress(devUser.address || '');
+          setUserPhone(devUser.phone || '');
+          setProfileIncomplete(false);
+          return;
+        }
+
         const user = auth.currentUser;
         if (!user) return; // Exit if user session not found
 
@@ -112,7 +143,7 @@ export default function Service() {
     };
 
     loadUserData(); // Execute profile fetch
-  }, [auth.currentUser, location.state]); // Re-run if auth or rebook state changes
+  }, [auth.currentUser, location.state, devUser]); // Re-run if auth, rebook state, or local smoke user changes
 
   useEffect(() => {
     setSmartMatch(getSmartMatchRecommendation(selectedType, issueDetails, estimatedDays));
@@ -159,13 +190,13 @@ export default function Service() {
     setError(''); // Clear previous errors
 
     try {
-      const user = auth.currentUser;
+      const user = devUser?.role === 'consumer' ? devUser : auth.currentUser;
       if (!user) throw new Error('Not authenticated'); // Safety check for auth session
 
       // Construct booking document payload
       const bookingPayload = {
         userId: user.uid, // Map booking to user ID
-        serviceType: type, // Category (Plumber, Electrician, etc.)
+        serviceType: selectedType, // Category (Plumber, Electrician, etc.)
         customerName: name, // Customer name at time of booking
         address: address, // Service location
         phone: userPhone, // Contact number
@@ -176,6 +207,8 @@ export default function Service() {
         estimatedDays: Number(estimatedDays),
         issueDetails: issueDetails.trim(),
         aiSmartMatch: smartMatch,
+        matchingScope: smartMatch.matchingScope,
+        suggestedPriceBand: smartMatch.priceBand,
         completedWorkDays: 0,
         remainingWorkDays: Number(estimatedDays),
         isMultiDay: Number(estimatedDays) > 1,
@@ -184,8 +217,12 @@ export default function Service() {
         updatedAt: new Date() // Record of latest status change
       };
 
-      // Write document to Firestore 'bookings' collection
-      await addDoc(collection(db, 'bookings'), bookingPayload);
+      // Write document to Firestore 'bookings' collection. Local smoke mode never writes data.
+      if (devUser?.role === 'consumer') {
+        bookingPayload.id = 'dev-booking-preview';
+      } else {
+        await addDoc(collection(db, 'bookings'), bookingPayload);
+      }
 
       setSuccess(`Success! Your request has been sent. Our regional professionals will review it and provide price quotes shortly. You can track this in 'My Bookings'.`); // Show success UI
       setShowConfirm(false); // Close confirmation modal
@@ -200,6 +237,192 @@ export default function Service() {
       setLoading(false); // Stop loading spinner
     }
   };
+
+  const serviceOptions = getServiceOptions();
+  const canReview = Boolean(name && address && userPhone && (!isScheduled || (scheduledDate && timeSlot)));
+  const scheduleText = isScheduled ? `${scheduledDate || 'Select date'} / ${timeSlot || 'Select time'}` : 'ASAP, nearest available worker';
+
+  return (
+    <div className="booking-redesign-page">
+      <section className="booking-redesign-shell">
+        <aside className="booking-redesign-aside">
+          <span className="booking-kicker">Fast booking</span>
+          <h1>Book {selectedType}</h1>
+          <p>Three steps: tell us the work, confirm location and time, then review. No maze.</p>
+
+          <div className="booking-trust-list">
+            <span>Verified workers</span>
+            <span>Transparent price range</span>
+            <span>Live tracking after assignment</span>
+          </div>
+        </aside>
+
+        <main className="booking-flow-panel">
+          <div className="booking-step-tabs" aria-label="Booking steps">
+            <span className="active">1 Work</span>
+            <span className={address && userPhone ? 'active' : ''}>2 Location</span>
+            <span className={canReview ? 'active' : ''}>3 Review</span>
+          </div>
+
+          {profileIncomplete && (
+            <div className="booking-warning">
+              Complete name, phone, and address to book faster next time.
+              <button onClick={() => navigate('/profile')}>Open profile</button>
+            </div>
+          )}
+          {error && <div className="booking-error">{error}</div>}
+          {success && <div className="booking-success">{success}</div>}
+
+          <section className="booking-panel-section">
+            <div className="section-row">
+              <div>
+                <h2>Choose service</h2>
+                <p>Search is on top; here you can switch related services quickly.</p>
+              </div>
+              <strong>{smartMatch.confidence}% match</strong>
+            </div>
+
+            <div className="service-choice-grid">
+              {serviceOptions.map((service) => (
+                <button
+                  key={service.id}
+                  type="button"
+                  className={selectedType === service.name ? 'selected' : ''}
+                  onClick={() => setSelectedType(service.name)}
+                >
+                  <span>{service.iconLabel}</span>
+                  <strong>{service.name}</strong>
+                </button>
+              ))}
+            </div>
+
+            <label className="booking-field">
+              <span>Describe the work</span>
+              <textarea
+                value={issueDetails}
+                onChange={(e) => setIssueDetails(e.target.value)}
+                rows={4}
+                placeholder="Describe your issue or work details. Example: kitchen deep cleaning today, sink area is oily, need quick help."
+              />
+            </label>
+
+            <div className="booking-insight-grid">
+              <div><span>Urgency</span><strong>{smartMatch.urgency}</strong></div>
+              <div><span>Visit</span><strong>{smartMatch.visitWindow}</strong></div>
+              <div><span>Fair range</span><strong>{smartMatch.budgetRange}</strong></div>
+            </div>
+
+            <label className="photo-upload-card">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => handlePhotoUpload(e.target.files[0])}
+                disabled={uploadingPhoto}
+              />
+              <span>{requestedPhoto ? 'Photo attached' : uploadingPhoto ? 'Uploading photo...' : 'Add work photo'}</span>
+              <small>Photos help workers quote correctly.</small>
+            </label>
+          </section>
+
+          <section className="booking-panel-section">
+            <div className="section-row">
+              <div>
+                <h2>Location and time</h2>
+                <p>Consumers can book with Google login, then keep phone and address saved.</p>
+              </div>
+            </div>
+
+            <div className="booking-form-grid">
+              <label className="booking-field">
+                <span>Name</span>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+              </label>
+              <label className="booking-field">
+                <span>Phone</span>
+                <input value={userPhone} onChange={(e) => setUserPhone(e.target.value)} placeholder="10-digit phone" />
+              </label>
+              <label className="booking-field full">
+                <span>Address</span>
+                <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={3} placeholder="House, street, landmark, area" />
+              </label>
+            </div>
+
+            <div className="booking-profile-summary" aria-label="Booking profile summary">
+              <div>
+                <span>Consumer</span>
+                <strong>{name || 'Name needed'}</strong>
+              </div>
+              <div>
+                <span>Phone</span>
+                <strong>{userPhone || 'Phone needed'}</strong>
+              </div>
+              <div>
+                <span>Area</span>
+                <strong>{address ? 'Saved address ready' : 'Address needed'}</strong>
+              </div>
+            </div>
+
+            <div className="booking-schedule-card">
+              <button type="button" className={!isScheduled ? 'selected' : ''} onClick={() => setIsScheduled(false)}>Book now</button>
+              <button type="button" className={isScheduled ? 'selected' : ''} onClick={() => setIsScheduled(true)}>Future booking</button>
+            </div>
+
+            {isScheduled && (
+              <div className="booking-form-grid">
+                <label className="booking-field">
+                  <span>Date</span>
+                  <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} min={new Date().toISOString().split('T')[0]} />
+                </label>
+                <label className="booking-field">
+                  <span>Time slot</span>
+                  <select value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)}>
+                    <option value="">Choose time</option>
+                    <option value="9 AM - 12 PM">9 AM - 12 PM</option>
+                    <option value="12 PM - 3 PM">12 PM - 3 PM</option>
+                    <option value="3 PM - 6 PM">3 PM - 6 PM</option>
+                  </select>
+                </label>
+              </div>
+            )}
+          </section>
+
+          <section className="booking-review-card">
+            <div>
+              <span>Review</span>
+              <strong>{selectedType}</strong>
+              <small>{scheduleText}</small>
+            </div>
+            <button
+              type="button"
+              disabled={!canReview || loading}
+              onClick={() => setShowConfirm(true)}
+            >
+              {loading ? 'Booking...' : 'Review and book'}
+            </button>
+          </section>
+        </main>
+      </section>
+
+      {showConfirm && (
+        <div className="booking-modal-backdrop">
+          <div className="booking-modal">
+            <h3>Confirm booking</h3>
+            <p>{selectedType} for {name || 'consumer'}.</p>
+            <div className="booking-modal-summary">
+              <span>Phone: {userPhone}</span>
+              <span>Address: {address}</span>
+              <span>Time: {scheduleText}</span>
+              <span>Expected range: {smartMatch.budgetRange}</span>
+            </div>
+            <div className="booking-modal-actions">
+              <button className="secondary" onClick={() => setShowConfirm(false)} disabled={loading}>Back</button>
+              <button onClick={handleBooking} disabled={loading}>{loading ? 'Booking...' : 'Confirm'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="service-page">
@@ -558,13 +781,13 @@ export default function Service() {
             textAlign: 'center'
           }}>
             <div style={{ fontSize: '50px', marginBottom: '15px' }}>
-              {serviceIcons[type] || '🛠️'}
+              {serviceIcons[selectedType] || '🛠️'}
             </div>
             <h3 style={{ fontSize: '20px', margin: '0 0 10px 0', color: '#333' }}>
               Confirm Booking?
             </h3>
             <p style={{ color: '#666', margin: '10px 0', fontSize: '14px' }}>
-              You are about to book <strong>{type}</strong> service for:
+              You are about to book <strong>{selectedType}</strong> service for:
             </p>
             {/* Confirmation Data Summary */}
             <div style={{

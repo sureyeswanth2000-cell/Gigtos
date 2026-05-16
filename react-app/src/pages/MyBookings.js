@@ -560,9 +560,31 @@ export default function MyBookings() {
   return (
     <div className="my-bookings-container">
       <header className="page-header">
-        <h2 className="premium-title">My Bookings</h2>
-        <p className="page-subtitle">Track requests, compare quotes, and manage service progress in one place.</p>
+        <div>
+          <h2 className="premium-title">My Bookings</h2>
+          <p className="page-subtitle">Track requests, compare quotes, and manage service progress in one place.</p>
+        </div>
+        <button className="quick-book-btn" onClick={() => navigate('/services')}>Book a service</button>
       </header>
+
+      <div className="booking-command-grid" aria-label="Booking summary">
+        <button onClick={() => setStatusFilter('all')}>
+          <strong>{bookings.length}</strong>
+          <span>Total</span>
+        </button>
+        <button onClick={() => setStatusFilter('in_progress')}>
+          <strong>{bookings.filter(b => ['assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status)).length}</strong>
+          <span>Live</span>
+        </button>
+        <button onClick={() => setStatusFilter('quoted')}>
+          <strong>{bookings.filter(b => b.status === 'quoted').length}</strong>
+          <span>Quotes</span>
+        </button>
+        <button onClick={() => setStatusFilter('completed')}>
+          <strong>{bookings.filter(b => b.status === 'completed').length}</strong>
+          <span>Done</span>
+        </button>
+      </div>
 
       <div className="search-filter-section">
         <div className="search-input-wrapper">

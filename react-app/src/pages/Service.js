@@ -1,111 +1,89 @@
-/**
- * SERVICE BOOKING PAGE - CONSUMER INTERFACE
- * 
- * Logic Overview:
- * - Fetches user profile to pre-fill booking details (Name, Address, Phone).
- * - Implements dual-booking modes: 
- *   1. Immediate (Status: 'pending') - for urgent needs.
- *   2. Scheduled (Status: 'scheduled') - for future appointments with specific time slots.
- * - Enforces ₹150 visiting charge policy across all service types.
- * - Validates profile completeness before allowing document creation in Firestore.
- */
-
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { collection, addDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc } from 'firebase/firestore';
+import { getDownloadURL, getStorage, ref as storageRef, uploadBytes } from 'firebase/storage';
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarClock,
+  Camera,
+  CheckCircle2,
+  Clock,
+  IndianRupee,
+  LocateFixed,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  Sparkles,
+  User,
+} from 'lucide-react';
 import { auth, db } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import './Service.css';
 import { getDevBypassUserFromSearch, isDevBypassEnabled } from '../utils/devBypass';
 import { getServiceByName, getServiceOptions } from '../utils/serviceCatalog';
 import { formatPriceBand, getSuggestedPriceBand } from '../utils/priceIntelligence';
-
-const serviceIcons = {
-  'Home Helper': '🏠',
-  'Kitchen Help': '🍳',
-  'House Cleaning': '🧹',
-  'Kitchen Cleaning': '✨',
-  'Bathroom Cleaning': '🛁',
-  'Bedroom Cleaning': '🛏️',
-  'Full House Cleaning': '🏡',
-  'Plumber': '🧰',
-  'Electrician': '⚡',
-  'Carpenter': '🪛',
-  'Painter': '🎨'
-};
-
-getServiceOptions().forEach((service) => {
-  if (!serviceIcons[service.name]) serviceIcons[service.name] = service.iconLabel;
-});
+import './Service.css';
 
 function getSmartMatchRecommendation(serviceType, details, estimatedDays) {
   const text = (details || '').toLowerCase();
   const isUrgent = /(urgent|asap|immediately|leak|sparking|short\s?circuit|burst)/.test(text);
   const complex = /(full|complete|renovation|rewire|repaint|replace|major)/.test(text) || Number(estimatedDays) > 2;
   const service = getServiceByName(serviceType);
-
   const urgency = isUrgent ? 'High' : complex ? 'Medium' : 'Normal';
   const visitWindow = isUrgent ? '30-90 mins' : '2-6 hours';
   const priceBand = getSuggestedPriceBand({ serviceType, urgency, estimatedDays });
-
-  let budgetRange = '₹700 - ₹1,800';
-  if (serviceType === 'Electrician') budgetRange = complex ? '₹1,400 - ₹4,500' : '₹900 - ₹2,200';
-  if (serviceType === 'Plumber') budgetRange = complex ? '₹1,300 - ₹4,200' : '₹850 - ₹2,000';
-  if (serviceType === 'Carpenter') budgetRange = complex ? '₹1,800 - ₹6,000' : '₹1,000 - ₹2,800';
-  if (serviceType === 'Painter') budgetRange = complex ? '₹2,200 - ₹8,000' : '₹1,200 - ₹3,200';
-
-  budgetRange = formatPriceBand(priceBand);
-
+  const budgetRange = formatPriceBand(priceBand);
   const confidence = isUrgent ? 92 : complex ? 87 : 81;
-
   const reasons = [
     `Matched to ${serviceType} based on your request details`,
-    isUrgent ? 'Detected urgent keywords and prioritized nearby availability' : 'No emergency risk keywords found',
-    complex ? 'Estimated multi-step work scope' : 'Estimated quick-resolution job scope',
-    service.rareService ? 'Rare service can expand to city-wide matching when area supply is low' : 'Area and 10 km matching is preferred for this service',
+    isUrgent ? 'Urgent keywords detected, so nearby availability is prioritized' : 'No emergency risk keywords found',
+    complex ? 'Work may need multi-step scheduling' : 'Work looks suitable for quick-resolution assignment',
+    service.rareService ? 'If local supply is sparse, matching can expand city-wide' : 'Area and 10 km matching is preferred',
   ];
 
-  return { urgency, visitWindow, budgetRange, priceBand, matchingScope: service.matchingScope, confidence, reasons };
+  return {
+    urgency,
+    visitWindow,
+    budgetRange,
+    priceBand,
+    matchingScope: service.matchingScope,
+    confidence,
+    reasons,
+  };
 }
 
+const getScopeText = (scope) => (
+  scope === 'city_when_sparse'
+    ? 'Nearby first, city-wide fallback when supply is rare'
+    : 'Nearby workers within service area and 10 km'
+);
+
 export default function Service() {
-  // React Router location hook to handle incoming state (e.g. from Rebook button)
   const location = useLocation();
-  // URL search params to get the service category (Plumber, etc.)
-  const params = new URLSearchParams(location.search);
-  // Default to URL type, then check location state if it's a rebooking
-  const [selectedType, setSelectedType] = useState(location.state?.serviceType || params.get('type') || 'Home Helper');
-  // Navigation hook for redirection
   const navigate = useNavigate();
-
-  // State variables for user contact and location information
-  const [name, setName] = useState(''); // Customer's full name
-  const [address, setAddress] = useState(location.state?.prefillAddress || ''); // Pre-filled from rebook if available
-  const [userPhone, setUserPhone] = useState(location.state?.prefillPhone || ''); // Pre-filled from rebook if available
-
-  // State variables for future/scheduled booking functionality
-  const [isScheduled, setIsScheduled] = useState(false); // Toggle between immediate and future booking
-  const [scheduledDate, setScheduledDate] = useState(''); // User selected date (YYYY-MM-DD)
-  const [timeSlot, setTimeSlot] = useState(''); // User selected slot: 9-12, 12-3, 3-6
-  const [estimatedDays, setEstimatedDays] = useState(1); // Single day by default, multi-day supported
-
-  // UI and feedback states
-  const [loading, setLoading] = useState(false); // Spinner state during Firestore write
-  const [error, setError] = useState(''); // Error message display
-  const [success, setSuccess] = useState(''); // Success message display
-  const [showConfirm, setShowConfirm] = useState(false); // State for the final confirmation modal
-  const [profileIncomplete, setProfileIncomplete] = useState(false); // Flag if name/address/phone is missing
-  const [requestedPhoto, setRequestedPhoto] = useState(null); // URL of uploaded work photo
-  const [uploadingPhoto, setUploadingPhoto] = useState(false); // Loading state for photo upload
+  const params = new URLSearchParams(location.search);
+  const [selectedType, setSelectedType] = useState(location.state?.serviceType || params.get('type') || 'Home Helper');
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState(location.state?.prefillAddress || '');
+  const [userPhone, setUserPhone] = useState(location.state?.prefillPhone || '');
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [timeSlot, setTimeSlot] = useState('');
+  const [estimatedDays, setEstimatedDays] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [profileIncomplete, setProfileIncomplete] = useState(false);
+  const [requestedPhoto, setRequestedPhoto] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [issueDetails, setIssueDetails] = useState('');
   const [smartMatch, setSmartMatch] = useState(() => getSmartMatchRecommendation(selectedType, '', 1));
+
   const devUser = useMemo(
     () => (isDevBypassEnabled() ? getDevBypassUserFromSearch(location.search) : null),
     [location.search]
   );
 
-  // Effect to load existing user profile data from Firestore on mount
   useEffect(() => {
     const loadUserData = async () => {
       try {
@@ -118,32 +96,25 @@ export default function Service() {
         }
 
         const user = auth.currentUser;
-        if (!user) return; // Exit if user session not found
+        if (!user) return;
 
-        // Fetch user document from 'users' collection using UID
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
           const data = userDoc.data();
-          // Only update name if not already set by rebook pre-fill
           if (!name) setName(data.name || '');
-          // If NOT rebooking (no location state), pre-fill address/phone from profile
           if (!location.state) {
             setAddress(data.address || '');
             setUserPhone(data.phone || '');
           }
-
-          // Trigger warning if profile fields are empty
-          if (!data.phone || !data.name || !data.address) {
-            setProfileIncomplete(true);
-          }
+          setProfileIncomplete(!data.phone || !data.name || !data.address);
         }
       } catch (err) {
-        console.error('Error loading profile:', err); // Log fetch errors
+        console.error('Error loading profile:', err);
       }
     };
 
-    loadUserData(); // Execute profile fetch
-  }, [auth.currentUser, location.state, devUser]); // Re-run if auth, rebook state, or local smoke user changes
+    loadUserData();
+  }, [devUser, location.state, name]);
 
   useEffect(() => {
     setSmartMatch(getSmartMatchRecommendation(selectedType, issueDetails, estimatedDays));
@@ -166,18 +137,15 @@ export default function Service() {
     }
   };
 
-  // Main booking submission handler
   const handleBooking = async () => {
-    // Validation: Ensure core profile details are present
     if (!name || !address || !userPhone) {
-      setError('Please complete your profile first (name, address, phone)');
+      setError('Please complete name, address, and phone before booking.');
       setProfileIncomplete(true);
       return;
     }
 
-    // Validation: Ensure scheduling details are selected if future booking is chosen
     if (isScheduled && (!scheduledDate || !timeSlot)) {
-      setError('Please select both a date and a time slot for your scheduled booking.');
+      setError('Please select both date and time for a future booking.');
       return;
     }
 
@@ -186,24 +154,23 @@ export default function Service() {
       return;
     }
 
-    setLoading(true); // Start loading spinner
-    setError(''); // Clear previous errors
+    setLoading(true);
+    setError('');
 
     try {
       const user = devUser?.role === 'consumer' ? devUser : auth.currentUser;
-      if (!user) throw new Error('Not authenticated'); // Safety check for auth session
+      if (!user) throw new Error('Not authenticated');
 
-      // Construct booking document payload
       const bookingPayload = {
-        userId: user.uid, // Map booking to user ID
-        serviceType: selectedType, // Category (Plumber, Electrician, etc.)
-        customerName: name, // Customer name at time of booking
-        address: address, // Service location
-        phone: userPhone, // Contact number
-        status: isScheduled ? 'scheduled' : 'pending', // Set status based on timing choice
+        userId: user.uid,
+        serviceType: selectedType,
+        customerName: name,
+        address,
+        phone: userPhone,
+        status: isScheduled ? 'scheduled' : 'pending',
         statusUpdatedAt: new Date(),
-        scheduledDate: isScheduled ? scheduledDate : null, // Future date if applicable
-        timeSlot: isScheduled ? timeSlot : null, // Future slot if applicable
+        scheduledDate: isScheduled ? scheduledDate : null,
+        timeSlot: isScheduled ? timeSlot : null,
         estimatedDays: Number(estimatedDays),
         issueDetails: issueDetails.trim(),
         aiSmartMatch: smartMatch,
@@ -213,32 +180,31 @@ export default function Service() {
         remainingWorkDays: Number(estimatedDays),
         isMultiDay: Number(estimatedDays) > 1,
         requestedPhotos: requestedPhoto ? [{ url: requestedPhoto, label: 'User Requested', uploadedAt: new Date() }] : [],
-        createdAt: new Date(), // Permanent record of submission
-        updatedAt: new Date() // Record of latest status change
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
-      // Write document to Firestore 'bookings' collection. Local smoke mode never writes data.
       if (devUser?.role === 'consumer') {
         bookingPayload.id = 'dev-booking-preview';
       } else {
         await addDoc(collection(db, 'bookings'), bookingPayload);
       }
 
-      setSuccess(`Success! Your request has been sent. Our regional professionals will review it and provide price quotes shortly. You can track this in 'My Bookings'.`); // Show success UI
-      setShowConfirm(false); // Close confirmation modal
+      setSuccess("Booking request sent. Track worker assignment and status in My Bookings.");
+      setShowConfirm(false);
 
-      // Navigate to My Bookings after a short delay for visual confirmation
       setTimeout(() => {
         navigate('/my-bookings');
       }, 1500);
     } catch (err) {
-      setError('❌ ' + err.message); // Display error to user
+      setError(err.message);
     } finally {
-      setLoading(false); // Stop loading spinner
+      setLoading(false);
     }
   };
 
   const serviceOptions = getServiceOptions();
+  const selectedService = getServiceByName(selectedType);
   const canReview = Boolean(name && address && userPhone && (!isScheduled || (scheduledDate && timeSlot)));
   const scheduleText = isScheduled ? `${scheduledDate || 'Select date'} / ${timeSlot || 'Select time'}` : 'ASAP, nearest available worker';
 
@@ -246,14 +212,22 @@ export default function Service() {
     <div className="booking-redesign-page">
       <section className="booking-redesign-shell">
         <aside className="booking-redesign-aside">
-          <span className="booking-kicker">Fast booking</span>
+          <button type="button" className="booking-back-link" onClick={() => navigate('/services')}>
+            <ArrowLeft size={16} /> Services
+          </button>
+          <span className="booking-kicker"><ShieldCheck size={14} /> Fast booking</span>
           <h1>Book {selectedType}</h1>
-          <p>Three steps: tell us the work, confirm location and time, then review. No maze.</p>
+          <p>Tell us the work, confirm location and time, then review. Clear enough for first-time users, detailed enough for serious jobs.</p>
 
           <div className="booking-trust-list">
-            <span>Verified workers</span>
-            <span>Transparent price range</span>
-            <span>Live tracking after assignment</span>
+            <span><CheckCircle2 size={16} /> Verified worker assignment</span>
+            <span><IndianRupee size={16} /> Fair price range guidance</span>
+            <span><LocateFixed size={16} /> Live tracking after assignment</span>
+          </div>
+
+          <div className="booking-supply-note">
+            <strong>Supply rule</strong>
+            <span>{getScopeText(selectedService.matchingScope)}</span>
           </div>
         </aside>
 
@@ -266,8 +240,8 @@ export default function Service() {
 
           {profileIncomplete && (
             <div className="booking-warning">
-              Complete name, phone, and address to book faster next time.
-              <button onClick={() => navigate('/profile')}>Open profile</button>
+              <span>Complete name, phone, and address to book faster next time.</span>
+              <button type="button" onClick={() => navigate('/profile')}>Open profile</button>
             </div>
           )}
           {error && <div className="booking-error">{error}</div>}
@@ -277,7 +251,7 @@ export default function Service() {
             <div className="section-row">
               <div>
                 <h2>Choose service</h2>
-                <p>Search is on top; here you can switch related services quickly.</p>
+                <p>Switch services here if your request belongs in another category.</p>
               </div>
               <strong>{smartMatch.confidence}% match</strong>
             </div>
@@ -302,14 +276,20 @@ export default function Service() {
                 value={issueDetails}
                 onChange={(e) => setIssueDetails(e.target.value)}
                 rows={4}
-                placeholder="Describe your issue or work details. Example: kitchen deep cleaning today, sink area is oily, need quick help."
+                placeholder="Describe your issue or work details. Example: urgent kitchen help needed immediately."
               />
             </label>
 
             <div className="booking-insight-grid">
-              <div><span>Urgency</span><strong>{smartMatch.urgency}</strong></div>
-              <div><span>Visit</span><strong>{smartMatch.visitWindow}</strong></div>
-              <div><span>Fair range</span><strong>{smartMatch.budgetRange}</strong></div>
+              <div><Clock size={16} /><span>Urgency</span><strong>{smartMatch.urgency}</strong></div>
+              <div><CalendarClock size={16} /><span>Visit</span><strong>{smartMatch.visitWindow}</strong></div>
+              <div><IndianRupee size={16} /><span>Fair range</span><strong>{smartMatch.budgetRange}</strong></div>
+            </div>
+
+            <div className="booking-reason-list">
+              {smartMatch.reasons.map((reason) => (
+                <span key={reason}><Sparkles size={14} /> {reason}</span>
+              ))}
             </div>
 
             <label className="photo-upload-card">
@@ -319,8 +299,9 @@ export default function Service() {
                 onChange={(e) => handlePhotoUpload(e.target.files[0])}
                 disabled={uploadingPhoto}
               />
+              <Camera size={18} />
               <span>{requestedPhoto ? 'Photo attached' : uploadingPhoto ? 'Uploading photo...' : 'Add work photo'}</span>
-              <small>Photos help workers quote correctly.</small>
+              <small>Photos help workers quote correctly and support later quality checks.</small>
             </label>
           </section>
 
@@ -328,38 +309,29 @@ export default function Service() {
             <div className="section-row">
               <div>
                 <h2>Location and time</h2>
-                <p>Consumers can book with Google login, then keep phone and address saved.</p>
+                <p>Keep contact and address simple. Future bookings can be scheduled up to the allowed booking window.</p>
               </div>
             </div>
 
             <div className="booking-form-grid">
               <label className="booking-field">
                 <span>Name</span>
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+                <div className="booking-input-icon"><User size={17} /><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" /></div>
               </label>
               <label className="booking-field">
                 <span>Phone</span>
-                <input value={userPhone} onChange={(e) => setUserPhone(e.target.value)} placeholder="10-digit phone" />
+                <div className="booking-input-icon"><Phone size={17} /><input value={userPhone} onChange={(e) => setUserPhone(e.target.value)} placeholder="10-digit phone" /></div>
               </label>
               <label className="booking-field full">
                 <span>Address</span>
-                <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={3} placeholder="House, street, landmark, area" />
+                <div className="booking-input-icon textarea"><MapPin size={17} /><textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={3} placeholder="House, street, landmark, area" /></div>
               </label>
             </div>
 
             <div className="booking-profile-summary" aria-label="Booking profile summary">
-              <div>
-                <span>Consumer</span>
-                <strong>{name || 'Name needed'}</strong>
-              </div>
-              <div>
-                <span>Phone</span>
-                <strong>{userPhone || 'Phone needed'}</strong>
-              </div>
-              <div>
-                <span>Area</span>
-                <strong>{address ? 'Saved address ready' : 'Address needed'}</strong>
-              </div>
+              <div><span>Consumer</span><strong>{name || 'Name needed'}</strong></div>
+              <div><span>Phone</span><strong>{userPhone || 'Phone needed'}</strong></div>
+              <div><span>Area</span><strong>{address ? 'Saved address ready' : 'Address needed'}</strong></div>
             </div>
 
             <div className="booking-schedule-card">
@@ -384,6 +356,17 @@ export default function Service() {
                 </label>
               </div>
             )}
+
+            <label className="booking-field booking-days-field">
+              <span>Estimated work days</span>
+              <select value={estimatedDays} onChange={(e) => setEstimatedDays(Number(e.target.value))}>
+                <option value={1}>1 day</option>
+                <option value={2}>2 days</option>
+                <option value={3}>3 days</option>
+                <option value={4}>4 days</option>
+                <option value={5}>5+ days</option>
+              </select>
+            </label>
           </section>
 
           <section className="booking-review-card">
@@ -392,12 +375,8 @@ export default function Service() {
               <strong>{selectedType}</strong>
               <small>{scheduleText}</small>
             </div>
-            <button
-              type="button"
-              disabled={!canReview || loading}
-              onClick={() => setShowConfirm(true)}
-            >
-              {loading ? 'Booking...' : 'Review and book'}
+            <button type="button" disabled={!canReview || loading} onClick={() => setShowConfirm(true)}>
+              {loading ? 'Booking...' : 'Review and book'} <ArrowRight size={18} />
             </button>
           </section>
         </main>
@@ -415,440 +394,12 @@ export default function Service() {
               <span>Expected range: {smartMatch.budgetRange}</span>
             </div>
             <div className="booking-modal-actions">
-              <button className="secondary" onClick={() => setShowConfirm(false)} disabled={loading}>Back</button>
-              <button onClick={handleBooking} disabled={loading}>{loading ? 'Booking...' : 'Confirm'}</button>
+              <button type="button" className="secondary" onClick={() => setShowConfirm(false)} disabled={loading}>Back</button>
+              <button type="button" onClick={handleBooking} disabled={loading}>{loading ? 'Booking...' : 'Confirm'}</button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-
-  return (
-    <div className="service-page">
-      <div className="service-shell" style={{ maxWidth: '700px' }}>
-      {/* Horizontal Service Selection Bar */}
-      <div className="service-type-bar">
-        {Object.entries(serviceIcons).map(([key, icon]) => (
-          <button
-            key={key}
-            onClick={() => setSelectedType(key)}
-            className={selectedType === key ? 'selected' : ''}
-          >
-            <span style={{ fontSize: 32, marginBottom: 6 }}>{icon}</span>
-            <span style={{ fontSize: 14 }}>{key}</span>
-          </button>
-        ))}
-      </div>
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '30px' }} className="service-header">
-        <div style={{ fontSize: '60px', marginBottom: '10px' }}>
-          {serviceIcons[selectedType] || '🛠️'}
-        </div>
-        <h2 style={{ fontSize: '28px', margin: '10px 0', color: '#333' }}>
-          Book {selectedType}
-        </h2>
-        <p style={{ color: '#666', margin: '10px 0' }}>
-          Professional & Verified Service
-        </p>
-        <div style={{ fontSize: '14px', color: '#10b981', fontWeight: '500' }}>
-          ✨ Transparent Bidding System
-        </div>
-      </div>
-
-      <div style={{
-        background: 'var(--glass-bg)',
-        border: '1px solid var(--glass-border)',
-        borderRadius: '14px',
-        padding: '14px',
-        marginBottom: '16px'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
-          <h4 style={{ margin: 0, fontSize: '15px', color: 'var(--text-main)' }}>AI Smart Match</h4>
-          <span style={{
-            padding: '4px 10px',
-            borderRadius: '999px',
-            fontSize: '11px',
-            fontWeight: 700,
-            color: '#fff',
-            background: 'linear-gradient(135deg, var(--primary-purple), var(--secondary-green))'
-          }}>
-            {smartMatch.confidence}% confidence
-          </span>
-        </div>
-        <textarea
-          value={issueDetails}
-          onChange={(e) => setIssueDetails(e.target.value)}
-          rows={3}
-          placeholder="Describe your issue so AI can refine urgency, price, and worker match..."
-          style={{
-            width: '100%',
-            border: '1px solid var(--border-light)',
-            borderRadius: '10px',
-            padding: '10px',
-            boxSizing: 'border-box',
-            marginBottom: '10px',
-            background: 'var(--bg-card)',
-            color: 'var(--text-main)'
-          }}
-        />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '8px' }}>
-          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: '10px', padding: '8px' }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Urgency</div>
-            <div style={{ fontWeight: 700 }}>{smartMatch.urgency}</div>
-          </div>
-          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: '10px', padding: '8px' }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Expected Visit</div>
-            <div style={{ fontWeight: 700 }}>{smartMatch.visitWindow}</div>
-          </div>
-          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: '10px', padding: '8px' }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Price Range</div>
-            <div style={{ fontWeight: 700 }}>{smartMatch.budgetRange}</div>
-          </div>
-        </div>
-        <ul style={{ margin: '10px 0 0 16px', padding: 0, color: 'var(--text-muted)', fontSize: '12px' }}>
-          {smartMatch.reasons.map((reason) => (
-            <li key={reason} style={{ marginBottom: '4px' }}>{reason}</li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Alert Messages (Error/Success/Profile Incomplete) */}
-      {profileIncomplete && (
-        <div style={{
-          padding: '12px',
-          marginBottom: '15px',
-          backgroundColor: '#fff3cd',
-          border: '1px solid #ffc107',
-          borderRadius: '4px',
-          color: '#856404',
-          fontSize: '14px'
-        }}>
-          ⚠️ Please complete your profile (name, address, phone) before booking.
-          <button
-            onClick={() => navigate('/profile')}
-            style={{
-              display: 'block',
-              marginTop: '10px',
-              padding: '8px 15px',
-              backgroundColor: '#ffc107',
-              color: '#000',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '14px'
-            }}
-          >
-            Go to Profile
-          </button>
-        </div>
-      )}
-
-      {error && (
-        <div style={{
-          padding: '12px',
-          marginBottom: '15px',
-          backgroundColor: '#fee',
-          border: '1px solid #fcc',
-          borderRadius: '4px',
-          color: '#c00',
-          fontSize: '14px'
-        }}>
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div style={{
-          padding: '12px',
-          marginBottom: '15px',
-          backgroundColor: '#efe',
-          border: '1px solid #cfc',
-          borderRadius: '4px',
-          color: '#060',
-          fontSize: '14px'
-        }}>
-          {success}
-        </div>
-      )}
-
-      {/* Booking Details and Scheduling Configuration Card */}
-      <div style={{
-        backgroundColor: '#f9f9f9',
-        padding: '20px',
-        borderRadius: '8px',
-        marginBottom: '20px',
-        border: '1px solid #eee',
-        display: 'flex',
-        flexDirection: 'row',
-        gap: '32px',
-        alignItems: 'flex-start',
-        flexWrap: 'wrap'
-      }}>
-        {/* Profile Summary Section (Left) */}
-        <div style={{ minWidth: 220, flex: 1 }}>
-          <h4 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '16px', fontWeight: 'bold' }}>
-            📋 Your Booking Details
-          </h4>
-          <div style={{ marginBottom: '15px' }}>
-            <span style={{ fontWeight: 'bold', color: '#666', fontSize: '13px' }}>👤 Name:</span>
-            <p style={{ margin: '5px 0 0 0', fontSize: '15px', color: '#333' }}>{name || 'Not set'}</p>
-          </div>
-          <div style={{ marginBottom: '15px' }}>
-            <span style={{ fontWeight: 'bold', color: '#666', fontSize: '13px' }}>📞 Phone:</span>
-            <p style={{ margin: '5px 0 0 0', fontSize: '15px', color: '#333' }}>{userPhone || 'Not set'}</p>
-          </div>
-          <div style={{ marginBottom: '20px' }}>
-            <span style={{ fontWeight: 'bold', color: '#666', fontSize: '13px' }}>📍 Address:</span>
-            <p style={{ margin: '5px 0 0 0', fontSize: '15px', color: '#333', whiteSpace: 'pre-wrap' }}>
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`}
-                target="_blank"
-                rel="noreferrer"
-                style={{ color: '#667eea', textDecoration: 'none' }}
-              >
-                {address || 'Not set'} ↗
-              </a>
-            </p>
-          </div>
-        </div>
-        {/* Booking Form Section (Right) */}
-        <div style={{ flex: 2, minWidth: 260 }}>
-          <div style={{ borderTop: '1px solid #ddd', paddingTop: '20px' }}>
-          {/* Checkbox to enable/disable scheduled booking */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '15px' }}>
-            <input type="checkbox" checked={isScheduled} onChange={e => setIsScheduled(e.target.checked)} />
-            <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#333' }}>🗓️ Book for a future date/time?</span>
-          </label>
-
-          {/* Conditional rendering for date and time slot selectors */}
-          {isScheduled && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '15px', background: '#fff', borderRadius: '8px', border: '1px solid #ddd' }}>
-              {/* Date Input for Scheduling */}
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#666', display: 'block', marginBottom: '5px' }}>Select Date:</label>
-                <input
-                  type="date"
-                  value={scheduledDate}
-                  onChange={e => setScheduledDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]} // Prevent selecting past dates
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                />
-              </div>
-              {/* Time Slot Selection for Scheduling */}
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#666', display: 'block', marginBottom: '5px' }}>Select Time Slot:</label>
-                <select
-                  value={timeSlot}
-                  onChange={e => setTimeSlot(e.target.value)}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                >
-                  <option value="">-- Choose a slot --</option>
-                  <option value="9 AM - 12 PM">Morning (9 AM - 12 PM)</option>
-                  <option value="12 PM - 3 PM">Afternoon (12 PM - 3 PM)</option>
-                  <option value="3 PM - 6 PM">Evening (3 PM - 6 PM)</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          <div style={{ marginTop: '12px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#666', display: 'block', marginBottom: '5px' }}>
-              Estimated Work Days:
-            </label>
-            <select
-              value={estimatedDays}
-              onChange={e => setEstimatedDays(Number(e.target.value))}
-              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-            >
-              <option value={1}>1 Day</option>
-              <option value={2}>2 Days</option>
-              <option value={3}>3 Days</option>
-              <option value={4}>4 Days</option>
-              <option value={5}>5+ Days</option>
-            </select>
-            {Number(estimatedDays) > 1 && (
-              <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px' }}>
-                Multi-day jobs will stay in progress until each day is marked complete.
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginTop: '20px', borderTop: '1px solid #ddd', paddingTop: '20px' }}>
-            <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#333', display: 'block', marginBottom: '10px' }}>
-              📸 Upload Photo of Work (Optional)
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => handlePhotoUpload(e.target.files[0])}
-              disabled={uploadingPhoto}
-              style={{ fontSize: '13px', marginBottom: '10px' }}
-            />
-            {uploadingPhoto && <div style={{ fontSize: '12px', color: '#667eea' }}>⏳ Uploading photo...</div>}
-            {requestedPhoto && (
-              <div style={{ marginTop: '10px' }}>
-                <img src={requestedPhoto} alt="Requested work" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd' }} />
-                <div style={{ fontSize: '11px', color: '#10b981' }}>✅ Photo attached</div>
-              </div>
-            )}
-            <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
-              Note: Uploading a clear photo helps professionals provide more accurate quotes.
-            </p>
-          </div>
-        </div>
-      </div>
-      </div>
-
-      {/* Edit Profile Link */}
-      {profileIncomplete && (
-        <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-          <button
-            onClick={() => navigate('/profile')}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            ✏️ Edit Profile First
-          </button>
-        </div>
-      )}
-
-      {/* Action Buttons */}
-      <div style={{ display: 'flex', gap: '10px' }}>
-        <button
-          onClick={() => navigate('/')}
-          style={{
-            flex: 1,
-            padding: '12px',
-            backgroundColor: '#e0e0e0',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            fontSize: '15px'
-          }}
-        >
-          ← Back
-        </button>
-        <button
-          onClick={() => setShowConfirm(true)}
-          disabled={loading || !name || !address || !userPhone || profileIncomplete}
-          style={{
-            flex: 1,
-            padding: '12px',
-            backgroundColor: loading || !name || !address || !userPhone || profileIncomplete ? '#ccc' : '#667eea',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: loading || !name || !address || !userPhone || profileIncomplete ? 'not-allowed' : 'pointer',
-            fontWeight: 'bold',
-            fontSize: '15px',
-            transition: 'background 0.2s'
-          }}
-        >
-          {loading ? '⏳ Processing...' : '✓ Confirm Booking'}
-        </button>
-      </div>
-
-      {/* Confirmation Modal */}
-      {showConfirm && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: 'white',
-            padding: '30px',
-            borderRadius: '12px',
-            maxWidth: '420px',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '50px', marginBottom: '15px' }}>
-              {serviceIcons[selectedType] || '🛠️'}
-            </div>
-            <h3 style={{ fontSize: '20px', margin: '0 0 10px 0', color: '#333' }}>
-              Confirm Booking?
-            </h3>
-            <p style={{ color: '#666', margin: '10px 0', fontSize: '14px' }}>
-              You are about to book <strong>{selectedType}</strong> service for:
-            </p>
-            {/* Confirmation Data Summary */}
-            <div style={{
-              backgroundColor: '#f0f4ff',
-              padding: '15px',
-              borderRadius: '8px',
-              marginBottom: '20px',
-              textAlign: 'left',
-              fontSize: '14px'
-            }}>
-              <div><strong>Name:</strong> {name}</div>
-              <div><strong>Phone:</strong> {userPhone}</div>
-              <div><strong>Address:</strong> {address}</div>
-              {/* Conditional display for Scheduled info */}
-              {isScheduled && (
-                <>
-                  <div style={{ marginTop: '8px' }}><strong>🗓️ Date:</strong> {scheduledDate}</div>
-                  <div><strong>🕒 Time Slot:</strong> {timeSlot}</div>
-                </>
-              )}
-              <div style={{ marginTop: '8px' }}><strong>⏳ Estimated Days:</strong> {estimatedDays}</div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => setShowConfirm(false)}
-                disabled={loading}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  backgroundColor: '#e0e0e0',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontWeight: 'bold',
-                  opacity: loading ? 0.6 : 1
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleBooking}
-                disabled={loading}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  backgroundColor: loading ? '#999' : '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontWeight: 'bold'
-                }}
-              >
-                {loading ? '⏳ Booking...' : '✓ Confirm & Book'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      </div>
     </div>
   );
 }

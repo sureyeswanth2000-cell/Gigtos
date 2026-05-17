@@ -71,7 +71,7 @@ export default function WorkerDashboard() {
   const toastTimeoutRef = useRef(null);
   const navigate = useNavigate();
   const devWorker = useMemo(
-    () => (isDevBypassEnabled() ? getDevBypassUserFromSearch(window.location.search) : null),
+    () => (isDevBypassEnabled() ? getDevBypassUserFromSearch() : null),
     []
   );
 

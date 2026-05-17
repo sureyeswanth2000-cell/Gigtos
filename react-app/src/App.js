@@ -61,7 +61,7 @@ function App() {
   useEffect(() => {
     if (isDevBypassEnabled()) {
       try {
-        const devUser = getDevBypassUserFromSearch(window.location.search);
+        const devUser = getDevBypassUserFromSearch();
         if (devUser) {
           setUser(devUser);
           setIsAdmin(devUser.role === 'superadmin' || devUser.role === 'field_operator');

@@ -173,7 +173,7 @@ export function LocationProvider({ children }) {
   useEffect(() => {
     if (isDevBypassEnabled()) {
       try {
-        const devUser = getDevBypassUserFromSearch(window.location.search);
+        const devUser = getDevBypassUserFromSearch();
         if (devUser?.lat && devUser?.lng) {
           setLocation({
             lat: devUser.lat,

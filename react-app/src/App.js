@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -145,12 +145,14 @@ function App() {
     return '/';
   };
 
-  return (
-    <HashRouter>
-      <ToastProvider>
-        <LocationProvider>
-          <Header />
-          <main style={{ minHeight: '70vh' }}>
+  const AppContent = () => {
+    const location = useLocation();
+    const isAuthRoute = location.pathname === '/auth';
+
+    return (
+      <>
+        {!isAuthRoute && <Header />}
+        <main style={{ minHeight: isAuthRoute ? '100vh' : '70vh' }}>
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={user ? (isAdmin || isWorker ? <Navigate to={getPostLoginRedirect()} /> : <Home />) : <Home />} />
@@ -188,8 +190,17 @@ function App() {
               {/* Protected SuperAdmin Route */}
               <Route path="/admin/super" element={<ProtectedRoute requireSuperAdmin><SuperAdmin /></ProtectedRoute>} />
             </Routes>
-          </main>
-          <Footer />
+        </main>
+        {!isAuthRoute && <Footer />}
+      </>
+    );
+  };
+
+  return (
+    <HashRouter>
+      <ToastProvider>
+        <LocationProvider>
+          <AppContent />
         </LocationProvider>
       </ToastProvider>
     </HashRouter>

@@ -1100,6 +1100,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] Field Operator App: add full verification queue, dispute queue, worker checks, and quality notes beyond the current admin/superadmin polish layer.
 - [x] Add backend contract scaffolds for worker availability, worker matching/assignment candidates, live tracking, support tickets, wallet dues, and operator quality notes.
 - [x] Discuss and redesign the home-page `Ask Gito` / `Nearby Workers` panel: current UI felt raw/default, prompt chips looked like browser buttons, spacing was too heavy, and the section needed a premium quick-action surface with polished chips, clearer selected state, compact mobile behavior, stronger worker-availability context, and honest non-AI wording until Gemini/Vertex is connected.
+- [x] Auth page full premium rewrite: remove broken blank layout, hide normal app chrome on `/auth`, add clear consumer/worker switch, Google login, phone/email login, worker signup fields, dark/light-safe inputs, and mobile-responsive trust panel.
 
 ## Safety And Policy
 

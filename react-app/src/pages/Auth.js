@@ -1,37 +1,80 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth, db } from '../firebase';
+import {
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+} from 'firebase/auth';
+import {
+  ArrowRight,
+  BriefcaseBusiness,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  Sparkles,
+  User,
+  Wrench,
+} from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { getAdminRedirectPath, isRegionSuspended } from '../utils/authRouting';
+import { auth, db } from '../firebase';
 import { detectCurrentLocation } from '../context/LocationContext';
 import { SPECIAL_JOBS } from '../config/specialJobs';
 import { useToast } from '../context/ToastContext';
+import { getAdminRedirectPath, isRegionSuspended } from '../utils/authRouting';
 import './Auth.css';
 
 const SIGNUP_JOB_TYPES = [
-  ...SPECIAL_JOBS.map(sj => sj.id),
-  'carpentry', 'masonry', 'landscaping', 'other'
-].filter((v, i, a) => a.indexOf(v) === i);
+  ...SPECIAL_JOBS.map((job) => job.id),
+  'carpentry',
+  'masonry',
+  'landscaping',
+  'other',
+].filter((value, index, all) => all.indexOf(value) === index);
+
+const JOB_TYPE_LABELS = {
+  maid: 'Maid service',
+  cleaning: 'Cleaning',
+  electrician: 'Electrician',
+  plumber: 'Plumber',
+  carpentry: 'Carpentry',
+  masonry: 'Masonry',
+  landscaping: 'Garden work',
+  other: 'Other skilled work',
+};
+
+const formatJobType = (type) => (
+  JOB_TYPE_LABELS[type]
+  || type
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+);
 
 function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { addToast } = useToast();
-  
-  const [phase, setPhase] = useState('login'); 
-  const [userType, setUserType] = useState(searchParams.get('mode') || 'user'); 
-  
+
+  const [phase, setPhase] = useState('login');
+  const [userType, setUserType] = useState(searchParams.get('mode') || 'user');
+
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [workerGigTypes, setWorkerGigTypes] = useState([]);
   const [workerArea, setWorkerArea] = useState('');
-  
+
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -68,7 +111,7 @@ function Auth() {
   const handleUnifiedLogin = async (e) => {
     e.preventDefault();
     if (!identifier || !password) {
-      setError('Please enter email or phone and password');
+      setError('Please enter phone/email and password');
       return;
     }
 
@@ -81,10 +124,10 @@ function Auth() {
       const isPhone = !identifier.includes('@') && cleaned.length >= 10 && /^\d+$/.test(cleaned);
 
       if (isPhone) {
-        const cleanPhone = identifier.replace(/[^\d]/g, '').slice(-10);
+        const cleanPhone = cleaned.slice(-10);
         const workerPhoneDoc = await getDoc(doc(db, 'workers_by_phone', cleanPhone));
         const userPhoneDoc = await getDoc(doc(db, 'users_by_phone', cleanPhone));
-        
+
         if (workerPhoneDoc.exists()) {
           emailToUse = workerPhoneDoc.data().email;
         } else if (userPhoneDoc.exists()) {
@@ -95,7 +138,7 @@ function Auth() {
       }
 
       const userCred = await signInWithEmailAndPassword(auth, emailToUse, password);
-      const uid = userCred.user.uid;
+      const { uid } = userCred.user;
 
       const adminDoc = await getDoc(doc(db, 'admins', uid));
       if (adminDoc.exists()) {
@@ -147,7 +190,7 @@ function Auth() {
 
     try {
       const userCred = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCred.user.uid;
+      const { uid } = userCred.user;
 
       if (userType === 'worker') {
         const loc = await detectCurrentLocation().catch(() => ({}));
@@ -156,18 +199,18 @@ function Auth() {
           name,
           email,
           phone,
-           gigTypes: workerGigTypes,
-           locationArea: workerArea,
-           approvalStatus: 'pending',
-           status: 'inactive',
+          gigTypes: workerGigTypes,
+          locationArea: workerArea,
+          approvalStatus: 'pending',
+          status: 'inactive',
           createdAt: new Date(),
-          ...loc && { locationLat: loc.lat, locationLng: loc.lng, locationCity: loc.city }
+          ...(loc && { locationLat: loc.lat, locationLng: loc.lng, locationCity: loc.city }),
         };
-        
+
         await setDoc(doc(db, 'worker_auth', uid), workerData);
         await setDoc(doc(db, 'gig_workers', uid), workerData);
         await setDoc(doc(db, 'workers_by_phone', phone.replace(/[^\d]/g, '').slice(-10)), { email, uid });
-        
+
         addToast('Registration successful! Waiting for approval.', 'success');
         navigate('/');
       } else {
@@ -182,239 +225,260 @@ function Auth() {
   };
 
   return (
-    <div className="auth-page" style={{ 
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '20px',
-      background: 'var(--bg-main)',
-      position: 'relative',
-      overflow: 'hidden'
-    }}>
-      {/* Dynamic Background Elements */}
-      <section className="auth-visual-panel" aria-hidden="true">
-        <div>
-          <span>Identity Verified</span>
-          <h2>Connect with trusted local professionals.</h2>
-          <p>Gigtos keeps login simple for consumers and gives workers a clean path into verified marketplace work.</p>
+    <main className="auth-page">
+      <section className="auth-visual-panel" aria-label="Gigtos trust summary">
+        <div className="auth-visual-content">
+          <span className="auth-kicker"><ShieldCheck size={16} /> Verified marketplace</span>
+          <h1>Simple login for real local services.</h1>
+          <p>
+            Consumers book faster. Workers join with a clean professional profile.
+            Gigtos keeps the path short, clear, and built for trust.
+          </p>
+
+          <div className="auth-trust-grid" aria-label="Trust signals">
+            <div>
+              <CheckCircle2 size={18} />
+              <strong>Google or phone/email</strong>
+              <span>Fast access without confusing steps.</span>
+            </div>
+            <div>
+              <Wrench size={18} />
+              <strong>Worker verification path</strong>
+              <span>Skill, area, phone, and approval status.</span>
+            </div>
+            <div>
+              <Sparkles size={18} />
+              <strong>SocioScore ready</strong>
+              <span>Trust signals can grow without changing login.</span>
+            </div>
+          </div>
         </div>
       </section>
 
-      <div className="auth-orb auth-orb--primary" style={{ 
-        position: 'absolute', 
-        top: '10%', 
-        left: '10%', 
-        width: '300px', 
-        height: '300px', 
-        background: 'var(--primary-purple)', 
-        filter: 'blur(120px)', 
-        opacity: 0.15,
-        borderRadius: '50%',
-        zIndex: 0
-      }} />
-      <div className="auth-orb auth-orb--secondary" style={{ 
-        position: 'absolute', 
-        bottom: '10%', 
-        right: '10%', 
-        width: '400px', 
-        height: '400px', 
-        background: 'var(--secondary-green)', 
-        filter: 'blur(150px)', 
-        opacity: 0.1,
-        borderRadius: '50%',
-        zIndex: 0
-      }} />
-
-      <div className="auth-card" style={{ 
-        width: '100%',
-        maxWidth: '460px', 
-        padding: '48px', 
-        borderRadius: 'var(--radius-xl)',
-        background: 'var(--glass-bg)',
-        backdropFilter: 'var(--glass-blur)',
-        boxShadow: 'var(--glass-shadow)',
-        border: '1px solid var(--glass-border)',
-        textAlign: 'center',
-        position: 'relative',
-        zIndex: 1
-      }}>
-        {/* Branding */}
-        <div style={{ 
-          background: 'var(--primary-purple)', 
-          color: 'white', 
-          padding: '6px 16px', 
-          borderRadius: 'var(--radius-pill)', 
-          fontSize: '11px', 
-          fontWeight: '900', 
-          letterSpacing: '0.1em',
-          display: 'inline-block',
-          marginBottom: '24px',
-          textTransform: 'uppercase'
-        }}>
-          Premium Platform
-        </div>
-
-        <h1 style={{ fontSize: '36px', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '850', letterSpacing: '-0.03em' }}>
-          {phase === 'login' ? 'Gigtos' : 'Join Us'}
-        </h1>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '40px', fontSize: '16px', fontWeight: '500' }}>
-          {phase === 'login' ? 'Book faster with Google or phone.' : 'Create your professional profile.'}
-        </p>
-
-        {error && (
-          <div style={{ 
-            backgroundColor: 'var(--error-bg)', 
-            color: 'var(--error)', 
-            padding: '12px 20px', 
-            borderRadius: 'var(--radius-lg)', 
-            marginBottom: '32px', 
-            fontSize: '14px', 
-            fontWeight: '600', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '10px', 
-            border: '1px solid var(--error)',
-            textAlign: 'left'
-          }}>
-            <span>⚠️</span> {error}
+      <section className="auth-panel" aria-label="Gigtos sign in">
+        <div className="auth-card">
+          <div className="auth-brand-row">
+            <div>
+              <span className="auth-brand">Gigtos</span>
+              <p>{phase === 'login' ? 'Welcome back' : 'Create your account'}</p>
+            </div>
+            <span className="auth-mode-chip">{phase === 'login' ? 'Secure access' : 'New profile'}</span>
           </div>
-        )}
 
-        {phase === 'login' && (
-          <div style={{ display: 'grid', gap: 10, marginBottom: 24 }}>
+          <div className="auth-heading">
+            <h2>{phase === 'login' ? 'Sign in' : 'Join Gigtos'}</h2>
+            <p>
+              {phase === 'login'
+                ? 'Use Google, phone, or email to continue.'
+                : 'Choose consumer or worker and fill the required details.'}
+            </p>
+          </div>
+
+          <div className="auth-segment" role="tablist" aria-label="Account type">
             <button
               type="button"
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '14px 18px',
-                borderRadius: 8,
-                border: '1px solid var(--border-light)',
-                background: 'var(--bg-surface)',
-                color: 'var(--text-main)',
-                fontWeight: 900,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                boxShadow: 'var(--shadow-sm)'
-              }}
+              className={userType === 'user' ? 'active' : ''}
+              onClick={() => setUserType('user')}
             >
-              Continue with Google
+              <User size={16} /> Consumer
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>
-              <span style={{ flex: 1, height: 1, background: 'var(--border-light)' }} />
-              Phone or email
-              <span style={{ flex: 1, height: 1, background: 'var(--border-light)' }} />
-            </div>
+            <button
+              type="button"
+              className={userType === 'worker' ? 'active' : ''}
+              onClick={() => setUserType('worker')}
+            >
+              <BriefcaseBusiness size={16} /> Worker
+            </button>
           </div>
-        )}
 
-        <form onSubmit={phase === 'login' ? handleUnifiedLogin : handleSignup}>
-          {phase === 'login' ? (
-            <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-              <label style={{ display: 'block', marginBottom: '10px', fontWeight: '700', fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Phone number or email
-              </label>
-              <input
-                type="text"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="10-digit phone or name@email.com"
-                className="input-field"
-                style={{
-                  width: '100%', padding: '16px 20px', background: 'var(--bg-soft)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', fontSize: '16px', color: 'var(--text-main)', outline: 'none', transition: 'all 0.2s', boxSizing: 'border-box'
-                }}
-              />
+          {error && (
+            <div className="auth-error" role="alert">
+              <ShieldCheck size={16} />
+              <span>{error}</span>
             </div>
-          ) : (
-            <>
-              <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-                <label style={{ display: 'block', marginBottom: '10px', fontWeight: '700', fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                  Account Type
-                </label>
-                <div style={{ display: 'flex', gap: '8px', background: 'var(--bg-soft)', padding: '6px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-light)' }}>
-                  <button type="button" onClick={() => setUserType('user')} style={{ flex: 1, padding: '12px', borderRadius: 'var(--radius-md)', border: 'none', background: userType === 'user' ? 'var(--primary-purple)' : 'transparent', color: userType === 'user' ? 'white' : 'var(--text-muted)', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s' }}>User</button>
-                  <button type="button" onClick={() => setUserType('worker')} style={{ flex: 1, padding: '12px', borderRadius: 'var(--radius-md)', border: 'none', background: userType === 'worker' ? 'var(--primary-purple)' : 'transparent', color: userType === 'worker' ? 'white' : 'var(--text-muted)', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s' }}>Pro</button>
-                </div>
-              </div>
-
-              {userType === 'worker' && (
-                <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-                  <label style={{ display: 'block', marginBottom: '10px', fontWeight: '700', fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Full Name</label>
-                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" style={{ width: '100%', padding: '16px 20px', background: 'var(--bg-soft)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', fontSize: '16px', color: 'var(--text-main)', outline: 'none', boxSizing: 'border-box' }} />
-                </div>
-              )}
-
-              <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-                <label style={{ display: 'block', marginBottom: '10px', fontWeight: '700', fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Email</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@email.com" style={{ width: '100%', padding: '16px 20px', background: 'var(--bg-soft)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', fontSize: '16px', color: 'var(--text-main)', outline: 'none', boxSizing: 'border-box' }} />
-              </div>
-
-              {userType === 'worker' && (
-                <>
-                  <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-                    <label style={{ display: 'block', marginBottom: '10px', fontWeight: '700', fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Phone</label>
-                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 XXXXX XXXXX" style={{ width: '100%', padding: '16px 20px', background: 'var(--bg-soft)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', fontSize: '16px', color: 'var(--text-main)', outline: 'none', boxSizing: 'border-box' }} />
-                  </div>
-                  <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-                    <label style={{ display: 'block', marginBottom: '10px', fontWeight: '700', fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Operating Area</label>
-                    <input type="text" value={workerArea} onChange={(e) => setWorkerArea(e.target.value)} placeholder="e.g. North Mumbai" style={{ width: '100%', padding: '16px 20px', background: 'var(--bg-soft)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', fontSize: '16px', color: 'var(--text-main)', outline: 'none', boxSizing: 'border-box' }} />
-                  </div>
-                  <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-                    <label style={{ display: 'block', marginBottom: '10px', fontWeight: '700', fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Skill</label>
-                    <select onChange={(e) => setWorkerGigTypes([e.target.value])} style={{ width: '100%', padding: '16px 20px', background: 'var(--bg-soft)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', fontSize: '16px', color: 'var(--text-main)', outline: 'none', boxSizing: 'border-box' }}>
-                      <option value="">Select...</option>
-                      {SIGNUP_JOB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                </>
-              )}
-            </>
           )}
 
-          <div style={{ marginBottom: '32px', textAlign: 'left' }}>
-            <label style={{ display: 'block', marginBottom: '10px', fontWeight: '700', fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Password</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                style={{ width: '100%', padding: '16px 20px', background: 'var(--bg-soft)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', fontSize: '16px', color: 'var(--text-main)', outline: 'none', boxSizing: 'border-box' }}
-              />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--primary-purple)', cursor: 'pointer', fontSize: '11px', fontWeight: '900' }}>
-                {showPassword ? 'HIDE' : 'SHOW'}
+          {phase === 'login' && userType === 'user' && (
+            <div className="auth-provider-stack">
+              <button
+                type="button"
+                className="auth-google-btn"
+                onClick={handleGoogleLogin}
+                disabled={loading}
+              >
+                <span aria-hidden="true">G</span>
+                Continue with Google
               </button>
-            </div>
-          </div>
-
-          {phase === 'signup' && (
-            <div style={{ marginBottom: '32px', textAlign: 'left' }}>
-              <label style={{ display: 'block', marginBottom: '10px', fontWeight: '700', fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Confirm Password</label>
-              <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••" style={{ width: '100%', padding: '16px 20px', background: 'var(--bg-soft)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', fontSize: '16px', color: 'var(--text-main)', outline: 'none', boxSizing: 'border-box' }} />
+              <div className="auth-divider">
+                <span />
+                <strong>or use phone/email</strong>
+                <span />
+              </div>
             </div>
           )}
 
-          <button type="submit" disabled={loading} className="btn-primary" style={{ width: '100%', padding: '18px', fontSize: '18px', marginBottom: '28px' }}>
-            {loading ? 'Processing...' : (phase === 'login' ? 'Continue' : 'Create Account')}
-          </button>
+          <form className="auth-form" onSubmit={phase === 'login' ? handleUnifiedLogin : handleSignup}>
+            {phase === 'login' ? (
+              <label className="auth-field">
+                <span>{userType === 'worker' ? 'Worker phone or email' : 'Phone number or email'}</span>
+                <div className="auth-input-wrap">
+                  <Phone size={18} />
+                  <input
+                    type="text"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder="10-digit phone or name@email.com"
+                    autoComplete="username"
+                  />
+                </div>
+              </label>
+            ) : (
+              <>
+                {userType === 'worker' && (
+                  <label className="auth-field">
+                    <span>Full name</span>
+                    <div className="auth-input-wrap">
+                      <User size={18} />
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Your professional name"
+                        autoComplete="name"
+                      />
+                    </div>
+                  </label>
+                )}
 
-          <div style={{ fontSize: '15px', color: 'var(--text-muted)', fontWeight: '500' }}>
+                <label className="auth-field">
+                  <span>Email address</span>
+                  <div className="auth-input-wrap">
+                    <Mail size={18} />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@email.com"
+                      autoComplete="email"
+                    />
+                  </div>
+                </label>
+
+                {userType === 'worker' && (
+                  <>
+                    <label className="auth-field">
+                      <span>Phone number</span>
+                      <div className="auth-input-wrap">
+                        <Phone size={18} />
+                        <input
+                          type="tel"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          placeholder="+91 98765 43210"
+                          autoComplete="tel"
+                        />
+                      </div>
+                    </label>
+
+                    <label className="auth-field">
+                      <span>Operating area</span>
+                      <div className="auth-input-wrap">
+                        <MapPin size={18} />
+                        <input
+                          type="text"
+                          value={workerArea}
+                          onChange={(e) => setWorkerArea(e.target.value)}
+                          placeholder="Example: HSR Layout, Bengaluru"
+                        />
+                      </div>
+                    </label>
+
+                    <label className="auth-field">
+                      <span>Main skill</span>
+                      <div className="auth-input-wrap">
+                        <Wrench size={18} />
+                        <select
+                          value={workerGigTypes[0] || ''}
+                          onChange={(e) => setWorkerGigTypes(e.target.value ? [e.target.value] : [])}
+                        >
+                          <option value="">Select your primary service</option>
+                          {SIGNUP_JOB_TYPES.map((type) => (
+                            <option key={type} value={type}>{formatJobType(type)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </label>
+                  </>
+                )}
+              </>
+            )}
+
+            <label className="auth-field">
+              <span>Password</span>
+              <div className="auth-input-wrap">
+                <Lock size={18} />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password"
+                  autoComplete={phase === 'login' ? 'current-password' : 'new-password'}
+                />
+                <button
+                  type="button"
+                  className="auth-icon-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </label>
+
+            {phase === 'signup' && (
+              <label className="auth-field">
+                <span>Confirm password</span>
+                <div className="auth-input-wrap">
+                  <Lock size={18} />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm password"
+                    autoComplete="new-password"
+                  />
+                </div>
+              </label>
+            )}
+
+            {phase === 'signup' && userType === 'worker' && (
+              <div className="auth-note">
+                Existing UC or Pivot ID proof can be reviewed later for free-access eligibility.
+              </div>
+            )}
+
+            <button type="submit" disabled={loading} className="auth-submit-btn">
+              {loading ? 'Please wait...' : (phase === 'login' ? 'Continue' : 'Create account')}
+              {!loading && <ArrowRight size={18} />}
+            </button>
+          </form>
+
+          <div className="auth-switch">
             {phase === 'login' ? (
               <>
-                New to Gigtos?{' '}
-                <span onClick={() => setPhase('signup')} style={{ color: 'var(--primary-purple)', fontWeight: '800', cursor: 'pointer', textDecoration: 'none' }}>Create account</span>
+                New to Gigtos?
+                <button type="button" onClick={() => setPhase('signup')}>Create account</button>
               </>
             ) : (
               <>
-                Already have an account?{' '}
-                <span onClick={() => setPhase('login')} style={{ color: 'var(--primary-purple)', fontWeight: '800', cursor: 'pointer', textDecoration: 'none' }}>Sign in</span>
+                Already have an account?
+                <button type="button" onClick={() => setPhase('login')}>Sign in</button>
               </>
             )}
           </div>
-        </form>
-      </div>
-    </div>
+        </div>
+      </section>
+    </main>
   );
 }
 

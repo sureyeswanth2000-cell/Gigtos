@@ -331,14 +331,14 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 
 - [x] Landing promise: "No job commission. Keep your earnings. Build your Gigtos SocioScore. First year free with verified UC/Pivot/similar ID."
 - [x] Worker freedom promise: "Use Gigtos along with your existing platform. No pressure, no exclusivity, no targets."
-- [ ] Worker onboarding funnel: exact first 10 minutes after worker installs app.
+- [x] Worker onboarding funnel: exact first 10 minutes after worker installs app — added reusable checklist model and worker signup preview UI.
 - [ ] Worker onboarding:
   - Upload existing platform ID/card.
   - Choose city and services.
   - Field operator verifies.
   - Worker starts at score `500`.
   - Explain first 5 jobs, Phoenix Bonus, Diamond path, and Elite eligibility.
-- [ ] First 10-minute worker onboarding should include:
+- [x] First 10-minute worker onboarding should include — captured in `workerOnboarding` checklist; actual upload/storage and payout setup remain under verification/payment implementation TODOs:
   - choose language
   - enter phone/login
   - choose worker type/services

@@ -28,6 +28,7 @@ import { detectCurrentLocation } from '../context/LocationContext';
 import { SPECIAL_JOBS } from '../config/specialJobs';
 import { useToast } from '../context/ToastContext';
 import { getAdminRedirectPath, isRegionSuspended } from '../utils/authRouting';
+import { getWorkerOnboardingChecklist, getWorkerOnboardingPromise } from '../utils/workerOnboarding';
 import './Auth.css';
 
 const SIGNUP_JOB_TYPES = [
@@ -78,6 +79,18 @@ function Auth() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const workerSignupChecklist = getWorkerOnboardingChecklist({
+    language: 'en',
+    email,
+    phone,
+    serviceTypes: workerGigTypes,
+    serviceArea: workerArea,
+    acceptedLaunchTerms: true,
+  });
+  const workerSignupPromise = getWorkerOnboardingPromise();
+  const workerPreviewStepIds = ['auth', 'services', 'area', 'proof', 'promise', 'first_action'];
+  const workerPreviewSteps = workerSignupChecklist.steps.filter((step) => workerPreviewStepIds.includes(step.id));
 
   const finishConsumerLogin = async (firebaseUser) => {
     const userRef = doc(db, 'users', firebaseUser.uid);
@@ -452,8 +465,26 @@ function Auth() {
             )}
 
             {phase === 'signup' && userType === 'worker' && (
-              <div className="auth-note">
-                First 30 days are free during launch. Verified UC, Pivot, or similar proof can unlock one-year free access. You can keep using other apps too.
+              <div className="auth-worker-onboarding" aria-label="Worker first ten minute onboarding checklist">
+                <div className="auth-worker-onboarding__head">
+                  <span><Sparkles size={15} /> First 10 minutes</span>
+                  <strong>{workerSignupChecklist.progressPercent}% ready</strong>
+                </div>
+                <div className="auth-worker-onboarding__bar" aria-hidden="true">
+                  <span style={{ width: `${workerSignupChecklist.progressPercent}%` }} />
+                </div>
+                <ul>
+                  {workerPreviewSteps.map((step) => (
+                    <li key={step.id} className={step.done ? 'done' : ''}>
+                      <CheckCircle2 size={16} />
+                      <div>
+                        <strong>{step.title}</strong>
+                        <span>{step.detail}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <p>{workerSignupPromise.summary}</p>
               </div>
             )}
 

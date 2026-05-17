@@ -105,6 +105,9 @@ describe('dev-auth UI smoke', () => {
 
     expect(await screen.findByText('Dev Worker')).toBeInTheDocument();
     expect(screen.getByLabelText(/SocioScore 500/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Worker wallet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cash platform-fee due/i)).toBeInTheDocument();
+    expect(screen.getByText(/one job per day/i)).toBeInTheDocument();
     expect(screen.getByText(/In-Progress Services/i)).toBeInTheDocument();
     expect(screen.getByText(/Available Services/i)).toBeInTheDocument();
     expect(screen.getByText(/Set Your Fixed Day Rate/i)).toBeInTheDocument();

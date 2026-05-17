@@ -55,6 +55,30 @@ const WORKFLOW_STEPS = {
   in_progress: { next: 'awaiting_confirmation', label: '✅ Mark Complete', style: 'btn-success' },
 };
 
+function formatInr(amount) {
+  return `₹${Math.max(0, Math.round(Number(amount) || 0)).toLocaleString('en-IN')}`;
+}
+
+function getWorkerWalletSummary(worker) {
+  const balance = Number(worker?.walletBalance ?? worker?.availableWalletBalance ?? worker?.earningsBalance ?? 0);
+  const platformFeeDue = Number(
+    worker?.cashPlatformFeeDue ??
+    worker?.pendingPlatformFeeDue ??
+    worker?.platformFeeDue ??
+    worker?.walletPlatformFeeDue ??
+    0
+  );
+  const dailyJobLimitActive = platformFeeDue >= 100 || worker?.platformFeeRestrictionActive === true;
+
+  return {
+    balance,
+    platformFeeDue,
+    dailyJobLimitActive,
+    socioScorePenalty: dailyJobLimitActive ? 5 : 0,
+    repaymentState: platformFeeDue > 0 ? 'Due' : 'Clear',
+  };
+}
+
 export default function WorkerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -92,6 +116,9 @@ export default function WorkerDashboard() {
         rating: 4.8,
         locationLat: devWorker.lat,
         locationLng: devWorker.lng,
+        walletBalance: 1240,
+        cashPlatformFeeDue: 120,
+        platformFeeRestrictionActive: true,
       });
       setLiveJobs([baseJob]);
       setFutureJobs([{ ...baseJob, id: 'dev-future-job-1', status: 'confirmed', scheduledAt: Date.now() + 86400000 }]);
@@ -221,6 +248,7 @@ export default function WorkerDashboard() {
 
   const initials = (worker?.name || 'W').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const isPending = worker?.approvalStatus !== 'approved';
+  const walletSummary = getWorkerWalletSummary(worker);
 
   return (
     <WorkerLocationProvider>
@@ -294,6 +322,56 @@ export default function WorkerDashboard() {
         />
 
         {/* ─── Active Status ─── */}
+        <section className={`worker-wallet-card ${walletSummary.dailyJobLimitActive ? 'restricted' : ''}`} aria-label="Worker wallet">
+          <div className="worker-wallet-head">
+            <div>
+              <span className="worker-wallet-kicker">Wallet and dues</span>
+              <h2>Platform fee health</h2>
+            </div>
+            <span className={`worker-wallet-status ${walletSummary.platformFeeDue > 0 ? 'due' : 'clear'}`}>
+              {walletSummary.repaymentState}
+            </span>
+          </div>
+
+          <div className="worker-wallet-grid">
+            <div>
+              <span>Available balance</span>
+              <strong>{formatInr(walletSummary.balance)}</strong>
+            </div>
+            <div>
+              <span>Cash platform-fee due</span>
+              <strong>{formatInr(walletSummary.platformFeeDue)}</strong>
+            </div>
+            <div>
+              <span>Job access state</span>
+              <strong>{walletSummary.dailyJobLimitActive ? 'Limited' : 'Normal'}</strong>
+            </div>
+          </div>
+
+          {walletSummary.dailyJobLimitActive ? (
+            <p className="worker-wallet-warning">
+              Dues above ₹100 limit access to one job per day and can apply -5 SocioScore per day until repayment is cleared.
+            </p>
+          ) : (
+            <p className="worker-wallet-note">
+              Wallet is healthy. Cash-collected bookings stay tracked here so repayment never becomes confusing.
+            </p>
+          )}
+
+          <div className="worker-wallet-actions">
+            <button
+              type="button"
+              onClick={() => showToast('Repayment flow will connect to Razorpay or UPI before production.', 'success')}
+              disabled={walletSummary.platformFeeDue <= 0}
+            >
+              Pay platform fee
+            </button>
+            <span>
+              Recovery: pay dues, complete clean jobs, keep confirmation photos ready.
+            </span>
+          </div>
+        </section>
+
         <ActiveStatusButton onStatusChange={handleStatusChange} />
 
         {/* ═══ 1. IN-PROGRESS SERVICES — with workflow buttons ═══ */}

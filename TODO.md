@@ -671,7 +671,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] Show debt restriction rule in wallet helper: if worker wallet balance crosses `-INR 100`, limit worker to one job per day.
 - [ ] Discuss SocioScore impact before automation: proposed rule is `-5` per day while wallet debt remains below `-INR 100`.
 - [x] Add backend contract scaffold for worker wallet due ledger entries when cash collection creates platform-fee debt.
-- [ ] Add worker wallet UI showing balance, cash-collected platform-fee dues, repayment action, job restriction state, and clear recovery steps.
+- [x] Add worker wallet UI showing balance, cash-collected platform-fee dues, repayment action, job restriction state, and clear recovery steps.
 - [ ] Add superadmin wallet view for debt, overrides, repayment proof, and abuse monitoring.
 - [ ] Payment/payout implementation is excluded for now; Razorpay and bank transfer wiring remain in the payment backlog.
 

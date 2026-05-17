@@ -3,20 +3,24 @@
    ────────────────────────────────────────────────────────── */
 
 .ai-monitor {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-xl);
-  padding: var(--space-6);
-  margin-bottom: var(--space-6);
-  box-shadow: var(--glass-shadow);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  margin-bottom: 0;
+  box-shadow: none;
   overflow: hidden;
 }
 
 /* ── Header ─────────────────────────────────────────────── */
 
 .ai-monitor__header {
-  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding: 4px 4px 0;
 }
 
 .ai-monitor__title-row {
@@ -49,7 +53,8 @@
 }
 
 .ai-monitor__subtitle {
-  margin: var(--space-1) 0 0;
+  max-width: 640px;
+  margin: 4px 0 0;
   color: var(--text-muted);
   font-size: 13px;
 }
@@ -59,8 +64,8 @@
 .ai-monitor__feed {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  max-height: 340px; /* fits ~3 worker cards before scrolling */
+  gap: 10px;
+  max-height: 310px;
   overflow-y: auto;
 }
 
@@ -68,18 +73,18 @@
 
 .ai-card {
   display: flex;
-  gap: var(--space-3);
-  background: var(--bg-card, rgba(255, 255, 255, 0.05));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
+  gap: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 14px;
   transition: all var(--motion-fast) ease;
   animation: ai-card-in 400ms ease both;
 }
 
 .ai-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(162, 89, 255, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 @keyframes ai-card-in {
@@ -100,10 +105,10 @@
 }
 
 .ai-card__title {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-main);
-  margin-bottom: 2px;
-  font-weight: 600;
+  margin-bottom: 3px;
+  font-weight: 850;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -220,17 +225,24 @@
 /* ── Empty state ────────────────────────────────────────── */
 
 .ai-empty {
-  text-align: center;
-  color: var(--color-text-500);
-  padding: var(--space-4);
-  font-size: 13px;
+  display: grid;
+  gap: 4px;
+  color: var(--text-muted);
+  padding: 24px;
+  font-size: 14px;
+  border: 1px dashed var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.ai-empty strong {
+  color: var(--text-main);
+  font-size: 16px;
 }
 
 /* ── Nearby worker card extras ──────────────────────────── */
 
 .nearby-worker-card {
-  border: 1px solid var(--border-light);
-  background: var(--glass-bg);
   align-items: center;
 }
 
@@ -240,30 +252,33 @@
 }
 
 .nearby-worker-icon {
-  font-size: 28px;
+  color: var(--primary-purple);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
   width: 44px;
   height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--primary-purple-glow);
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid var(--border-light);
 }
 
 .nearby-worker-badge {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 900;
   color: #059669;
   background: #ECFDF5;
-  padding: 1px 8px;
+  padding: 3px 8px;
   border-radius: var(--radius-pill);
   border: 1px solid #A7F3D0;
 }
 
 .nearby-worker-rating {
   font-size: 12px;
-  color: var(--text-main);
+  color: var(--text-muted);
 }
 
 .nearby-worker-distance {
@@ -284,22 +299,22 @@
 }
 
 .nearby-book-btn {
-  background: linear-gradient(135deg, #059669, #10B981);
+  background: #0f766e;
   color: #fff;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 10px 18px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.2);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .nearby-book-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(5, 150, 105, 0.35);
+  box-shadow: 0 4px 16px rgba(15, 118, 110, 0.28);
 }
 
 .nearby-book-btn:active {

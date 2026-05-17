@@ -8,28 +8,25 @@ import './AiActivityMonitor.css';
 
 const NEARBY_RADIUS_KM = 10;
 
-/**
- * Service-type icons used on worker cards.
- */
-const SERVICE_ICONS = {
-  plumber: '🔧',
-  electrician: '⚡',
-  carpenter: '🪚',
-  painter: '🎨',
-  cleaner: '🧹',
-  driver: '🚗',
-  security: '🛡️',
-  construction: '🏗️',
-  delivery: '📦',
+const SERVICE_LABELS = {
+  plumber: 'PL',
+  electrician: 'EL',
+  carpenter: 'CA',
+  painter: 'PA',
+  cleaner: 'CL',
+  driver: 'DR',
+  security: 'SE',
+  construction: 'CO',
+  delivery: 'DE',
 };
 
-function getServiceIcon(serviceType) {
-  if (!serviceType) return '🔧';
+function getServiceMark(serviceType) {
+  if (!serviceType) return 'SV';
   const key = serviceType.toLowerCase();
-  for (const [k, icon] of Object.entries(SERVICE_ICONS)) {
-    if (key.includes(k)) return icon;
+  for (const [service, label] of Object.entries(SERVICE_LABELS)) {
+    if (key.includes(service)) return label;
   }
-  return '🔧';
+  return serviceType.slice(0, 2).toUpperCase();
 }
 
 function AiPulse() {
@@ -40,22 +37,16 @@ function AiPulse() {
   );
 }
 
-/**
- * Nearby Workers section — fetches real workers from the worker_availability
- * Firestore collection within 10 km of the user and displays them as
- * bookable cards with service type, name, rating, distance, and price.
- */
 export default function AiActivityMonitor({ onBookWorker }) {
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const { location } = useGigLocation() || {};
   const navigate = useNavigate();
 
-  // Fetch real nearby workers from Firestore
   useEffect(() => {
     if (!location?.lat || !location?.lng) {
       setLoading(false);
-      return;
+      return undefined;
     }
 
     let cancelled = false;
@@ -66,42 +57,29 @@ export default function AiActivityMonitor({ onBookWorker }) {
           query(collection(db, 'worker_availability'), where('isAvailable', '==', true))
         );
         const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-        // Match workers across all service types within 10 km
         const serviceTypes = [...new Set(all.map((w) => w.serviceType))];
         const matched = [];
         const seen = new Set();
+        const heavyDriverSubtypes = ['driver-with-private-bus', 'driver-with-bulldozer'];
 
-
-        // Define heavy driver subtypes
-        const HEAVY_DRIVER_SUBTYPES = [
-          'driver-with-private-bus',
-          'driver-with-bulldozer',
-        ];
-
-        for (const sType of serviceTypes) {
-          // If heavy driver, expand search radius
-          let radius = NEARBY_RADIUS_KM;
-          if (HEAVY_DRIVER_SUBTYPES.includes(sType)) {
-            radius = 100; // 100km or more for heavy drivers
-          }
+        for (const serviceType of serviceTypes) {
+          const radiusKm = heavyDriverSubtypes.includes(serviceType) ? 100 : NEARBY_RADIUS_KM;
           const results = matchNearbyWorkers(all, {
-            serviceType: sType,
+            serviceType,
             lat: location.lat,
             lng: location.lng,
-            radiusKm: radius,
+            radiusKm,
           });
-          for (const w of results) {
-            if (!seen.has(w.workerId)) {
-              seen.add(w.workerId);
-              matched.push(w);
+          for (const worker of results) {
+            if (!seen.has(worker.workerId)) {
+              seen.add(worker.workerId);
+              matched.push(worker);
             }
           }
         }
 
         if (!cancelled) setWorkers(matched);
-      } catch (err) {
-        // Log for debugging; UI falls back to empty state
+      } catch {
         if (!cancelled) setWorkers([]);
       } finally {
         if (!cancelled) setLoading(false);
@@ -109,7 +87,9 @@ export default function AiActivityMonitor({ onBookWorker }) {
     };
 
     fetchWorkers();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [location]);
 
   const handleBook = useCallback(
@@ -134,18 +114,19 @@ export default function AiActivityMonitor({ onBookWorker }) {
           <span className="ai-live-badge">LIVE</span>
         </div>
         <p className="ai-monitor__subtitle">
-          Real workers within {NEARBY_RADIUS_KM} km of {cityName} — book for immediate help.
+          Real workers within {NEARBY_RADIUS_KM} km of {cityName}. Book for immediate help.
         </p>
       </div>
 
       <div className="ai-monitor__feed">
         {loading && (
-          <div className="ai-empty">Searching for workers nearby…</div>
+          <div className="ai-empty">Checking nearby worker supply...</div>
         )}
 
         {!loading && workers.length === 0 && (
           <div className="ai-empty">
-            No workers available within {NEARBY_RADIUS_KM} km right now. Please check again shortly or browse services below.
+            <strong>All nearby workers are occupied right now.</strong>
+            <span>Please check again shortly or browse services below.</span>
           </div>
         )}
 
@@ -153,33 +134,33 @@ export default function AiActivityMonitor({ onBookWorker }) {
           workers.map((worker) => {
             const info = getWorkerDisplayInfo(worker);
             if (!info) return null;
-            const icon = getServiceIcon(info.serviceType);
+            const serviceMark = getServiceMark(info.serviceType);
 
             return (
               <div className="ai-card nearby-worker-card" key={worker.workerId}>
                 <div className="ai-card__icon">
-                  <span className="nearby-worker-icon">{icon}</span>
+                  <span className="nearby-worker-icon">{serviceMark}</span>
                 </div>
                 <div className="ai-card__body">
                   <div className="ai-card__title">
                     {info.workerName}
-                    <span className="nearby-worker-badge">✅ Available</span>
+                    <span className="nearby-worker-badge">Available</span>
                   </div>
                   <div className="ai-card__desc">
                     {info.serviceType}
-                    {info.area && ` · 📍 ${info.area}`}
+                    {info.area && ` - ${info.area}`}
                   </div>
                   <div className="ai-card__meta">
                     <span className="nearby-worker-rating">
-                      ⭐ {info.rating > 0 ? info.rating.toFixed(1) : 'New'}
+                      Rating {info.rating > 0 ? info.rating.toFixed(1) : 'New'}
                     </span>
                     {info.distanceKm != null && (
                       <span className="nearby-worker-distance">
-                        📍 {info.distanceKm} km away
+                        {info.distanceKm} km away
                       </span>
                     )}
                     <span className="nearby-worker-price">
-                      ₹{info.fixedRate.toLocaleString('en-IN')}/day
+                      INR {info.fixedRate.toLocaleString('en-IN')}/day
                     </span>
                   </div>
                 </div>
@@ -188,6 +169,7 @@ export default function AiActivityMonitor({ onBookWorker }) {
                     className="nearby-book-btn"
                     onClick={() => handleBook(worker)}
                     aria-label={`Book ${info.workerName}`}
+                    type="button"
                   >
                     Book Now
                   </button>

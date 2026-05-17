@@ -4,21 +4,31 @@ import './AiHeroCarousel.css';
 
 const CYCLE_INTERVAL_MS = 6000;
 
-/**
- * Merges the "Ask Gito AI" prompt panel and the "Nearby Workers" display into a
- * single location that alternates between the two views with a slide animation.
- *
- * Props:
- *  - onQuerySelect: (query: string) => void  — called when a prompt suggestion is clicked
- *  - onBookWorker:  (worker: object) => void  — called when a worker "Book Now" is clicked
- */
+const VIEWS = [
+  {
+    label: 'Ask Gito AI',
+    eyebrow: 'Smart booking',
+    meta: 'Fast quote guidance',
+  },
+  {
+    label: 'Nearby Workers',
+    eyebrow: 'Live supply',
+    meta: '10 km availability',
+  },
+];
+
+const QUERIES = [
+  { label: 'Kitchen tap leak', query: 'Fix a leaky kitchen tap today', intent: 'Urgent repair' },
+  { label: '2BHK painting', query: 'Paint a 2BHK apartment next week', intent: 'Planned work' },
+  { label: 'Fan switchboard', query: 'Need an electrician for fan and switchboard', intent: 'Electrician' },
+];
+
 export default function AiHeroCarousel({ onQuerySelect, onBookWorker }) {
-  const [activeView, setActiveView] = useState(0); // 0 = Ask AI, 1 = Nearby Workers
+  const [activeView, setActiveView] = useState(0);
   const [paused, setPaused] = useState(false);
 
-  // Auto-cycle between views
   useEffect(() => {
-    if (paused) return;
+    if (paused) return undefined;
     const timer = setInterval(() => {
       setActiveView((v) => (v === 0 ? 1 : 0));
     }, CYCLE_INTERVAL_MS);
@@ -27,46 +37,44 @@ export default function AiHeroCarousel({ onQuerySelect, onBookWorker }) {
 
   const handleToggle = useCallback((index) => {
     setActiveView(index);
-    // Pause auto-cycle for a while after manual switch
     setPaused(true);
   }, []);
 
-  // Resume auto-cycle after manual interaction pause
   useEffect(() => {
-    if (!paused) return;
+    if (!paused) return undefined;
     const resume = setTimeout(() => setPaused(false), CYCLE_INTERVAL_MS * 2);
     return () => clearTimeout(resume);
   }, [paused]);
 
-  const queries = [
-    'Fix a leaky kitchen tap today',
-    'Paint a 2BHK apartment next week',
-    'Need an electrician for fan and switchboard',
-  ];
-
   return (
     <section className="ai-carousel" aria-label="Gito AI Hub">
-      {/* Tab toggle */}
-      <div className="ai-carousel__tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={activeView === 0}
-          className={activeView === 0 ? 'active' : ''}
-          onClick={() => handleToggle(0)}
-        >
-          💬 Ask Gito AI
-        </button>
-        <button
-          role="tab"
-          aria-selected={activeView === 1}
-          className={activeView === 1 ? 'active' : ''}
-          onClick={() => handleToggle(1)}
-        >
-          📍 Nearby Workers
-        </button>
+      <div className="ai-carousel__shell">
+        <div className="ai-carousel__header">
+          <div>
+            <span className="ai-carousel__eyebrow">Gigtos command center</span>
+            <h2>Book faster with AI and live worker supply</h2>
+          </div>
+          <span className="ai-carousel__status">Availability aware</span>
+        </div>
+
+        <div className="ai-carousel__tabs" role="tablist" aria-label="Gito AI panel views">
+          {VIEWS.map((view, index) => (
+            <button
+              key={view.label}
+              role="tab"
+              aria-selected={activeView === index}
+              className={activeView === index ? 'active' : ''}
+              onClick={() => handleToggle(index)}
+              type="button"
+            >
+              <span>{view.eyebrow}</span>
+              <strong>{view.label}</strong>
+              <small>{view.meta}</small>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Progress indicator */}
       <div className="ai-carousel__progress">
         <div
           className="ai-carousel__progress-fill"
@@ -75,36 +83,40 @@ export default function AiHeroCarousel({ onQuerySelect, onBookWorker }) {
         />
       </div>
 
-      {/* Sliding panels */}
       <div className="ai-carousel__viewport">
         <div
           className="ai-carousel__track"
           style={{ transform: `translateX(-${activeView * 100}%)` }}
         >
-          {/* Panel 0: Ask Gito AI */}
           <div className="ai-carousel__panel" aria-hidden={activeView !== 0}>
             <div className="ai-ask-panel">
-              <h2>Ask Gito AI</h2>
-              <p>Try specific prompts for faster results:</p>
-              <div className="query-list">
-                {queries.map((query) => (
-                  <button key={query} onClick={() => onQuerySelect?.(query)}>
-                    {query}
+              <div className="ai-ask-panel__copy">
+                <span>Quick start</span>
+                <h3>Tell Gito the job. It will prepare the booking path.</h3>
+                <p>Choose one, then edit details in the assistant if needed.</p>
+              </div>
+              <div className="query-list" aria-label="Suggested AI prompts">
+                {QUERIES.map((query) => (
+                  <button
+                    key={query.query}
+                    type="button"
+                    onClick={() => onQuerySelect?.(query.query)}
+                  >
+                    <span>{query.intent}</span>
+                    <strong>{query.label}</strong>
+                    <small>{query.query}</small>
                   </button>
                 ))}
               </div>
-              <small>Gito AI will open automatically with your selected query.</small>
             </div>
           </div>
 
-          {/* Panel 1: Nearby Workers */}
           <div className="ai-carousel__panel" aria-hidden={activeView !== 1}>
             <AiActivityMonitor onBookWorker={onBookWorker} />
           </div>
         </div>
       </div>
 
-      {/* Dots */}
       <div className="ai-carousel__dots">
         {[0, 1].map((i) => (
           <button
@@ -112,6 +124,7 @@ export default function AiHeroCarousel({ onQuerySelect, onBookWorker }) {
             className={`ai-carousel__dot${activeView === i ? ' active' : ''}`}
             onClick={() => handleToggle(i)}
             aria-label={i === 0 ? 'Show Ask Gito AI' : 'Show Nearby Workers'}
+            type="button"
           />
         ))}
       </div>

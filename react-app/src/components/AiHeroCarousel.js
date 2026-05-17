@@ -6,9 +6,9 @@ const CYCLE_INTERVAL_MS = 6000;
 
 const VIEWS = [
   {
-    label: 'Ask Gito AI',
+    label: 'Ask Gito',
     eyebrow: 'Smart booking',
-    meta: 'Fast quote guidance',
+    meta: 'Fast booking guidance',
   },
   {
     label: 'Nearby Workers',
@@ -47,17 +47,17 @@ export default function AiHeroCarousel({ onQuerySelect, onBookWorker }) {
   }, [paused]);
 
   return (
-    <section className="ai-carousel" aria-label="Gito AI Hub">
+    <section className="ai-carousel" aria-label="Gito booking hub">
       <div className="ai-carousel__shell">
         <div className="ai-carousel__header">
           <div>
             <span className="ai-carousel__eyebrow">Gigtos command center</span>
-            <h2>Book faster with AI and live worker supply</h2>
+            <h2>Book faster with Gito and live worker supply</h2>
           </div>
           <span className="ai-carousel__status">Availability aware</span>
         </div>
 
-        <div className="ai-carousel__tabs" role="tablist" aria-label="Gito AI panel views">
+        <div className="ai-carousel__tabs" role="tablist" aria-label="Gito booking panel views">
           {VIEWS.map((view, index) => (
             <button
               key={view.label}
@@ -95,7 +95,7 @@ export default function AiHeroCarousel({ onQuerySelect, onBookWorker }) {
                 <h3>Tell Gito the job. It will prepare the booking path.</h3>
                 <p>Choose one, then edit details in the assistant if needed.</p>
               </div>
-              <div className="query-list" aria-label="Suggested AI prompts">
+              <div className="query-list" aria-label="Suggested booking prompts">
                 {QUERIES.map((query) => (
                   <button
                     key={query.query}
@@ -123,7 +123,7 @@ export default function AiHeroCarousel({ onQuerySelect, onBookWorker }) {
             key={i}
             className={`ai-carousel__dot${activeView === i ? ' active' : ''}`}
             onClick={() => handleToggle(i)}
-            aria-label={i === 0 ? 'Show Ask Gito AI' : 'Show Nearby Workers'}
+            aria-label={i === 0 ? 'Show Ask Gito' : 'Show Nearby Workers'}
             type="button"
           />
         ))}

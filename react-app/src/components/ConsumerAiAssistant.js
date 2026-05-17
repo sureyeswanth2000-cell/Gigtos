@@ -21,7 +21,7 @@ export default function ConsumerAiAssistant({
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      text: "Hi there! 👋 I'm Gito AI, your personal booking assistant. Tell me what you need \u2014 whether it's fixing a leak, installing a fan, or painting a room \u2014 and I'll find the right worker for you!",
+      text: "Hi there! I'm Gito Assistant, your booking helper. Tell me what you need - whether it's fixing a leak, installing a fan, or painting a room - and I'll help you find the right worker.",
     },
   ]);
   const [loading, setLoading] = useState(false);
@@ -183,7 +183,7 @@ export default function ConsumerAiAssistant({
             boxShadow: '0 12px 24px rgba(15, 23, 42, 0.24)',
           }}
         >
-          Ask Gito AI
+          Ask Gito
         </button>
       )}
 
@@ -203,7 +203,7 @@ export default function ConsumerAiAssistant({
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
             <div>
-              <div style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Gito AI</div>
+              <div style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Gito Assistant</div>
               <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Quick booking help</div>
             </div>
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -289,7 +289,7 @@ export default function ConsumerAiAssistant({
                 {message.text}
               </div>
             ))}
-            {loading && <div style={{ fontSize: '12px', opacity: 0.8 }}>Gito AI is replying...</div>}
+            {loading && <div style={{ fontSize: '12px', opacity: 0.8 }}>Gito is replying...</div>}
           </div>
 
           <div style={{ marginTop: 'auto', padding: '12px', borderTop: '1px solid rgba(255,255,255,0.12)', background: 'rgba(17,24,39,0.22)' }}>
@@ -302,10 +302,10 @@ export default function ConsumerAiAssistant({
                 marginBottom: '10px',
               }}>
                 <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '6px' }}>
-                  <span role="img" aria-label="AI">🤖</span> Confirm booking for {pendingBooking.name}?
+                  Confirm booking for {pendingBooking.name}?
                 </div>
                 <div style={{ fontSize: '11px', opacity: 0.85, marginBottom: '8px' }}>
-                  AI will never auto-book. Your explicit confirmation is required.
+                  Gito will never auto-book. Your explicit confirmation is required.
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button

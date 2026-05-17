@@ -270,7 +270,7 @@ export default function Home() {
 
         {visibleHomeServices.length === 0 && (
           <div className="no-services-note">
-            No services found. Try asking our <strong>Gito AI</strong> for a custom quote.
+            No services found. Try asking <strong>Gito Assistant</strong> for booking help.
           </div>
         )}
       </section>

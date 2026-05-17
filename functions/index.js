@@ -74,6 +74,42 @@ async function logActivity(bookingId, action, actorRole, extra = {}) {
   }
 }
 
+function calculateConsumerPlatformFee(baseAmount) {
+  const base = Number(baseAmount);
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  if (base <= 500) return 19;
+  if (base <= 1000) return 29;
+  return Math.round((19 + base * 0.02) * 100) / 100;
+}
+
+function getWorkerPriceFromBooking(booking = {}) {
+  return Number(
+    booking.workerPrice ??
+    booking.workerAmount ??
+    booking.baseAmount ??
+    booking.amount ??
+    booking.budget ??
+    booking.estimatedBudget ??
+    0
+  );
+}
+
+function buildNoCommissionSettlement(booking = {}) {
+  const workerPrice = Math.max(0, getWorkerPriceFromBooking(booking));
+  const bookingFee = Number(booking.platformFee ?? booking.consumerPlatformFee ?? calculateConsumerPlatformFee(workerPrice));
+  const gatewayFee = Number(booking.gatewayFee ?? booking.paymentGatewayFee ?? 0);
+  const consumerTotal = Number(booking.finalTotal ?? booking.totalAmount ?? (workerPrice + bookingFee + gatewayFee));
+
+  return {
+    model: 'no_worker_commission_v1',
+    workerEarnings: Math.round(workerPrice * 100) / 100,
+    consumerBookingFee: Math.round(bookingFee * 100) / 100,
+    gatewayFee: Math.round(gatewayFee * 100) / 100,
+    consumerTotal: Math.round(consumerTotal * 100) / 100,
+    calculatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+}
+
 function normalizeServiceType(value) {
   return (value || '')
     .toString()
@@ -683,23 +719,25 @@ exports.onBookingStatusChange = functions.firestore
     }
 
     // LOGIC: Completion Automation
-    // - Processes commissions (₹150 Split)
+    // - Records no-worker-commission settlement
     // - Issues ₹9 Cashback to user with 15-day expiry
     // - Updates worker "Completed Jobs" count and assigns Top-Listed badge after 3 jobs
     if (before.status !== 'completed' && after.status === 'completed') {
-      const commissionData = {
-        totalVisitingCharge: 150,
-        workerShare: 80, localAdminShare: 20, gigtoShare: 50,
-        calculatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      };
+      const settlementData = buildNoCommissionSettlement(after);
 
       await bookingRef.update({
-        commissions: commissionData,
-        isCommissionProcessed: true,
+        settlement: settlementData,
+        settlementModel: 'no_worker_commission_v1',
+        isSettlementProcessed: true,
+        isCommissionProcessed: false,
         escrowStatus: after.escrowStatus || 'released',
       });
 
-      await logActivity(bookingId, 'completion_processed', 'system');
+      await logActivity(bookingId, 'settlement_processed', 'system', {
+        model: settlementData.model,
+        workerEarnings: settlementData.workerEarnings,
+        consumerBookingFee: settlementData.consumerBookingFee,
+      });
 
       // Issue Cashback (₹9)
       if (after.userId) {

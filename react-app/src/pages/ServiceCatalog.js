@@ -139,7 +139,7 @@ export default function ServiceCatalog() {
           <section className="catalog-trust-band">
             <span>Trust & Safety Guarantee</span>
             <h2>Every booking is secured and every worker action can be verified.</h2>
-            <p>Before/after photos, consumer feedback, SocioScore history, and payment records create a cleaner path than hidden commission pressure.</p>
+            <p>Workers keep their job earnings. Gigtos uses transparent consumer booking fees, proof photos, feedback, and SocioScore history to build trust without hidden worker commission pressure.</p>
           </section>
         </div>
       </section>

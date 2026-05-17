@@ -8,8 +8,10 @@ import {
   getTierFromScore,
 } from './socioScore';
 import {
+  WORKER_FREEDOM_PROMISE,
   calculateFreeAccessUntil,
   evaluateSubscriptionRefund,
+  getLaunchAccessPlan,
   getSubscriptionStatus,
 } from './workerSubscription';
 import { t, translateScoreEvent } from './localization';
@@ -80,6 +82,17 @@ describe('SocioScore core model', () => {
 });
 
 describe('worker subscription model', () => {
+  it('documents launch access and worker freedom without exclusivity', () => {
+    expect(getLaunchAccessPlan()).toMatchObject({
+      freeDays: 30,
+      founderManagedCosts: true,
+      noExclusivity: true,
+      workerKeepsJobEarnings: true,
+    });
+    expect(getLaunchAccessPlan({ hasVerifiedExternalPlatform: true }).freeDays).toBe(365);
+    expect(WORKER_FREEDOM_PROMISE).toContain('No exclusivity');
+  });
+
   it('grants one-year free access for verified external platform workers', () => {
     expect(calculateFreeAccessUntil({
       joinedAt: '2026-01-01T00:00:00Z',

@@ -29,10 +29,15 @@ Do not promise impossible guarantees such as instant refunds for every case, fak
 
 - No job commission from worker earnings.
 - Worker subscription is separate from job earnings and starts only after free/trial access ends.
+- First 30 launch days are free platform access; founder-managed early costs should be handled manually and reviewed before paid scale.
 - Verified previous-platform experience may qualify a worker for one-year free access, subject to safe proof storage and review.
 - Workers can use Gigtos alongside other platforms. No exclusivity, no forced target, no pressure to leave another app.
 - Completion photo is required before marking a job ready for consumer confirmation.
 - Repeated verified 1-star ratings, low SocioScore, fraud, unsafe behavior, or repeated complaints can pause access and refund eligibility.
+
+## Worker Acquisition Promise
+
+Public worker-facing copy should stay simple: no job commission, keep your work earnings, first 30 days free during launch, first year free with verified previous-platform proof, and freedom to use Gigtos alongside other legal work sources.
 
 ## SocioScore Policy Baseline
 

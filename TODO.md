@@ -34,16 +34,17 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 
 ## Pricing And Monetization
 
-- [ ] Remove old commission-style pricing from code/docs. Gigtos should not take worker commission from each job.
+- [x] Remove old active commission-style pricing from app/functions and worker-facing docs. Gigtos should not take worker commission from each job.
+- [ ] Later architecture cleanup: rename old migration/Data Connect `commissions` artifacts into settlement/platform-fee ledger language during the database redesign.
 - [x] Implement booking-based consumer platform fee tiers:
   - Booking amount `<= INR 500`: platform fee `INR 19`.
   - Booking amount `INR 501-1000`: platform fee should be a slightly higher flat fee; recommended v1 `INR 29`, configurable by superadmin.
   - Booking amount `> INR 1000`: platform fee `INR 19 + 2%` of booking amount.
 - [x] Add tests for fee examples: `INR 400 -> INR 19`, `INR 800 -> INR 29`, `INR 1200 -> INR 43`, with rounding rules documented.
 - [x] Add worker subscription plan: `INR 1000/month` after the free access period, configurable by superadmin.
-- [ ] First 30 days launch plan: provide Gigtos free access/platform usage; founder will manually manage platform/payment costs where needed.
+- [x] First 30 days launch plan: provide Gigtos free access/platform usage; founder will manually manage platform/payment costs where needed.
 - [x] Add one-year free worker access for verified workers who provide an existing valid platform ID/card from UC, Pivot, or similar trusted service platforms.
-- [ ] Do not force UC/Pivot workers to leave their existing app. Gigtos should support freedom: workers can use UC/Pivot and Gigtos in parallel, with no pressure, no exclusivity, and no targets.
+- [x] Do not force UC/Pivot workers to leave their existing app. Gigtos should support freedom: workers can use UC/Pivot and Gigtos in parallel, with no pressure, no exclusivity, and no targets.
 - [x] Add subscription fairness/refund logic:
   - if a subscribed worker does not get proper work/leads from Gigtos, provide partial subscription refund or credit based on clear rules
   - if worker receives verified 1-star ratings 3 times, has repeated quality issues, or has low SocioScore, do not refund subscription because Gigtos is inviting experts and must protect consumers
@@ -328,8 +329,8 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 
 ## Acquisition Strategy For UC/Pivot Workers
 
-- [ ] Landing promise: "No job commission. Keep your earnings. Build your Gigtos SocioScore. First year free with verified UC/Pivot/similar ID."
-- [ ] Worker freedom promise: "Use Gigtos along with your existing platform. No pressure, no exclusivity, no targets."
+- [x] Landing promise: "No job commission. Keep your earnings. Build your Gigtos SocioScore. First year free with verified UC/Pivot/similar ID."
+- [x] Worker freedom promise: "Use Gigtos along with your existing platform. No pressure, no exclusivity, no targets."
 - [ ] Worker onboarding funnel: exact first 10 minutes after worker installs app.
 - [ ] Worker onboarding:
   - Upload existing platform ID/card.

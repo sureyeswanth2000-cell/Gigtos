@@ -453,7 +453,7 @@ function Auth() {
 
             {phase === 'signup' && userType === 'worker' && (
               <div className="auth-note">
-                Existing UC or Pivot ID proof can be reviewed later for free-access eligibility.
+                First 30 days are free during launch. Verified UC, Pivot, or similar proof can unlock one-year free access. You can keep using other apps too.
               </div>
             )}
 

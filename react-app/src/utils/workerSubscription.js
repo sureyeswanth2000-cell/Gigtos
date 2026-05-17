@@ -4,6 +4,27 @@ export const DEFAULT_SUBSCRIPTION_PLAN = {
   verifiedExternalPlatformFreeDays: 365,
 };
 
+export const WORKER_FREEDOM_PROMISE =
+  'Workers can use Gigtos alongside UC, Pivot, or any other legal work source. No exclusivity, no forced target, no pressure to leave another app.';
+
+export function getLaunchAccessPlan({
+  hasVerifiedExternalPlatform = false,
+  plan = DEFAULT_SUBSCRIPTION_PLAN,
+} = {}) {
+  return {
+    monthlyFee: plan.monthlyFee,
+    freeDays: hasVerifiedExternalPlatform
+      ? plan.verifiedExternalPlatformFreeDays
+      : plan.launchFreeDays,
+    founderManagedCosts: true,
+    noExclusivity: true,
+    workerKeepsJobEarnings: true,
+    promise: hasVerifiedExternalPlatform
+      ? 'First year free with verified previous-platform proof.'
+      : 'First 30 days free during launch; Gigtos founder manages early platform costs.',
+  };
+}
+
 export function calculateFreeAccessUntil({
   joinedAt = new Date(),
   hasVerifiedExternalPlatform = false,

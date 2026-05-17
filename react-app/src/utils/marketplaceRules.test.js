@@ -3,7 +3,7 @@ import { getEmergencyBookingRule, getRecurringBookingPriority, validateFutureBoo
 import { classifyWorkerPrice, getSuggestedPriceBand } from './priceIntelligence';
 import { getLaunchServices, getRecruitableServices } from './serviceCatalog';
 import { chooseAutoSelectWorker, distanceKm, getMatchingScope } from './workerMatching';
-import { approveExternalPlatformProof, createExternalPlatformProof } from './workerVerification';
+import { approveExternalPlatformProof, createExternalPlatformProof, getExperiencedWorkerBadge } from './workerVerification';
 import { calculateWalletBalance, evaluateWalletRestrictions, recordCashPlatformFeeDebt } from './wallet';
 
 describe('service catalog and price intelligence', () => {
@@ -67,6 +67,32 @@ describe('worker verification and wallet debt', () => {
     expect(proof.maskedId).toBe('****6789');
     expect(approved.verificationStatus).toBe('approved');
     expect(approved.audit).toHaveLength(2);
+  });
+
+  test('shows experienced worker badge only after proof review with safe public copy', () => {
+    const pending = createExternalPlatformProof({
+      workerId: 'w1',
+      platformName: 'UC',
+      externalId: 'UC-123456789',
+    });
+    const approved = approveExternalPlatformProof(pending, {
+      reviewedBy: 'superadmin',
+      freeAccessUntil: new Date('2027-05-16T00:00:00Z'),
+    });
+
+    expect(getExperiencedWorkerBadge({ externalPlatformProofs: [pending] }).visible).toBe(false);
+
+    const safeBadge = getExperiencedWorkerBadge({ externalPlatformProofs: [approved] });
+    expect(safeBadge.visible).toBe(true);
+    expect(safeBadge.label).toBe('Verified previous platform experience');
+    expect(safeBadge.description).not.toContain('UC');
+    expect(safeBadge.sourcePlatformName).toBeNull();
+
+    const legallyApprovedBadge = getExperiencedWorkerBadge({
+      externalPlatformProofs: [approved],
+      legalCopyApproved: true,
+    });
+    expect(legallyApprovedBadge.sourcePlatformName).toBe('UC');
   });
 
   test('wallet records cash platform fee debt and flags restriction after -100', () => {

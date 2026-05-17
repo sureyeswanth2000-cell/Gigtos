@@ -352,7 +352,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - explain first 5 jobs protection/Phoenix path
   - ask bank setup now or later
   - show first action: "Turn on available" or "Finish verification"
-- [ ] Verified experienced worker badge:
+- [x] Verified experienced worker badge:
   - Use only after proof review.
   - Consumer-facing copy should say "verified previous platform experience" rather than naming a competitor in a risky way if legal review is not done.
 - [ ] Subscription conversion should happen only after value is proven:

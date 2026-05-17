@@ -51,3 +51,30 @@ export function approveExternalPlatformProof(proof, { reviewedBy, reviewedAt = n
     ],
   };
 }
+
+export function getExperiencedWorkerBadge({
+  externalPlatformProofs = [],
+  legalCopyApproved = false,
+} = {}) {
+  const approvedProof = externalPlatformProofs.find((proof) => proof?.verificationStatus === 'approved');
+
+  if (!approvedProof) {
+    return {
+      visible: false,
+      label: '',
+      description: '',
+      reason: 'no_approved_previous_platform_proof',
+    };
+  }
+
+  return {
+    visible: true,
+    type: 'verified_previous_platform_experience',
+    label: 'Verified previous platform experience',
+    description: legalCopyApproved && approvedProof.platformName
+      ? `Experience proof reviewed from ${approvedProof.platformName}.`
+      : 'Experience proof reviewed by Gigtos. Platform names are hidden until legal copy is approved.',
+    maskedId: approvedProof.maskedId,
+    sourcePlatformName: legalCopyApproved ? approvedProof.platformName : null,
+  };
+}

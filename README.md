@@ -70,6 +70,24 @@ Home services app (Plumbing, Electrical, and more) across all of India — with 
 - ✅ Twilio SMS integration (configured via env vars)
 - ✅ Nodemailer/Gmail email integration
 
+### 🌐 Firebase Hosting & Custom Domain (`gigto.in`)
+
+The React app is configured for Firebase Hosting (see the `hosting` section in `firebase.json`).
+
+**Quick deploy:**
+```bash
+# Build the React app
+cd react-app && npm run build && cd ..
+
+# Deploy to Firebase Hosting
+firebase deploy --only hosting
+```
+
+**Connect the `gigto.in` custom domain:**
+See the full step-by-step guide → [CUSTOM_DOMAIN_SETUP.md](CUSTOM_DOMAIN_SETUP.md)
+
+---
+
 ### Deploy functions:
 ```bash
 cd functions

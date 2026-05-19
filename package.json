@@ -6,10 +6,10 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "firebase-admin": "^11.11.1"
+    "firebase-admin": "^13.10.0"
   },
   "devDependencies": {
     "gh-pages": "^6.3.0",
-    "protobufjs": "^7.5.4"
+    "protobufjs": "^7.6.0"
   }
 }

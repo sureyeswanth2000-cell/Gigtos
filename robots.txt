@@ -5,4 +5,4 @@ Disallow: /operator
 Disallow: /worker/dashboard
 Disallow: /worker/open-work
 Disallow: /worker/profile
-Sitemap: https://sureyeswanth2000-cell.github.io/Gigtos/sitemap.xml
+Sitemap: https://gigto.in/sitemap.xml

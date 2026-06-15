@@ -5417,6 +5417,107 @@ exports.checkCashbackExpiry = functions.pubsub
   });
 
 /**
+ * SCHEDULED: Runs every day.
+ * LOGIC: Lazily processes inactivity decay for workers and consumers.
+ */
+exports.runInactivityDecay = functions.pubsub
+  .schedule('every day 01:00')
+  .timeZone('Asia/Kolkata')
+  .onRun(async (context) => {
+    try {
+      const settingsSnap = await db.collection('platform_settings').doc('gigscore_controls').get();
+      const settings = settingsSnap.exists ? settingsSnap.data() : {};
+      
+      const inactivityDecayAfterDays = Number(settings.inactivityDecayAfterDays ?? 10);
+      const workerInactivityDecay = Number(settings.workerInactivityDecay ?? -5);
+      const consumerInactivityDecay = Number(settings.consumerInactivityDecay ?? -2);
+      const inactivityFloor = Number(settings.inactivityFloor ?? 450);
+
+      const now = new Date();
+      const thresholdDate = new Date(now.getTime() - (inactivityDecayAfterDays * 24 * 60 * 60 * 1000));
+
+      // Process Workers
+      const workersSnap = await db.collection('worker_auth')
+        .where('lastActiveAt', '<', thresholdDate)
+        .get();
+
+      for (const workerDoc of workersSnap.docs) {
+        const workerData = workerDoc.data();
+        const lastDecayedAt = workerData.lastInactivityDecayAt?.toDate?.() || workerData.lastActiveAt?.toDate?.() || workerData.lastActiveAt;
+        if (!lastDecayedAt) continue;
+
+        const daysSinceDecay = Math.floor((now.getTime() - new Date(lastDecayedAt).getTime()) / (24 * 60 * 60 * 1000));
+        if (daysSinceDecay >= inactivityDecayAfterDays) {
+          const currentScore = Number(workerData.gigScore ?? workerData.socioScore ?? 500);
+          if (currentScore > inactivityFloor) {
+            const decayAmount = workerInactivityDecay; // e.g. -5
+            const nextScore = Math.max(inactivityFloor, currentScore + decayAmount);
+            if (nextScore !== currentScore) {
+              await writeGigScoreEventAndProfile({
+                actorId: workerDoc.id,
+                actorRole: 'worker',
+                bookingId: 'inactivity_decay_system',
+                reasonCode: 'inactivity_decay',
+                reasonText: `Account inactive for ${daysSinceDecay} days. Score decay applied.`,
+                delta: nextScore - currentScore,
+                status: 'finalized',
+                metadata: {
+                  daysInactive: daysSinceDecay,
+                }
+              });
+              await db.collection('worker_auth').doc(workerDoc.id).update({
+                lastInactivityDecayAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            }
+          }
+        }
+      }
+
+      // Process Consumers
+      const consumersSnap = await db.collection('users')
+        .where('lastActiveAt', '<', thresholdDate)
+        .get();
+
+      for (const consumerDoc of consumersSnap.docs) {
+        const consumerData = consumerDoc.data();
+        const lastDecayedAt = consumerData.lastInactivityDecayAt?.toDate?.() || consumerData.lastActiveAt?.toDate?.() || consumerData.lastActiveAt;
+        if (!lastDecayedAt) continue;
+
+        const daysSinceDecay = Math.floor((now.getTime() - new Date(lastDecayedAt).getTime()) / (24 * 60 * 60 * 1000));
+        if (daysSinceDecay >= inactivityDecayAfterDays) {
+          const currentScore = Number(consumerData.gigScore ?? consumerData.socioScore ?? 0);
+          const floor = inactivityFloor;
+          if (currentScore > floor) {
+            const decayAmount = consumerInactivityDecay; // e.g. -2
+            const nextScore = Math.max(floor, currentScore + decayAmount);
+            if (nextScore !== currentScore) {
+              await writeGigScoreEventAndProfile({
+                actorId: consumerDoc.id,
+                actorRole: 'consumer',
+                bookingId: 'inactivity_decay_system',
+                reasonCode: 'inactivity_decay',
+                reasonText: `Account inactive for ${daysSinceDecay} days. Score decay applied.`,
+                delta: nextScore - currentScore,
+                status: 'finalized',
+                metadata: {
+                  daysInactive: daysSinceDecay,
+                }
+              });
+              await db.collection('users').doc(consumerDoc.id).update({
+                lastInactivityDecayAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            }
+          }
+        }
+      }
+
+    } catch (e) {
+      console.error('Inactivity decay scheduled run failed:', e);
+    }
+    return null;
+  });
+
+/**
  * SCHEDULED: Runs every 30 minutes.
  * LOGIC: Escalates any active booking that has not moved status in the last 24 hours
  * and pushes an alert to the corresponding Region Lead.

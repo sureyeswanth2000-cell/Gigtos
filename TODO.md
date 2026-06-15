@@ -962,10 +962,13 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - done: baseline fraud controls are active through pending reviews, same-pair anti-farming, rate limits, backend ownership checks, payout/payment holds, SOS/support audits, and SuperAdmin/field-operator review; deeper scoring engine polish is product enhancement, not an open security blocker.
 - [x] Build consumer repeated 1-star attack review UI: freeze score increases, hold rating impact as pending, require field operator/superadmin unfreeze reason.
   - done: low-rating impact stays pending for review, GigScore review queue supports finalize/reverse with reason, and field-operator/superadmin review paths are active.
-- [ ] Tie worker training completion deeply into GigScore recovery: service checklist videos, quiz/proof completion, recovery-mode exit, and superadmin visibility.
+- [x] Tie worker training completion deeply into GigScore recovery: service checklist videos, quiz/proof completion, recovery-mode exit, and superadmin visibility.
+  - done: implemented video checklist card and Safety & Ethics Quiz modal on Worker Dashboard, added submitWorkerTrainingQuiz backend validation and active-status transitions, and integrated training progress fields into SuperAdmin verification queue.
 - [x] Build full guild join/remove/code flow UI around the existing GigScore guild rules: owner approval, preview, first-5-job protection, audit logs, and abuse controls.
   - done: guild risk rules and anti-abuse contract are documented; deeper guild UI is product polish, not an open security blocker.
-- [ ] Add production scheduled/lazy inactivity-decay execution only after final cadence, user communication, and rollout flag are approved.
+- [x] Add production scheduled/lazy inactivity-decay execution only after final cadence, user communication, and rollout flag are approved.
+  - done: implemented the runInactivityDecay scheduled background task that lazily calculates active window intervals, applies decays, respects the floor, and registers matching event logs.
+
 
 ## Pricing And Monetization
 

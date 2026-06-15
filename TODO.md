@@ -138,14 +138,14 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - First target cities: Bangalore and Hyderabad.
 - [x] MVP launch must control scope tightly.
 - [x] Add product-wide app guidelines and build path in `docs/APP_GUIDELINES_AND_BUILD_PATH.md`; future feature work should follow and update this document when product direction changes.
-- [ ] Next execution focus: complete Phase 1 base access before complex features:
+- [x] Next execution focus: complete Phase 1 base access before complex features:
   - Auth/new consumer flow first: Google/phone/email login, safe account auto-create for first-time consumers, collect missing details only when needed
   - Worker onboarding second: service type, area selection, price, profile/photo, previous platform proof, availability
   - Active service catalog third: show only bookable/active services and truthful occupied/recruiting states
   - Smart Queue v1 fourth: `Book Now`, `Book Later`, and `Notify Me` must route only to approved workers who clicked `Open to Work`
   - Consumer AI v1, demand pricing v1, area intelligence v1, SEO, worker landing, Sentry/Vertex health summaries, and Heart Monitor are MVP because they reduce manual founder monitoring
   - delay only heavy future systems: autonomous auto-booking without confirmation, multi-booking, full payment automation, full AI release orchestration, and advanced field-operator workflows
-- [ ] MVP fast-launch scope lock:
+- [x] MVP fast-launch scope lock:
   - launch as simple as possible; do not build heavy future systems before the first reliable marketplace loop works
   - skip online payment/Razorpay for MVP
   - no in-app consumer payment integration for MVP
@@ -172,7 +172,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - for the last `10%` available supply in a high-demand service-area, superadmin/manual control may allow a higher suggested demand price within the configured peak cap
   - add/keep superadmin manual high-demand button/control for city/area/service so founder can enable/disable demand labels or suggested increase without deploying code
   - target is fast MVP launch, not complete full roadmap implementation
-- [ ] MVP versus regular-later scope divider:
+- [x] MVP versus regular-later scope divider:
   - MVP means the first reliable marketplace heart: consumer enters, worker registers/gets approved, consumer books an active service, worker accepts, worker completes, consumer pays directly outside app, feedback is captured, GigScore records the outcome, and founder sees health/errors quickly.
   - MVP required product flow:
     - consumer login/register with Google/phone/email and safe auto-create for new consumers

@@ -101,7 +101,7 @@ jobs:
             "${{ secrets.AI_REVIEW_WEBHOOK_URL }}" || echo "Webhook call failed (non-fatal)"
 
       - name: Add ai-reviewed label
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             try {

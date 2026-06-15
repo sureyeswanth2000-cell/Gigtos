@@ -992,7 +992,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] Store external platform ID proof safely: platform name, masked ID/card display, verification status, reviewed by, reviewed at, free-access-until, and audit log.
 - [x] Consumer price display must be truthful and all-inclusive. Worker/admin settlement views should show worker earnings, consumer booking fee, gateway fee, taxes if any, and payout status clearly.
 - [x] Always show consumer platform fee line item even when it is `INR 0`; superadmin can edit fee rules from UI later.
-- [ ] Add booking-time-only bargain/offer feature: consumer may ask for a small worker-price reduction only before booking confirmation; hide/lock bargain after booking is confirmed or work starts so post-work pressure is avoided.
+- [x] Add booking-time-only bargain/offer feature: consumer may ask for a small worker-price reduction only before booking confirmation; hide/lock bargain after booking is confirmed or work starts so post-work pressure is avoided.
 - [ ] Discuss and design Gigtos Community Support Program for launch funding:
   - users can support/donate to Gigtos during launch, but donation must not buy core GigScore or worker ranking
   - public principle: "GigScore cannot be bought; it is earned through clean bookings, fair behavior, payment discipline, and trust"

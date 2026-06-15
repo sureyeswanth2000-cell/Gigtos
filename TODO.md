@@ -26,7 +26,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 
 ### 🟠 High - Push Notifications Not Working
 
-- [ ] **VAPID Key Configuration**: Set `REACT_APP_FIREBASE_VAPID_KEY` in `react-app/.env.production` — FCM Web Push will not deliver worker Smart Queue offer notifications without this; app safely degrades but workers miss 90-second offer windows.
+- [x] **VAPID Key Configuration**: Set `REACT_APP_FIREBASE_VAPID_KEY` in `react-app/.env.production` — FCM Web Push will not deliver worker Smart Queue offer notifications without this; app safely degrades but workers miss 90-second offer windows.
 - [x] **VAPID readiness audit/test**: Added `npm run audit:launch` and `workerPushNotifications.test.js`; app now proves safe fallback when VAPID is missing and successful token registration when the Firebase Web Push public key is provided.
 - [ ] **FCM Push End-to-End Test**: After VAPID key is set, test that Smart Queue offers actually deliver push notifications to a worker browser/device in the background.
 

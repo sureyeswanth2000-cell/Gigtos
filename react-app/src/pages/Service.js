@@ -143,6 +143,7 @@ export default function Service() {
   const [lockedQuote, setLockedQuote] = useState(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState('');
+  const [bargainPrice, setBargainPrice] = useState('');
   const activeQuoteRequestKeyRef = useRef('');
 
   const devUser = useMemo(
@@ -189,15 +190,42 @@ export default function Service() {
   useEffect(() => {
     setSmartMatch(getSmartMatchRecommendation(selectedType, issueDetails, estimatedDays));
     setLockedQuote(null);
+    setBargainPrice('');
     activeQuoteRequestKeyRef.current = '';
     setQuoteError('');
   }, [selectedType, issueDetails, estimatedDays]);
 
   useEffect(() => {
     setLockedQuote(null);
+    setBargainPrice('');
     activeQuoteRequestKeyRef.current = '';
     setQuoteError('');
   }, [address, profileCity, profileArea]);
+
+  const minAllowedBargainPrice = useMemo(() => {
+    if (!lockedQuote?.finalConsumerPrice) return 0;
+    return Math.round(Number(lockedQuote.finalConsumerPrice) * 0.85); // Up to 15% discount
+  }, [lockedQuote]);
+
+  const isBargainValid = useMemo(() => {
+    if (!bargainPrice) return true;
+    const priceNum = Number(bargainPrice);
+    return !Number.isNaN(priceNum) && priceNum >= minAllowedBargainPrice && priceNum <= (lockedQuote?.finalConsumerPrice || 0);
+  }, [bargainPrice, minAllowedBargainPrice, lockedQuote]);
+
+  const finalPriceToCharge = useMemo(() => {
+    if (lockedQuote && bargainPrice && isBargainValid) {
+      return Number(bargainPrice);
+    }
+    return lockedQuote?.finalConsumerPrice || 0;
+  }, [lockedQuote, bargainPrice, isBargainValid]);
+
+  const finalWorkerReceivable = useMemo(() => {
+    if (lockedQuote && bargainPrice && isBargainValid) {
+      return Number(bargainPrice);
+    }
+    return lockedQuote?.workerReceivable || 0;
+  }, [lockedQuote, bargainPrice, isBargainValid]);
 
   const consumerPriceReasons = useMemo(
     () => buildConsumerPriceReasons(lockedQuote, lockedQuote?.quoteContext?.serviceType || selectedType),
@@ -287,6 +315,10 @@ export default function Service() {
         priceQuoteId: lockedQuote.quoteId,
         quoteId: lockedQuote.quoteId,
         quoteStatus: 'locked',
+        finalConsumerPrice: finalPriceToCharge,
+        workerReceivable: finalWorkerReceivable,
+        bargainRequestedPrice: bargainPrice && isBargainValid ? Number(bargainPrice) : null,
+        bargainStatus: bargainPrice && isBargainValid ? 'pending' : null,
         completedWorkDays: 0,
         remainingWorkDays: Number(estimatedDays),
         isMultiDay: Number(estimatedDays) > 1,
@@ -307,12 +339,12 @@ export default function Service() {
         const createRazorpayOrder = httpsCallable(functionsAsia, 'createRazorpayOrder');
         const verifyRazorpayPayment = httpsCallable(functionsAsia, 'verifyRazorpayPayment');
 
-        const orderResponse = await createRazorpayOrder({ amount: lockedQuote.finalConsumerPrice });
+        const orderResponse = await createRazorpayOrder({ amount: finalPriceToCharge });
         const { orderId } = orderResponse.data;
 
         const options = {
           key: process.env.REACT_APP_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-          amount: Math.round(Number(lockedQuote.finalConsumerPrice) * 100),
+          amount: Math.round(Number(finalPriceToCharge) * 100),
           currency: 'INR',
           name: 'Gigtos Home Services',
           description: `Booking for ${selectedType}`,
@@ -563,6 +595,45 @@ export default function Service() {
               {quoteError && <small>{quoteError}</small>}
             </div>
 
+            {lockedQuote && (
+              <div className="booking-locked-quote" style={{ marginTop: 16, padding: '16px 20px', background: 'var(--bg-soft)', border: '1px dashed var(--border-light)', borderRadius: 14 }}>
+                <strong style={{ display: 'block', marginBottom: 6 }}>Request a launch discount (Optional)</strong>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'block', marginBottom: 12 }}>
+                  You can propose a lower price (bargain) up to 15% discount. Verified workers can choose to accept or reject your offer before match confirmation.
+                </span>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    placeholder={`Enter offer (Min INR ${minAllowedBargainPrice})`}
+                    className="input-field"
+                    style={{ margin: 0, flex: 1, padding: '10px 14px' }}
+                    value={bargainPrice}
+                    onChange={(e) => setBargainPrice(e.target.value)}
+                  />
+                  {bargainPrice && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ padding: '12px 18px', whiteSpace: 'nowrap', borderRadius: 8 }}
+                      onClick={() => setBargainPrice('')}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+                {!isBargainValid && (
+                  <small style={{ color: 'var(--error)', marginTop: 6, display: 'block', fontWeight: 700 }}>
+                    Discount request cannot exceed 15% (Min allowed: INR {minAllowedBargainPrice}).
+                  </small>
+                )}
+                {bargainPrice && isBargainValid && (
+                  <small style={{ color: 'var(--success)', marginTop: 6, display: 'block', fontWeight: 700 }}>
+                    Proposing target price of INR {finalPriceToCharge} to open workers.
+                  </small>
+                )}
+              </div>
+            )}
+
             <div className="booking-reason-list">
               {smartMatch.reasons.map((reason) => (
                 <span key={reason}><Sparkles size={14} /> {reason}</span>
@@ -652,7 +723,7 @@ export default function Service() {
               <strong>{selectedType}</strong>
               <small>{scheduleText}</small>
             </div>
-            <button type="button" disabled={!canReview || loading || quoteLoading} onClick={prepareLockedQuote}>
+            <button type="button" disabled={!canReview || loading || quoteLoading || !isBargainValid} onClick={prepareLockedQuote}>
               {quoteLoading ? 'Locking price...' : loading ? 'Booking...' : 'Review and book'} <ArrowRight size={18} />
             </button>
           </section>
@@ -669,8 +740,18 @@ export default function Service() {
               <span>Address: {address}</span>
               <span>Time: {scheduleText}</span>
               <span>Locked price: {formatInr(lockedQuote?.finalConsumerPrice)}</span>
-              <span>Platform fee: {formatInr(lockedQuote?.platformFee || 0)}</span>
-              <span>Worker receives: {formatInr(lockedQuote?.workerReceivable || (lockedQuote?.finalConsumerPrice - (lockedQuote?.platformFee || 0)))}</span>
+              {bargainPrice && isBargainValid ? (
+                <>
+                  <span style={{ color: 'var(--success)' }}>Requested discount price: {formatInr(finalPriceToCharge)}</span>
+                  <span>Platform fee: {formatInr(0)} (Waived for bargain offer)</span>
+                  <span>Worker receives: {formatInr(finalWorkerReceivable)}</span>
+                </>
+              ) : (
+                <>
+                  <span>Platform fee: {formatInr(lockedQuote?.platformFee || 0)}</span>
+                  <span>Worker receives: {formatInr(lockedQuote?.workerReceivable || (lockedQuote?.finalConsumerPrice - (lockedQuote?.platformFee || 0)))}</span>
+                </>
+              )}
               <span>Price reason: {getDemandLabel(lockedQuote)}</span>
               <span>Price lock: {lockedQuote?.priceLockedUntil ? new Date(lockedQuote.priceLockedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Missing'}</span>
             </div>

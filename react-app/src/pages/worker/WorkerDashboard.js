@@ -241,6 +241,7 @@ export default function WorkerDashboard() {
         workerReceivable: 700,
         demandLevel: 'normal',
         rank: 1,
+        bargainStatus: 'pending',
         expiresAt: Date.now() + 90000,
       }]);
       setPayoutJobs([{
@@ -856,6 +857,13 @@ export default function WorkerDashboard() {
                 <div className="worker-queue-offer" key={offer.id}>
                   <div>
                     <strong>{String(offer.serviceId || 'Service').replace(/_/g, ' ')}</strong>
+                    {offer.bargainStatus === 'pending' && (
+                      <div style={{ margin: '4px 0 6px' }}>
+                        <span style={{ display: 'inline-block', padding: '3px 8px', fontSize: 11, fontWeight: 900, borderRadius: 8, background: 'rgba(252,211,77,0.25)', color: '#FCD34D', border: '1px dashed rgba(252,211,77,0.4)' }}>
+                          🏷️ Proposes Discount Offer
+                        </span>
+                      </div>
+                    )}
                     <span>{offer.areaId || 'Nearby area'}{offer.city ? `, ${offer.city}` : ''}</span>
                     {matchText && <span>{matchText}</span>}
                     <small>

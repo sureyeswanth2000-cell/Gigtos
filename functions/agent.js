@@ -237,7 +237,7 @@ ${anchorContext}`;
     parts: [{ text: h.text }]
   }));
 
-  const chat = ai.chats.create({
+  let chat = ai.chats.create({
     model: process.env.VERTEX_AI_MODEL || 'gemini-2.5-flash',
     history: history,
     config: {
@@ -246,7 +246,26 @@ ${anchorContext}`;
     }
   });
 
-  let response = await chat.sendMessage({ message: prompt });
+  let response;
+  try {
+    response = await chat.sendMessage({ message: prompt });
+  } catch (error) {
+    const errorStr = error.message || String(error);
+    if (errorStr.includes('503') || errorStr.includes('UNAVAILABLE') || errorStr.includes('demand')) {
+      console.warn("Gemini 2.5 Flash busy, retrying with Gemini 1.5 Flash...");
+      chat = ai.chats.create({
+        model: 'gemini-1.5-flash',
+        history: history,
+        config: {
+          systemInstruction: systemInstruction,
+          tools: tools
+        }
+      });
+      response = await chat.sendMessage({ message: prompt });
+    } else {
+      throw error;
+    }
+  }
 
   while (response.functionCalls && response.functionCalls.length > 0) {
     const toolResults = await Promise.all(response.functionCalls.map(async call => {

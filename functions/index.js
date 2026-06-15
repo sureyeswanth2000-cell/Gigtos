@@ -4838,6 +4838,39 @@ exports.onBookingCreated = functions.firestore
   });
 
 /**
+ * TRIGGER: When a user document is created or updated in the users collection.
+ * LOGIC: Indexes the user's email/UID by phone number for secure lookup.
+ */
+exports.onUserWrite = functions.firestore
+  .document('users/{userId}')
+  .onWrite(async (change, context) => {
+    const userId = context.params.userId;
+    const beforeData = change.before.data() || {};
+    const afterData = change.after.data() || {};
+
+    const beforePhone = (beforeData.phone || '').toString().replace(/\D/g, '').slice(-10);
+    const afterPhone = (afterData.phone || '').toString().replace(/\D/g, '').slice(-10);
+
+    // If the phone number changed or was deleted, remove the old index
+    if (beforePhone && beforePhone !== afterPhone) {
+      await db.collection('users_by_phone').doc(beforePhone).delete().catch(() => {});
+    }
+
+    // Write the new index
+    if (afterPhone) {
+      await db.collection('users_by_phone').doc(afterPhone).set({
+        phone: afterPhone,
+        uid: userId,
+        email: afterData.email || '',
+        name: afterData.name || '',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+
+    return null;
+  });
+
+/**
  * TRIGGER: When any booking field is updated.
  * This is the CORE lifecycle function handling:
  * - Status transitions (pending -> assigned -> in_progress -> etc)

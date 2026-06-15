@@ -13,6 +13,18 @@ npm-debug.log*
 # Environment files
 .env
 .env.local
+
+# Production build
+react-app/build
+build
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment files
+.env
+.env.local
 functions/.env
 
 # IDE
@@ -22,3 +34,7 @@ functions/.env
 # OS
 .DS_Store
 Thumbs.db
+
+# Keystores and private signing keys
+*.keystore
+android-release/

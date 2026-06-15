@@ -1,8 +1,8 @@
 # Launch Readiness Latest
 
-- Time: 2026-06-15T10:37:47.133Z
-- Status: NEEDS_SETUP
-- Blocking setup/code items: 1
+- Time: 2026-06-15T15:46:59.438Z
+- Status: READY_FOR_MANUAL_QA
+- Blocking setup/code items: 0
 - Manual QA items: 1
 
 ## Worker profile Firestore write rules
@@ -51,10 +51,10 @@
 
 ## Worker Web Push VAPID key
 
-- Status: needs_external_value
+- Status: configured
 - Next action: Firebase Console -> Project settings -> Cloud Messaging -> Web Push certificates -> Generate key pair, then set REACT_APP_FIREBASE_VAPID_KEY in react-app/.env.production and redeploy hosting.
 - Evidence:
-  - REACT_APP_FIREBASE_VAPID_KEY=missing
+  - REACT_APP_FIREBASE_VAPID_KEY=configured
 
 ## Real-account manual E2E QA
 

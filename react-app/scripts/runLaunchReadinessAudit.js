@@ -102,7 +102,7 @@ const checks = [
     name: 'Worker Web Push VAPID key',
     status: vapidLooksValid ? 'configured' : 'needs_external_value',
     evidence: [
-      `REACT_APP_FIREBASE_VAPID_KEY=${vapidKey ? '[set_but_unexpected_format]' : 'missing'}`,
+      `REACT_APP_FIREBASE_VAPID_KEY=${vapidKey ? (vapidLooksValid ? 'configured' : '[set_but_unexpected_format]') : 'missing'}`,
     ],
     nextAction: 'Firebase Console -> Project settings -> Cloud Messaging -> Web Push certificates -> Generate key pair, then set REACT_APP_FIREBASE_VAPID_KEY in react-app/.env.production and redeploy hosting.',
   },

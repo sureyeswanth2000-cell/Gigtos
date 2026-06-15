@@ -1,0 +1,35 @@
+name: Deploy to Firebase Hosting
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: |
+          cd react-app
+          npm ci
+
+      - name: Build React app
+        env:
+          REACT_APP_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY: 6LfJzvQsAAAAAO7eO16Wm4hWii7iIIOML_Q-Lnom
+          REACT_APP_FIREBASE_STORAGE_BUCKET: gigtos-user-uploads-gigto-c0c83
+          REACT_APP_REQUIRE_APPCHECK: 'true'
+        run: |
+          cd react-app
+          npm run build:prod
+
+      - name: Deploy to Firebase Hosting
+        run: npx firebase-tools deploy --only hosting --project gigto-c0c83 --token "${{ secrets.FIREBASE_TOKEN }}"

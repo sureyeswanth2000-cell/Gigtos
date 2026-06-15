@@ -1,8 +1,3 @@
 User-agent: *
 Allow: /
-Disallow: /admin
-Disallow: /operator
-Disallow: /worker/dashboard
-Disallow: /worker/open-work
-Disallow: /worker/profile
-Sitemap: https://gigto.in/sitemap.xml
+Sitemap: https://sureyeswanth2000-cell.github.io/Gigtos/sitemap.xml

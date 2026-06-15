@@ -9,7 +9,6 @@
     "firebase-admin": "^11.11.1"
   },
   "devDependencies": {
-    "gh-pages": "^6.3.0",
     "protobufjs": "^7.5.4"
   }
 }

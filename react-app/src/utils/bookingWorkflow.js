@@ -1,5 +1,5 @@
 import { calculateFinalPrice } from './pricing';
-import { buildRatingScoreEvents } from './socioScore';
+import { buildRatingScoreEvents } from './gigScore';
 
 export function submitQuote(booking, { adminId, adminName, basePrice }) {
   if (!booking) throw new Error('Booking is required');
@@ -89,12 +89,12 @@ export function confirmCompletion(booking) {
   return { ...booking, status: 'completed' };
 }
 
-export function rateCompletedBooking(booking, { rating, workerOldScore = 500, consumerOldScore = 0 }) {
+export function rateCompletedBooking(booking, { rating, reviewText = '', workerOldScore = 500, consumerOldScore = 0 }) {
   if (!booking) throw new Error('Booking is required');
   if (booking.status !== 'completed') throw new Error('Booking must be completed before rating');
   if (booking.rating) throw new Error('Booking is already rated');
 
-  const scoreEvents = buildRatingScoreEvents({
+  const gigScoreEvents = buildRatingScoreEvents({
     booking,
     rating,
     workerOldScore,
@@ -104,7 +104,8 @@ export function rateCompletedBooking(booking, { rating, workerOldScore = 500, co
   return {
     ...booking,
     rating,
-    scoreEvents,
+    reviewText: String(reviewText || '').trim(),
+    gigScoreEvents,
     updatedAt: new Date(),
   };
 }

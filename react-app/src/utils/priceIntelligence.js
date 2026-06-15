@@ -1,5 +1,10 @@
 import { getServiceByName } from './serviceCatalog';
 
+// LEGACY OVERLAP NOTE:
+// This helper uses static frontend service bands. MVP Auto Pricing v1 should use
+// backend `service_price_rules` + `area_demand_snapshots` so SuperAdmin can change
+// city/area/service prices without deploys and every booking stores pricing evidence.
+
 export function getSuggestedPriceBand({ serviceType, urgency = 'Normal', estimatedDays = 1, cityMultiplier = 1 }) {
   const service = getServiceByName(serviceType);
   const days = Math.max(1, Number(estimatedDays) || 1);

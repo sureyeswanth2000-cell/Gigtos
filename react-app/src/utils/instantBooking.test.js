@@ -24,7 +24,7 @@ describe('buildWorkerAvailability', () => {
     expect(result.workerId).toBe('w1');
     expect(result.workerName).toBe('Ravi Kumar');
     expect(result.fixedRate).toBe(600);
-    expect(result.finalPrice).toBe(629);
+    expect(result.finalPrice).toBe(641.58);
     expect(result.isAvailable).toBe(true);
     expect(result.pricing).toBeDefined();
     expect(result.pricing.platformFeePercent).toBe(0);
@@ -127,6 +127,37 @@ describe('matchNearbyWorkers', () => {
     });
     expect(result.length).toBeGreaterThan(0);
   });
+
+  it('handles null or undefined user lat/lng coordinates gracefully', () => {
+    const resultNull = matchNearbyWorkers(workers, {
+      serviceType: 'Electrician',
+      lat: null,
+      lng: null,
+    });
+    expect(resultNull).toEqual([]);
+
+    const resultUndefined = matchNearbyWorkers(workers, {
+      serviceType: 'Electrician',
+    });
+    expect(resultUndefined).toEqual([]);
+  });
+
+  it('ignores workers with missing or null coordinates', () => {
+    const brokenWorkers = [
+      { workerId: 'w_broken_1', workerName: 'Broken Coords', serviceType: 'Electrician', fixedRate: 500, isAvailable: true },
+      { workerId: 'w_broken_2', workerName: 'Null Coords', serviceType: 'Electrician', fixedRate: 500, isAvailable: true, lat: null, lng: null },
+      { workerId: 'w_valid', workerName: 'Valid Coords', serviceType: 'Electrician', fixedRate: 500, isAvailable: true, lat: 13.01, lng: 80.25 }
+    ];
+
+    const result = matchNearbyWorkers(brokenWorkers, {
+      serviceType: 'Electrician',
+      lat: 13.0,
+      lng: 80.25,
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].workerId).toBe('w_valid');
+  });
 });
 
 // ---------- createInstantBooking ----------
@@ -155,7 +186,7 @@ describe('createInstantBooking', () => {
     expect(booking.workerName).toBe('Ravi Kumar');
     expect(booking.fixedRate).toBe(600);
     expect(booking.acceptedQuote.price).toBe(600);
-    expect(booking.acceptedQuote.finalPrice).toBe(629);
+    expect(booking.acceptedQuote.finalPrice).toBe(641.58);
     expect(booking.serviceType).toBe('Electrician');
     expect(booking.isScheduled).toBe(false);
     expect(booking.userId).toBe('u1');
@@ -221,7 +252,7 @@ describe('getWorkerDisplayInfo', () => {
 
     expect(info.workerName).toBe('Ravi Kumar');
     expect(info.fixedRate).toBe(500);
-    expect(info.finalPrice).toBe(519);
+    expect(info.finalPrice).toBe(529.38);
     expect(info.rating).toBe(4.5);
     expect(info.distanceKm).toBe(3.2);
     // Phone must NOT be present

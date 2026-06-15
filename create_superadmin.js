@@ -3,8 +3,8 @@
  * 
  * Usage: node create_superadmin.js
  * 
- * This creates a superadmin document in the 'admins' collection
- * for the user yeswanthsure97@gmail.com (UID: OPKEivC1GsfsRo5mcGd0SFOXO3y1)
+ * This creates a superadmin document in the 'admins' collection.
+ * Set SUPERADMIN_UID and SUPERADMIN_EMAIL in your local shell before running.
  */
 
 const admin = require('firebase-admin');
@@ -17,7 +17,12 @@ admin.initializeApp({
 const db = admin.firestore();
 
 async function createSuperAdmin() {
-    const uid = 'OPKEivC1GsfsRo5mcGd0SFOXO3y1';
+    const uid = process.env.SUPERADMIN_UID;
+    const email = process.env.SUPERADMIN_EMAIL;
+    const name = process.env.SUPERADMIN_NAME || 'Gigtos SuperAdmin';
+    if (!uid || !email) {
+        throw new Error('Set SUPERADMIN_UID and SUPERADMIN_EMAIL before running this local bootstrap script.');
+    }
 
     try {
         // Check if already exists
@@ -32,8 +37,8 @@ async function createSuperAdmin() {
         } else {
             // Create new superadmin document
             await db.collection('admins').doc(uid).set({
-                name: 'Yeswanth (SuperAdmin)',
-                email: 'yeswanthsure97@gmail.com',
+                name,
+                email,
                 role: 'superadmin',
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 regionStatus: 'active',

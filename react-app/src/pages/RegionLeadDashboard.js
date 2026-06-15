@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../firebase';
+import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functionsInstance } from '../firebase';
 
 const getStatusTimestamp = (booking) => {
   const statusAt = booking?.statusUpdatedAt || booking?.updatedAt || booking?.createdAt;
@@ -43,6 +43,11 @@ export default function RegionLeadDashboard() {
   const [approvalAssignments, setApprovalAssignments] = useState({});
 
   const uid = auth.currentUser?.uid;
+
+  const callAdminWorkerAction = async (action, payload = {}) => {
+    const callable = httpsCallable(functionsInstance, 'adminWorkerAction');
+    return callable({ action, payload });
+  };
 
   useEffect(() => {
     if (!uid) return;
@@ -109,12 +114,12 @@ export default function RegionLeadDashboard() {
 
   const createChildAdmin = async () => {
     if (!newAdminName || !newAdminEmail || !newAdminPassword) return alert('Fill all fields');
+    if (newAdminPassword.length < 8) return alert('Password must be at least 8 characters');
     try {
-      const cred = await createUserWithEmailAndPassword(auth, newAdminEmail, newAdminPassword);
-      await setDoc(doc(db, 'admins', cred.user.uid), {
-        name: newAdminName, email: newAdminEmail, role: 'mason',
-        parentAdminId: uid, areaName: regionLeadData?.areaName || '',
-        regionStatus: 'active', createdAt: new Date(),
+      await callAdminWorkerAction('create_child_admin', {
+        name: newAdminName,
+        email: newAdminEmail,
+        password: newAdminPassword,
       });
       alert('Mason created!');
       setNewAdminName(''); setNewAdminEmail(''); setNewAdminPassword('');
@@ -125,10 +130,7 @@ export default function RegionLeadDashboard() {
     const targetAdminId = approvalAssignments[workerId];
     if (!targetAdminId) return alert('Select a mason');
     try {
-      await updateDoc(doc(db, 'gig_workers', workerId), {
-        approvalStatus: 'approved', adminId: targetAdminId, status: 'active',
-        approvedAt: new Date(), approvedByRegionLeadId: uid,
-      });
+      await callAdminWorkerAction('approve_worker', { workerId, targetAdminId });
       alert('Approved!');
     } catch (e) { alert(e.message); }
   };

@@ -58,7 +58,7 @@ describe('basic booking smoke loop', () => {
     };
 
     expect(booking.status).toBe('assigned');
-    expect(booking.acceptedQuote.finalPrice).toBe(519);
+    expect(booking.acceptedQuote.finalPrice).toBe(529.38);
     expect(booking.acceptedQuote.pricing.workerReceives).toBe(500);
 
     const assigned = assignWorker(booking, {
@@ -73,23 +73,28 @@ describe('basic booking smoke loop', () => {
     const completed = confirmCompletion(awaitingConfirmation);
     const rated = rateCompletedBooking(completed, {
       rating: 5,
+      reviewText: 'Great cleaning finish.',
       workerOldScore: 500,
       consumerOldScore: 0,
     });
 
     expect(rated.status).toBe('completed');
     expect(rated.rating).toBe(5);
-    expect(rated.scoreEvents).toHaveLength(2);
-    expect(rated.scoreEvents[0]).toMatchObject({
+    expect(rated.reviewText).toBe('Great cleaning finish.');
+    expect(rated.gigScoreEvents).toHaveLength(2);
+    expect(rated.scoreEvents).toBeUndefined();
+    expect(rated.gigScoreEvents[0]).toMatchObject({
       actorRole: 'worker',
-      delta: 15,
-      newScore: 515,
+      reasonCode: 'five_star_job',
+      delta: 8,
+      newScore: 508,
       status: 'finalized',
     });
-    expect(rated.scoreEvents[1]).toMatchObject({
+    expect(rated.gigScoreEvents[1]).toMatchObject({
       actorRole: 'consumer',
-      delta: 10,
-      newScore: 10,
+      reasonCode: 'fair_rating_submitted',
+      delta: 5,
+      newScore: 5,
       status: 'finalized',
     });
   });

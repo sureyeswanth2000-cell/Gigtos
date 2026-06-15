@@ -50,6 +50,9 @@ type User @table(name: "users") {
   email: String
   phone: String!                     @unique
   address: String
+  gigScore: Int!                     @col(name: "gig_score") @default(value: 0)
+  gigScoreTier: String!              @col(name: "gig_score_tier") @default(value: "Copper")
+  gigScoreStatus: String!            @col(name: "gig_score_status") @default(value: "active")
   createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
   updatedAt: Timestamp!              @col(name: "updated_at") @default(expr: "request.time")
   # Relationships
@@ -100,6 +103,9 @@ type Worker @table(name: "workers") {
   isAvailable: Boolean!              @col(name: "is_available")   @default(value: true)
   isFraud: Boolean!                  @col(name: "is_fraud")       @default(value: false)
   rating: Float!                     @default(value: 0)
+  gigScore: Int!                     @col(name: "gig_score") @default(value: 450)
+  gigScoreTier: String!              @col(name: "gig_score_tier") @default(value: "Bronze")
+  gigScoreStatus: String!            @col(name: "gig_score_status") @default(value: "active")
   completedJobs: Int!                @col(name: "completed_jobs") @default(value: 0)
   isTopListed: Boolean!              @col(name: "is_top_listed")  @default(value: false)
   adminId: UUID!                     @col(name: "admin_id")
@@ -110,6 +116,28 @@ type Worker @table(name: "workers") {
   admin: Admin!                      @hasOne(foreignKey: "admin_id")
   bookings: [Booking!]!              @hasMany(foreignKey: "assigned_worker_id")
   locationSessions: [WorkerLocationSession!]! @hasMany(foreignKey: "worker_id")
+}
+
+type GigScoreEvent @table(name: "gigscore_events") {
+  eventId: UUID!                     @col(name: "event_id") @default(expr: "uuidV4()")
+  actorId: String!                   @col(name: "actor_id")
+  actorRole: String!                 @col(name: "actor_role")
+  bookingId: String!                 @col(name: "booking_id")
+  guildId: String                    @col(name: "guild_id")
+  pairKey: String                    @col(name: "pair_key")
+  reasonCode: String!                @col(name: "reason_code")
+  reasonText: String!                @col(name: "reason_text")
+  improvementAdvice: String          @col(name: "improvement_advice")
+  oldScore: Int!                     @col(name: "old_score")
+  delta: Int!
+  newScore: Int!                     @col(name: "new_score")
+  oldTier: String!                   @col(name: "old_tier")
+  newTier: String!                   @col(name: "new_tier")
+  status: String!                    @default(value: "pending")
+  fraudReviewState: String!          @col(name: "fraud_review_state") @default(value: "not_required")
+  metadataJson: String               @col(name: "metadata_json")
+  createdAt: Timestamp!              @col(name: "created_at") @default(expr: "request.time")
+  finalizedAt: Timestamp             @col(name: "finalized_at")
 }
 
 # ─── Booking Tables ───────────────────────────────────────────────────────────

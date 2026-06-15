@@ -26,11 +26,11 @@ describe('booking workflow integration', () => {
 
     expect(quoted.quotes).toHaveLength(1);
     expect(quoted.quotes[0].price).toBe(1000);
-    expect(quoted.quotes[0].finalPrice).toBe(1029);
+    expect(quoted.quotes[0].finalPrice).toBe(1049.58);
 
     const accepted = acceptQuote(quoted, 'a1');
     expect(accepted.status).toBe('accepted');
-    expect(accepted.acceptedQuote.finalPrice).toBe(1029);
+    expect(accepted.acceptedQuote.finalPrice).toBe(1049.58);
 
     const assigned = assignWorker(accepted, {
       id: 'w1',
@@ -50,11 +50,14 @@ describe('booking workflow integration', () => {
     const completed = confirmCompletion(awaiting);
     expect(completed.status).toBe('completed');
 
-    const rated = rateCompletedBooking(completed, { rating: 5 });
+    const rated = rateCompletedBooking(completed, { rating: 5, reviewText: 'Clean work and polite worker.' });
     expect(rated.rating).toBe(5);
-    expect(rated.scoreEvents).toHaveLength(2);
-    expect(rated.scoreEvents[0].actorRole).toBe('worker');
-    expect(rated.scoreEvents[0].delta).toBe(15);
+    expect(rated.reviewText).toBe('Clean work and polite worker.');
+    expect(rated.gigScoreEvents).toHaveLength(2);
+    expect(rated.scoreEvents).toBeUndefined();
+    expect(rated.gigScoreEvents[0].actorRole).toBe('worker');
+    expect(rated.gigScoreEvents[0].reasonCode).toBe('five_star_job');
+    expect(rated.gigScoreEvents[0].delta).toBe(8);
   });
 
   it('updates existing quote from same admin', () => {
@@ -73,7 +76,7 @@ describe('booking workflow integration', () => {
     expect(updated.quotes).toHaveLength(1);
     expect(updated.quotes[0].adminId).toBe('a1');
     expect(updated.quotes[0].price).toBe(600);
-    expect(updated.quotes[0].finalPrice).toBe(629);
+    expect(updated.quotes[0].finalPrice).toBe(641.58);
   });
 
   it('enforces valid status order', () => {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functionsInstance } from '../firebase';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
 import { SPECIAL_JOBS } from '../config/specialJobs';
 import './MasonDashboard.css';
@@ -79,19 +80,17 @@ export default function MasonDashboard() {
 
     setSubmitting(true);
     try {
-      const workerId = `mason-worker-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      await setDoc(doc(db, 'gig_workers', workerId), {
-        name: form.name.trim(),
-        contact: form.contact.trim(),
-        gigType: form.jobRole.trim(),
-        area: form.location.trim(),
-        email: form.email.trim(),
-        notes: form.notes.trim(),
-        adminId,
-        approvalStatus: 'approved',
-        status: 'active',
-        addedBy: 'mason',
-        createdAt: serverTimestamp(),
+      const callable = httpsCallable(functionsInstance, 'adminWorkerAction');
+      await callable({
+        action: 'create_worker',
+        payload: {
+          name: form.name.trim(),
+          contact: form.contact.trim(),
+          gigType: form.jobRole.trim(),
+          area: form.location.trim(),
+          email: form.email.trim(),
+          notes: form.notes.trim(),
+        },
       });
       setFormSuccess(`Worker "${form.name}" added successfully.`);
       setForm(EMPTY_WORKER_FORM);

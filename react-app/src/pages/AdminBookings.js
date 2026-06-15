@@ -12,14 +12,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from '../context/ToastContext';
 import {
-  collection, onSnapshot, doc, getDoc, updateDoc,
+  collection, onSnapshot, doc, getDoc,
   query, where, orderBy
 } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functionsInstance } from '../firebase';
 import { calculateFinalPrice } from '../utils/pricing';
-import { submitQuote as buildBookingWithQuote } from '../utils/bookingWorkflow';
 
 // Status colors to give admins quick visual cues about the load
 const STATUS_COLORS = {
@@ -36,8 +35,6 @@ const STATUS_COLORS = {
 
 // All statuses that require active attention from admins
 const ACTIVE_STATUSES = ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'];
-const USE_FREE_PLAN_MODE = true;
-
 const QUOTE_PRESETS = {
   plumber: [
     { key: 'leak', label: 'Leak Fix', amount: 500 },
@@ -405,200 +402,14 @@ export default function AdminBookings() {
     return unsub;
   };
 
-  /**
-   * Universal Backend Caller
-   */
-  const runSparkFallback = async (method, data) => {
-    if (!uid) throw new Error('Not authenticated');
-
-    if (method === 'submitQuote') {
-      console.log('🟢 runSparkFallback: submitQuote called');
-      const { bookingId, price } = data;
-      const bookingRef = doc(db, 'bookings', bookingId);
-      const snap = await getDoc(bookingRef);
-      if (!snap.exists()) throw new Error('Booking not found');
-      const booking = snap.data();
-      console.log('🟢 Current booking status:', booking.status, '| Existing quotes:', booking.quotes?.length || 0);
-
-      const adminDoc = await getDoc(doc(db, 'admins', uid));
-      const adminName = adminDoc.exists() ? (adminDoc.data().name || adminDoc.data().email || 'Admin') : 'Admin';
-      const bookingWithQuote = buildBookingWithQuote(booking, {
-        adminId: uid,
-        adminName,
-        basePrice: Number(price),
-      });
-      const latestQuote = bookingWithQuote.quotes[bookingWithQuote.quotes.length - 1];
-      latestQuote.createdAt = new Date();
-
-      // Don't change status to 'quoted' - keep it open for other masons to submit quotes
-      // Status will only change when user accepts a quote
-      console.log('🟢 Updating booking - NOT changing status (keeping:', booking.status + ')');
-      await updateDoc(bookingRef, {
-        quotes: bookingWithQuote.quotes,
-        // status remains 'pending' or 'scheduled' so other masons can still see and quote
-        updatedAt: new Date(),
-      });
-      console.log('🟢 Quote submitted successfully! Status should still be:', booking.status);
-      return;
-    }
-
-    if (method === 'updateBookingStatus') {
-      const { bookingId, action, extraArgs = {} } = data;
-      const bookingRef = doc(db, 'bookings', bookingId);
-      const snap = await getDoc(bookingRef);
-      if (!snap.exists()) throw new Error('Booking not found');
-      const booking = snap.data();
-
-      const base = { updatedAt: new Date() };
-
-      if (action === 'admin_assign_worker') {
-        const { workerId, workerName, workerPhone } = extraArgs;
-        await updateDoc(bookingRef, {
-          ...base,
-          status: 'assigned',
-          statusUpdatedAt: new Date(),
-          adminId: uid,
-          assignedWorkerId: workerId,
-          workerName,
-          workerPhone,
-          assignedWorker: workerName,
-        });
-        return;
-      }
-
-      if (action === 'admin_start_work') {
-        await updateDoc(bookingRef, {
-          ...base,
-          status: 'in_progress',
-          statusUpdatedAt: new Date(),
-          startedAt: new Date(),
-          adminId: booking.adminId || uid,
-        });
-        return;
-      }
-
-      if (action === 'admin_mark_finished') {
-        const estimatedDays = Number(booking.estimatedDays || 1);
-        const completedWorkDays = Number(booking.completedWorkDays || 0);
-        const nextCompletedDays = completedWorkDays + 1;
-        const remainingWorkDays = Math.max(estimatedDays - nextCompletedDays, 0);
-
-        if (remainingWorkDays > 0) {
-          await updateDoc(bookingRef, {
-            ...base,
-            status: 'in_progress',
-            completedWorkDays: nextCompletedDays,
-            remainingWorkDays,
-            statusUpdatedAt: new Date(),
-            adminId: booking.adminId || uid,
-          });
-        } else {
-          await updateDoc(bookingRef, {
-            ...base,
-            status: 'awaiting_confirmation',
-            completedWorkDays: nextCompletedDays,
-            remainingWorkDays: 0,
-            statusUpdatedAt: new Date(),
-            finishedAt: new Date(),
-            adminId: booking.adminId || uid,
-          });
-        }
-        return;
-      }
-
-      if (action === 'admin_cancelled') {
-        await updateDoc(bookingRef, { ...base, status: 'cancelled', statusUpdatedAt: new Date(), adminId: booking.adminId || uid });
-        return;
-      }
-
-      if (action === 'admin_reopen_booking') {
-        await updateDoc(bookingRef, {
-          ...base,
-          status: 'pending',
-          statusUpdatedAt: new Date(),
-          adminId: null,
-          assignedWorkerId: null,
-          workerName: null,
-          workerPhone: null,
-          assignedWorker: null,
-          acceptedQuote: null,
-        });
-        return;
-      }
-
-      if (action === 'admin_resolve_dispute') {
-        await updateDoc(bookingRef, {
-          ...base,
-          'dispute.status': 'resolved',
-          'dispute.decision': extraArgs.decision,
-          'dispute.resolvedBy': uid,
-          'dispute.resolutionTime': new Date(),
-          adminId: booking.adminId || uid,
-        });
-        return;
-      }
-
-      if (action === 'admin_log_call') {
-        await updateDoc(bookingRef, {
-          ...base,
-          'dispute.regionCallTime': new Date(),
-          'dispute.callNotes': extraArgs.callNotes || '',
-          adminId: booking.adminId || uid,
-        });
-        return;
-      }
-
-      if (action === 'admin_log_visit') {
-        await updateDoc(bookingRef, {
-          ...base,
-          'dispute.visitTime': new Date(),
-          adminId: booking.adminId || uid,
-        });
-        return;
-      }
-
-      if (action === 'admin_add_note') {
-        const existing = booking.dailyNotes || [];
-        const next = [...existing, { date: new Date().toLocaleDateString('en-IN'), note: extraArgs.note || '' }];
-        await updateDoc(bookingRef, { ...base, dailyNotes: next, adminId: booking.adminId || uid });
-        return;
-      }
-
-      if (action === 'admin_upload_photo') {
-        const existing = booking.photos || [];
-        const next = [...existing, { label: extraArgs.label, url: extraArgs.url, uploadedAt: new Date() }];
-        await updateDoc(bookingRef, { ...base, photos: next, adminId: booking.adminId || uid });
-        return;
-      }
-    }
-
-    addToast('Action not available on current plan.', 'error');
-    return;
-  };
-
   const callBackend = async (method, data) => {
-    if (USE_FREE_PLAN_MODE) {
-      try {
-        await runSparkFallback(method, data);
-      } catch (fallbackErr) {
-        console.error('🔴 Free-plan fallback error:', fallbackErr);
-        addToast('Action failed: ' + fallbackErr.message, 'error');
-      }
-      return;
-    }
-
     try {
       const func = httpsCallable(functionsInstance, method);
       await func(data);
     } catch (e) {
-      // Spark plan cannot deploy callable functions that require Cloud Build.
-      try {
-        await runSparkFallback(method, data);
-      } catch (fallbackErr) {
-        console.error(e);
-        console.error(fallbackErr);
-        addToast('Action failed: ' + (fallbackErr.message || e.message), 'error');
-      }
+      console.error(e);
+      addToast('Action failed: ' + e.message, 'error');
+      throw e;
     }
   };
 
@@ -771,8 +582,10 @@ export default function AdminBookings() {
     setUploading(prev => ({ ...prev, [bookingId]: true }));
     try {
       const storage = getStorage();
-      const path = `bookings/${bookingId}/${label}_${Date.now()}`;
-      const snap = await uploadBytes(storageRef(storage, path), file);
+      const uid = auth.currentUser?.uid;
+      if (!uid) throw new Error('Not authenticated');
+      const path = `bookings/${bookingId}/adminPhotos/${uid}/${label}_${Date.now()}_${file.name}`;
+      const snap = await uploadBytes(storageRef(storage, path), file, { contentType: file.type });
       const url = await getDownloadURL(snap.ref);
 
       await callBackend('updateBookingStatus', { bookingId, action: 'admin_upload_photo', extraArgs: { label, url } });

@@ -389,6 +389,61 @@
   overflow-wrap: anywhere;
 }
 
+.booking-locked-quote {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--bg-surface);
+  color: var(--text-main);
+}
+
+.booking-locked-quote strong {
+  font-size: 13px;
+}
+
+.booking-locked-quote span,
+.booking-locked-quote small {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.booking-locked-quote small {
+  color: var(--error);
+  font-weight: 850;
+}
+
+.booking-price-explainer,
+.booking-modal-price-note {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-card);
+  padding: 10px 12px;
+}
+
+.booking-price-explainer strong,
+.booking-modal-price-note strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.booking-price-explainer ul,
+.booking-modal-price-note ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .booking-reason-list {
   display: grid;
   gap: 8px;
@@ -548,6 +603,11 @@
   margin: 18px 0;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.booking-modal-price-note {
+  margin-bottom: 18px;
+  background: var(--bg-card);
 }
 
 .booking-modal-actions {

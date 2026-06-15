@@ -1,0 +1,7 @@
+title = "Gigtos secret scanning"
+
+[allowlist]
+description = "Firebase web API keys are public client identifiers; access is protected by Auth, App Check, and rules."
+regexes = [
+  '''AIzaSyDMJvNKvgwfEvymuLaXhGQwJr-Id4yExYU''',
+]

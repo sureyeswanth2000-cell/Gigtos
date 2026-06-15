@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { auth, db } from '../firebase';
-import { onAuthStateChanged, createUserWithEmailAndPassword } from 'firebase/auth';
-import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, getDoc, setDoc, getDocs } from 'firebase/firestore';
+import { auth, db, functionsInstance } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, onSnapshot, doc, query, where, getDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { useToast } from '../context/ToastContext';
 import MasonDashboard from '../components/MasonDashboard';
 import './Workers.css';
@@ -28,26 +29,9 @@ export default function Workers() {
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [newAdminPassword, setNewAdminPassword] = useState('');
 
-  async function upsertWorkerPhoneIndex(workerId, workerData, extra = {}) {
-    const phone = (workerData?.contact || '').toString().trim();
-    if (!phone) return;
-
-    await setDoc(doc(db, 'workers_by_phone', phone), {
-      phone,
-      workerDocId: workerId,
-      name: workerData?.name || '',
-      gigType: workerData?.gigType || '',
-      area: workerData?.area || '',
-      certifications: workerData?.certifications || '',
-      bankDetails: workerData?.bankDetails || '',
-      totalEarnings: Number(workerData?.totalEarnings || 0),
-      adminId: workerData?.adminId || '',
-      approvalStatus: workerData?.approvalStatus || 'approved',
-      status: workerData?.status || 'active',
-      email: workerData?.email || '',
-      updatedAt: new Date(),
-      ...extra
-    }, { merge: true });
+  async function callAdminWorkerAction(action, payload = {}) {
+    const callable = httpsCallable(functionsInstance, 'adminWorkerAction');
+    return callable({ action, payload });
   }
 
   useEffect(() => {
@@ -85,21 +69,8 @@ export default function Workers() {
     return () => unsubChildren();
   }, [user]);
 
-  // Run migration on component mount to fix existing workers without adminId
-  useEffect(() => {
-    if (user && adminRole === 'superadmin') {
-      migrateWorkersWithoutAdminId();
-    }
-  }, [user, adminRole]);
-
   useEffect(() => {
     if (!user) return;
-    const syncPhoneIndex = (items) => {
-      items.forEach(w => {
-        upsertWorkerPhoneIndex(w.id, w).catch(() => { /* phone index sync failed */ });
-      });
-    };
-
     const handleError = () => {
       /* Firestore error handled silently */
     };
@@ -109,7 +80,6 @@ export default function Workers() {
         query(collection(db, 'gig_workers')),
         (snap) => {
           const allWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          syncPhoneIndex(allWorkers);
 
           const pending = allWorkers.filter(w => w.approvalStatus === 'pending');
           const approved = allWorkers.filter(w => !w.approvalStatus || w.approvalStatus === 'approved' || w.approvalStatus !== 'pending');
@@ -133,7 +103,6 @@ export default function Workers() {
           ),
           (snap) => {
             const pending = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            syncPhoneIndex(pending);
             setPendingGigs(pending);
           },
           handleError
@@ -151,7 +120,6 @@ export default function Workers() {
       const updateRegionWorkers = () => {
         const merged = Object.values(workersByAdmin).flat();
         const approved = merged.filter(w => !w.approvalStatus || w.approvalStatus === 'approved' || w.approvalStatus !== 'pending');
-        syncPhoneIndex(approved);
         setWorkers(approved);
       };
 
@@ -173,7 +141,6 @@ export default function Workers() {
       query(collection(db, 'gig_workers'), where('adminId', '==', user.uid)),
       (snap) => {
         const allWorkers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        syncPhoneIndex(allWorkers);
 
         const approved = allWorkers.filter(w => !w.approvalStatus || w.approvalStatus === 'approved' || w.approvalStatus !== 'pending');
         setWorkers(approved);
@@ -195,31 +162,23 @@ export default function Workers() {
     const parsedEarnings = Number(totalEarnings);
     if (Number.isNaN(parsedEarnings) || parsedEarnings < 0) return addToast('Total earnings must be 0 or more', 'warning');
     try {
-      const newWorkerPayload = {
-        name, 
-        contact, 
-        gigType, 
+      await callAdminWorkerAction('create_worker', {
+        name,
+        contact,
+        gigType,
         certifications: certifications.trim(),
         bankDetails: bankDetails.trim(),
         totalEarnings: parsedEarnings,
-        status: 'active', 
-        adminId: user.uid, 
-        approvalStatus: 'approved',  // ✅ Explicitly mark as approved when admin creates
-        createdAt: new Date(),
-        approvedAt: new Date()
-      };
+      });
 
-      const newRef = await addDoc(collection(db, 'gig_workers'), newWorkerPayload);
-      await upsertWorkerPhoneIndex(newRef.id, newWorkerPayload);
-
-      setName(''); 
+      setName('');
       setContact('');
       setCertifications('');
       setBankDetails('');
       setTotalEarnings('0');
-      addToast('✅ Worker created successfully!', 'success');
-    } catch (e) { 
-      addToast('Error: ' + e.message, 'error'); 
+      addToast('Worker created successfully!', 'success');
+    } catch (e) {
+      addToast('Error: ' + e.message, 'error');
     }
   }
 
@@ -238,17 +197,12 @@ export default function Workers() {
       return addToast('Total earnings must be 0 or more', 'warning');
     }
     try {
-      await updateDoc(doc(db, 'gig_workers', workerId), {
+      await callAdminWorkerAction('update_worker_details', {
+        workerId,
         certifications: (editWorkerData.certifications || '').trim(),
         bankDetails: (editWorkerData.bankDetails || '').trim(),
         totalEarnings: parsedEarnings,
-        updatedAt: new Date(),
       });
-
-      const updatedSnap = await getDoc(doc(db, 'gig_workers', workerId));
-      if (updatedSnap.exists()) {
-        await upsertWorkerPhoneIndex(workerId, updatedSnap.data());
-      }
 
       setEditingWorkerId(null);
       setEditWorkerData({ certifications: '', bankDetails: '', totalEarnings: '0' });
@@ -260,50 +214,9 @@ export default function Workers() {
 
   async function toggleWorker(id, status) {
     try {
-      // Check ownership before toggling
-      const workerSnap = await getDoc(doc(db, 'gig_workers', id));
-      if (!workerSnap.exists()) return addToast('Worker not found', 'error');
-      
-      const worker = workerSnap.data();
-      
-      // Verify ownership (unless superadmin)
-      if (adminRole !== 'superadmin' && worker.adminId !== user.uid) {
-        return addToast('You can only modify your own workers', 'error');
-      }
-      
-      await updateDoc(doc(db, 'gig_workers', id), { 
-        status: status === 'active' ? 'inactive' : 'active' 
-      });
-
-      const updatedSnap = await getDoc(doc(db, 'gig_workers', id));
-      if (updatedSnap.exists()) {
-        await upsertWorkerPhoneIndex(id, updatedSnap.data());
-      }
+      await callAdminWorkerAction('toggle_worker_status', { workerId: id });
     } catch (e) { 
       addToast(e.message, 'error'); 
-    }
-  }
-
-  // ✅ Migration: Automatically set adminId on existing workers without it
-  async function migrateWorkersWithoutAdminId() {
-    if (!user || adminRole !== 'superadmin') return;
-    try {
-      const snapshot = await getDocs(collection(db, 'gig_workers'));
-      const workersToMigrate = snapshot.docs.filter(d => !d.data().adminId);
-      
-      if (workersToMigrate.length === 0) {
-        return;
-      }
-      
-      // Update all workers without adminId to have current user's ID
-      for (const workerDoc of workersToMigrate) {
-        await updateDoc(doc(db, 'gig_workers', workerDoc.id), {
-          adminId: user.uid,
-          migratedAt: new Date()
-        });
-      }
-    } catch {
-      /* migration error */
     }
   }
 
@@ -312,19 +225,8 @@ export default function Workers() {
     const targetAdminId = approvalAssignments[workerId];
     if (!targetAdminId) return addToast('Please select a mason before approval.', 'warning');
     try {
-      await updateDoc(doc(db, 'gig_workers', workerId), {
-        approvalStatus: 'approved',
-        adminId: targetAdminId,
-        status: 'active',
-        approvedAt: new Date(),
-        approvedByRegionLeadId: user.uid,
-      });
-
-      const updatedSnap = await getDoc(doc(db, 'gig_workers', workerId));
-      if (updatedSnap.exists()) {
-        await upsertWorkerPhoneIndex(workerId, updatedSnap.data());
-      }
-      addToast('✅ Gig approved successfully!', 'success');
+      await callAdminWorkerAction('approve_worker', { workerId, targetAdminId });
+      addToast('Gig approved successfully!', 'success');
     } catch (e) {
       addToast('Error approving worker: ' + e.message, 'error');
     }
@@ -332,15 +234,7 @@ export default function Workers() {
 
   async function rejectWorker(workerId) {
     try {
-      await updateDoc(doc(db, 'gig_workers', workerId), {
-        approvalStatus: 'rejected',
-        status: 'inactive'
-      });
-
-      const updatedSnap = await getDoc(doc(db, 'gig_workers', workerId));
-      if (updatedSnap.exists()) {
-        await upsertWorkerPhoneIndex(workerId, updatedSnap.data());
-      }
+      await callAdminWorkerAction('reject_worker', { workerId });
       addToast('Worker application rejected.', 'info');
     } catch (e) {
       addToast('Error rejecting worker: ' + e.message, 'error');
@@ -350,20 +244,15 @@ export default function Workers() {
   async function createChildAdmin() {
     if (adminRole !== 'regionLead') return addToast('Only region leads can create masons.', 'warning');
     if (!newAdminName || !newAdminEmail || !newAdminPassword) return addToast('Fill all mason fields.', 'warning');
-    if (newAdminPassword.length < 6) return addToast('Password must be at least 6 characters.', 'warning');
+    if (newAdminPassword.length < 8) return addToast('Password must be at least 8 characters.', 'warning');
 
     try {
-      const cred = await createUserWithEmailAndPassword(auth, newAdminEmail, newAdminPassword);
-      const newUid = cred.user.uid;
-      await setDoc(doc(db, 'admins', newUid), {
+      await callAdminWorkerAction('create_child_admin', {
         name: newAdminName,
         email: newAdminEmail,
-        role: 'mason',
-        parentAdminId: user.uid,
-        areaName: regionArea || '',
-        createdAt: new Date(),
+        password: newAdminPassword,
       });
-      addToast('✅ Mason created successfully.', 'success');
+      addToast('Mason created successfully.', 'success');
       setNewAdminName('');
       setNewAdminEmail('');
       setNewAdminPassword('');

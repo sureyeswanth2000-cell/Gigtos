@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { httpsCallable } from 'firebase/functions';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { functionsInstance, db, auth } from '../firebase';
+import { ref as storageRef, uploadBytes } from 'firebase/storage';
+import { functionsInstance, db, auth, storage } from '../firebase';
 import {
   buildLocalAssistantFallback,
   checkServiceNearby,
@@ -30,8 +31,80 @@ export default function ConsumerAiAssistant({
   const [isOpen, setIsOpen] = useState(false);
   const [pendingBooking, setPendingBooking] = useState(null);
   const [availableWorkers, setAvailableWorkers] = useState([]);
+  const [memoryConsent, setMemoryConsent] = useState(false);
+  const [memoryPanelOpen, setMemoryPanelOpen] = useState(false);
+  const [memoryState, setMemoryState] = useState(null);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [problemPhotoFile, setProblemPhotoFile] = useState(null);
+  const [uploadingProblemPhoto, setUploadingProblemPhoto] = useState(false);
   const messagesRef = useRef(null);
+  const assistantSessionIdRef = useRef(`gito_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
   const { location } = useGigLocation() || {};
+
+  const recordAiConversionEvent = async (eventType, extra = {}) => {
+    if (!auth.currentUser) return;
+    try {
+      const callable = httpsCallable(functionsInstance, 'recordConsumerAiConversionEvent');
+      await callable({
+        eventType,
+        assistantSessionId: assistantSessionIdRef.current,
+        selectedService: extra.selectedService || selectedService || '',
+        source: 'consumer_ai_assistant',
+        ...extra,
+      });
+    } catch {
+      // AI conversion logging should never block booking help.
+    }
+  };
+
+  const safeFileName = (file) => (file?.name || 'problem-photo.jpg')
+    .replace(/[^a-zA-Z0-9_.-]/g, '_')
+    .slice(0, 80);
+
+  const uploadProblemPhoto = async (file) => {
+    if (!file) return '';
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw new Error('Login required to analyze a problem photo.');
+    if (!file.type?.startsWith('image/')) throw new Error('Please attach an image file.');
+    if (file.size > 4 * 1024 * 1024) throw new Error('Photo must be under 4 MB for AI triage.');
+    const path = `bookings/requested/${uid}/${Date.now()}_${safeFileName(file)}`;
+    const ref = storageRef(storage, path);
+    await uploadBytes(ref, file, { contentType: file.type || 'image/jpeg' });
+    return path;
+  };
+
+  const loadMemoryState = async () => {
+    if (!auth.currentUser) {
+      setMessages((prev) => [...prev, { role: 'assistant', text: 'Please log in first to view or delete AI memory.' }]);
+      return null;
+    }
+    setMemoryLoading(true);
+    try {
+      const callable = httpsCallable(functionsInstance, 'manageConsumerAiMemory');
+      const response = await callable({ action: 'get' });
+      setMemoryState(response.data || null);
+      return response.data || null;
+    } catch {
+      setMessages((prev) => [...prev, { role: 'assistant', text: 'I could not load memory settings right now.' }]);
+      return null;
+    } finally {
+      setMemoryLoading(false);
+    }
+  };
+
+  const runMemoryAction = async (action, payload = {}) => {
+    if (!auth.currentUser) return;
+    setMemoryLoading(true);
+    try {
+      const callable = httpsCallable(functionsInstance, 'manageConsumerAiMemory');
+      const response = await callable({ action, ...payload });
+      setMemoryState(response.data || null);
+    } catch {
+      setMessages((prev) => [...prev, { role: 'assistant', text: 'Memory update failed. Please try again.' }]);
+    } finally {
+      setMemoryLoading(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -94,18 +167,20 @@ export default function ConsumerAiAssistant({
   }, [messages, loading, isOpen]);
 
   const sendQuestion = async (promptText) => {
-    const text = (promptText || question).trim();
-    if (!text) return;
+    const typedText = (promptText || question).trim();
+    if (!typedText && !problemPhotoFile) return;
+    const text = typedText || 'Please identify the service needed from this photo.';
 
     setQuestion('');
     setLoading(true);
     setIsOpen(true);
-    setMessages((prev) => [...prev, { role: 'user', text }]);
+    setMessages((prev) => [...prev, { role: 'user', text: problemPhotoFile ? `${text}\n[Photo attached]` : text }]);
 
     const inferredService = findRelevantService(text)?.name || selectedService;
     if (inferredService) {
       setSelectedService(inferredService);
     }
+    recordAiConversionEvent('message_sent', { selectedService: inferredService || selectedService || '' });
 
     // Run proximity check every time a message is processed
     const nearbyCheck = inferredService
@@ -117,11 +192,38 @@ export default function ConsumerAiAssistant({
         })
       : null;
 
+    if (!auth.currentUser) {
+      const reply = buildLocalAssistantFallback({
+        message: text,
+        selectedService: inferredService,
+        insights,
+        nearbyCheck,
+      });
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        text: problemPhotoFile ? 'Please log in first so I can safely check that photo. Text help is still available after login.' : reply,
+      }]);
+      setLoading(false);
+      return;
+    }
+
     try {
+      let problemPhotoStoragePath = '';
+      if (problemPhotoFile) {
+        setUploadingProblemPhoto(true);
+        problemPhotoStoragePath = await uploadProblemPhoto(problemPhotoFile);
+        recordAiConversionEvent('problem_photo_attached', { selectedService: inferredService || selectedService || '' });
+      }
       const callable = httpsCallable(functionsInstance, 'aiBookingAssistant');
       const response = await callable({
         message: text,
         selectedService: inferredService || '',
+        memoryConsent,
+        problemPhotoStoragePath,
+        areaContext: {
+          city: location?.city || '',
+          source: location?.source || 'unknown',
+        },
       });
 
       const reply = response.data?.reply || buildLocalAssistantFallback({
@@ -135,6 +237,24 @@ export default function ConsumerAiAssistant({
       if (response.data?.insights?.length) {
         setInsights(response.data.insights);
       }
+      if (response.data?.memory?.written) {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', text: 'I saved that as a safe preference summary. You can turn memory off anytime.' },
+        ]);
+      }
+      if (response.data?.photoTriage?.confidenceLevel) {
+        const triage = response.data.photoTriage;
+        recordAiConversionEvent('problem_photo_triaged', { selectedService: triage.serviceSuggestion || inferredService || selectedService || '' });
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: `Photo signal: ${triage.confidenceLevel} confidence${triage.serviceSuggestion ? ` for ${triage.serviceSuggestion}` : ''}. Please confirm before booking.`,
+          },
+        ]);
+      }
+      setProblemPhotoFile(null);
     } catch {
       const reply = buildLocalAssistantFallback({
         message: text,
@@ -144,6 +264,7 @@ export default function ConsumerAiAssistant({
       });
       setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
     } finally {
+      setUploadingProblemPhoto(false);
       setLoading(false);
     }
   };
@@ -171,7 +292,10 @@ export default function ConsumerAiAssistant({
     >
       {!isOpen && (
         <button
-          onClick={() => setIsOpen(true)}
+          onClick={() => {
+            setIsOpen(true);
+            recordAiConversionEvent('assistant_opened');
+          }}
           style={{
             border: 'none',
             borderRadius: '999px',
@@ -210,6 +334,7 @@ export default function ConsumerAiAssistant({
               {matchedService && !pendingBooking && (
                 <button
                   onClick={() => {
+                    recordAiConversionEvent('book_clicked', { selectedService: matchedService.name });
                     if (!auth.currentUser) {
                       setMessages((prev) => [
                         ...prev,
@@ -316,6 +441,7 @@ export default function ConsumerAiAssistant({
                         { role: 'assistant', text: `Great! Opening the booking page for ${serviceName}. You can fill in the details there.` },
                       ]);
                       setPendingBooking(null);
+                      recordAiConversionEvent('booking_page_opened', { selectedService: serviceName });
                       navigate(`/service?type=${encodeURIComponent(serviceName)}`);
                     }}
                     style={{
@@ -358,7 +484,34 @@ export default function ConsumerAiAssistant({
               </div>
             )}
 
+            {problemPhotoFile && (
+              <div style={{ fontSize: '11px', opacity: 0.86, marginBottom: '8px' }}>
+                Photo ready: {problemPhotoFile.name}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '8px' }}>
+              <label
+                title="Attach a problem photo"
+                style={{
+                  width: '38px',
+                  height: '38px',
+                  display: 'grid',
+                  placeItems: 'center',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.18)',
+                  background: 'rgba(255,255,255,0.12)',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                }}
+              >
+                📷
+                <input
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  disabled={loading}
+                  onChange={(event) => setProblemPhotoFile(event.target.files?.[0] || null)}
+                />
+              </label>
               <input
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
@@ -380,20 +533,96 @@ export default function ConsumerAiAssistant({
               />
               <button
                 onClick={() => sendQuestion()}
-                disabled={loading}
+                disabled={loading || uploadingProblemPhoto}
                 style={{
                   padding: '10px 14px',
                   borderRadius: '8px',
                   border: 'none',
-                  background: loading ? '#9ca3af' : '#f97316',
+                  background: loading || uploadingProblemPhoto ? '#9ca3af' : '#f97316',
                   color: '#1f2937',
                   fontWeight: 'bold',
-                  cursor: loading ? 'not-allowed' : 'pointer',
+                  cursor: loading || uploadingProblemPhoto ? 'not-allowed' : 'pointer',
                 }}
               >
-                Ask
+                {uploadingProblemPhoto ? '...' : 'Ask'}
               </button>
             </div>
+            <label style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px', fontSize: '11px', opacity: 0.86 }}>
+              <input
+                type="checkbox"
+                checked={memoryConsent}
+                onChange={(event) => setMemoryConsent(event.target.checked)}
+              />
+              Remember safe preferences only
+            </label>
+            <button
+              type="button"
+              onClick={async () => {
+                const nextOpen = !memoryPanelOpen;
+                setMemoryPanelOpen(nextOpen);
+                if (nextOpen && !memoryState) await loadMemoryState();
+              }}
+              style={{
+                marginTop: '8px',
+                padding: '6px 8px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255,255,255,0.18)',
+                background: 'rgba(255,255,255,0.08)',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '11px',
+              }}
+            >
+              AI memory controls
+            </button>
+            {memoryPanelOpen && (
+              <div style={{
+                marginTop: '8px',
+                padding: '8px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255,255,255,0.16)',
+                background: 'rgba(15,23,42,0.24)',
+                fontSize: '11px',
+                lineHeight: 1.4,
+              }}>
+                {memoryLoading && <div>Loading memory...</div>}
+                {!memoryLoading && memoryState && (
+                  <>
+                    <div style={{ marginBottom: '6px' }}>
+                      Memory is {memoryState.memoryPaused ? 'paused' : 'active'}.
+                    </div>
+                    {memoryState.homeProfile && (
+                      <div style={{ marginBottom: '6px', opacity: 0.9 }}>
+                        Home: {[memoryState.homeProfile.preferredTimeWindow, memoryState.homeProfile.preferredLanguage, memoryState.homeProfile.preferredBudget].filter(Boolean).join(', ') || 'safe preferences saved'}
+                      </div>
+                    )}
+                    {(memoryState.items || []).slice(0, 3).map((item) => (
+                      <div key={item.id} style={{ marginBottom: '6px', opacity: 0.9 }}>
+                        {item.summary}
+                        <button
+                          type="button"
+                          onClick={() => runMemoryAction('delete_item', { memoryId: item.id })}
+                          style={{ marginLeft: '6px', border: 'none', background: 'transparent', color: '#fbbf24', cursor: 'pointer' }}
+                        >
+                          forget
+                        </button>
+                      </div>
+                    ))}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                      <button type="button" onClick={() => runMemoryAction('set_pause', { memoryPaused: !memoryState.memoryPaused })} style={{ padding: '5px 7px', borderRadius: '6px', border: 'none', cursor: 'pointer' }}>
+                        {memoryState.memoryPaused ? 'Resume' : 'Pause'}
+                      </button>
+                      <button type="button" onClick={() => runMemoryAction('delete_home_profile')} style={{ padding: '5px 7px', borderRadius: '6px', border: 'none', cursor: 'pointer' }}>
+                        Clear home
+                      </button>
+                      <button type="button" onClick={() => runMemoryAction('delete_all')} style={{ padding: '5px 7px', borderRadius: '6px', border: 'none', cursor: 'pointer' }}>
+                        Clear all
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </section>
       )}

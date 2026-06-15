@@ -23,9 +23,13 @@ jobs:
           npm install
 
       - name: Build React app
+        env:
+          REACT_APP_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY: 6LfJzvQsAAAAAO7eO16Wm4hWii7iIIOML_Q-Lnom
+          REACT_APP_FIREBASE_STORAGE_BUCKET: gigtos-user-uploads-gigto-c0c83
+          REACT_APP_REQUIRE_APPCHECK: 'true'
         run: |
           cd react-app
-          npm run build
+          npm run build:prod
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4

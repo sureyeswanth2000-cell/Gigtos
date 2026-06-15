@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { getLaunchServices, getRecruitableServices, SERVICE_ICON_LABELS } from '../utils/serviceCatalog';
 import { formatPriceBand, getSuggestedPriceBand } from '../utils/priceIntelligence';
+import { useSeo, buildPageUrl } from '../utils/seo';
 import './ServiceCatalog.css';
 
 const SERVICE_IMAGES = {
@@ -37,6 +38,25 @@ export default function ServiceCatalog() {
     if (!categoryMatches) return false;
     if (!value) return true;
     return service.name.toLowerCase().includes(value) || service.category.toLowerCase().includes(value);
+  });
+
+  useSeo({
+    title: 'Gigtos Services - Maid, Cleaning, Electrician And Repair Workers',
+    description: 'Browse Gigtos launch services including maid help, kitchen help, bathroom cleaning, full house cleaning, electricians, and repair workers with transparent price guidance.',
+    path: '/#/services',
+    keywords: 'home services India, maid help Bangalore, bathroom cleaning Hyderabad, electrician near me, verified cleaning workers',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      name: 'Gigtos launch service catalog',
+        url: buildPageUrl('/#/services'),
+      itemListElement: allServices.map((service, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: service.name,
+        url: buildPageUrl(`/#/service?type=${encodeURIComponent(service.name)}`),
+      })),
+    },
   });
 
   return (
@@ -93,7 +113,7 @@ export default function ServiceCatalog() {
           <div className="service-results-toolbar">
             <div>
               <h2>{services.length} Services Found</h2>
-              <p>Sort: Best match • SocioScore and price intelligence ready</p>
+              <p>Sort: Best match • GigScore and price intelligence ready</p>
             </div>
             <button type="button">Show Map</button>
           </div>
@@ -139,7 +159,7 @@ export default function ServiceCatalog() {
           <section className="catalog-trust-band">
             <span>Trust & Safety Guarantee</span>
             <h2>Every booking is secured and every worker action can be verified.</h2>
-            <p>Workers keep their job earnings. Gigtos uses transparent consumer booking fees, proof photos, feedback, and SocioScore history to build trust without hidden worker commission pressure.</p>
+            <p>Workers keep their job earnings. Gigtos uses transparent consumer booking fees, proof photos, feedback, and GigScore history to build trust without hidden worker commission pressure.</p>
           </section>
         </div>
       </section>

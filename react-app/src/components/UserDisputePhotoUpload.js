@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { storage } from '../firebase';
+import { auth, storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 /**
@@ -24,8 +24,10 @@ export default function UserDisputePhotoUpload({ bookingId, onUploaded }) {
     try {
       const urls = [];
       for (const file of files) {
-        const storageRef = ref(storage, `bookings/${bookingId}/userDisputePhotos/${file.name}`);
-        await uploadBytes(storageRef, file);
+        const uid = auth.currentUser?.uid;
+        if (!uid) throw new Error('Login required for dispute photo upload.');
+        const storageRef = ref(storage, `bookings/${bookingId}/userDisputePhotos/${uid}/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file, { contentType: file.type });
         const url = await getDownloadURL(storageRef);
         urls.push(url);
       }

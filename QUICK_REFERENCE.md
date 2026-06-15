@@ -134,14 +134,14 @@ Worker signup          → Should redirect to /worker/dashboard after approval
 
 ### User Role Test
 ```
-✅ Phone: 8374532598, Password: user123 → Works
+Use a local emulator-only phone/password from `.env.local` or your password manager.
 ✅ Can navigate to /service, /my-bookings
 ✅ Bookings show correctly
 ```
 
 ### Admin Role Test
 ```
-✅ Email: sri@gmail.com, Password: Sri123 → Works
+Use a local emulator-only admin email/password from `.env.local` or your password manager.
 ✅ Redirects to /admin/bookings
 ✅ Can view and quote bookings
 ```

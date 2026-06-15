@@ -2,10 +2,10 @@
   "name": "gigto-react",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://sureyeswanth2000-cell.github.io/Gigtos",
+  "homepage": "https://gigto.in",
   "dependencies": {
-    "firebase": "^10.12.0",
-    "gh-pages": "^6.3.0",
+    "@sentry/react": "^10.54.0",
+    "firebase": "^12.13.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.7.0",
     "react": "^18.2.0",
@@ -13,22 +13,30 @@
     "react-router-dom": "^6.11.2",
     "react-scripts": "5.0.1",
     "recharts": "^3.8.1",
-    "styled-components": "^6.3.12"
+    "styled-components": "^6.4.2"
   },
   "scripts": {
+    "postinstall": "node scripts/patchReactScriptsDevServer.js",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "build:prod": "node scripts/guardProductionBuild.js --production && react-scripts build",
     "smoke:serve": "node scripts/staticSmokeServer.js",
     "smoke:routes": "node scripts/runRouteSmoke.js",
     "smoke:live": "node scripts/runLiveSmoke.js",
+    "smoke:browser-heart": "node scripts/runPlaywrightHeartMonitor.js",
+    "audit:ai-ops": "node scripts/runAiOpsSetupAudit.js",
+    "audit:launch": "node scripts/runLaunchReadinessAudit.js",
     "smoke:heart": "node scripts/runHeartSmoke.js",
+    "smoke:marketplace": "react-scripts test src/__tests__/marketplacePricingSmartQueueSmoke.test.js --watchAll=false",
     "smoke:dev-ui": "react-scripts test src/__tests__/devAuthUiSmoke.test.js --watchAll=false",
+    "smoke:e2e": "node scripts/e2eBookingFlowTest.js",
+    "test:rules": "npx firebase-tools emulators:exec --project demo-gigtos-rules --config ../firebase.json --only firestore,storage \"node scripts/testFirebaseRules.js\"",
     "test": "react-scripts test",
     "smoke:booking": "react-scripts test src/__tests__/basicBookingSmoke.test.js --watchAll=false",
     "eject": "react-scripts eject",
     "predeploy": "npm run build:prod",
-    "deploy": "gh-pages -d build"
+    "deploy": "firebase deploy --only hosting",
+    "deploy:full": "npm run build:prod && firebase deploy"
   },
   "browserslist": {
     "production": [
@@ -43,7 +51,20 @@
     ]
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
+    "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^14.1.2"
+  },
+  "overrides": {
+    "@tootallnate/once": "^3.0.1",
+    "nth-check": "^2.1.1",
+    "postcss": "^8.5.10",
+    "serialize-javascript": "^7.0.5",
+    "underscore": "^1.13.8",
+    "webpack-dev-server": "5.2.4",
+    "yaml": "^2.8.1",
+    "qs": "^6.15.2",
+    "uuid": "^11.1.1"
   }
 }

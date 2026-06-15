@@ -4,33 +4,37 @@ import { isSpecialJob } from '../config/specialJobs';
 import { useToast } from '../context/ToastContext';
 
 /**
- * JobCard – reusable card for displaying a job/service with availability indicator.
- *
- * Props:
- *   job          – { id, name, icon, desc, category, isUpcoming }
- *   available    – boolean | null (null = unknown/loading)
- *   onBook       – callback when "Book" is clicked (for regular jobs)
- *   showUpcoming – whether to show upcoming badge
+ * Reusable service/job card with availability state and guarded navigation.
  */
-export default function JobCard({ job, available = null, onBook, showUpcoming = true }) {
+export default function JobCard({ job, available = null, onBook }) {
   const navigate = useNavigate();
-  const { addToast } = useToast();
-  const hasSpecialPage = isSpecialJob(job.id);
+  const toast = useToast();
+  const safeJob = job || {};
+  const jobId = safeJob.id != null ? String(safeJob.id) : '';
+  const serviceName = typeof safeJob.name === 'string' ? safeJob.name.trim() : '';
+  const hasSpecialPage = Boolean(jobId) && isSpecialJob(jobId);
 
   const handleClick = () => {
-    if (available === 'none') return; // disabled
-    if (!job?.id) {
-      addToast('Job information is incomplete. Please try again later.', 'error');
+    if (available === 'none') return;
+
+    if (hasSpecialPage) {
+      navigate(`/jobs/${encodeURIComponent(jobId)}`);
       return;
     }
-    if (hasSpecialPage) {
-      navigate(`/jobs/${job.id}`);
-    } else if (onBook) {
-      onBook(job);
+
+    if (!serviceName) {
+      toast?.addToast?.('Job information is incomplete. Please try again later.', 'error');
+      return;
     }
+
+    if (onBook) {
+      onBook({ ...safeJob, name: serviceName });
+      return;
+    }
+
+    toast?.addToast?.('Booking is not available for this service yet.', 'info');
   };
 
-  // For special jobs (like 'driver'), always allow navigation to options page
   const isDisabled = (available === 'none' || available === false) && !hasSpecialPage;
   const isLoading = available === null;
   const isNearMe = available === 'area';
@@ -38,7 +42,7 @@ export default function JobCard({ job, available = null, onBook, showUpcoming = 
   return (
     <article className={`job-card${isDisabled ? ' job-card--disabled' : ''}${isLoading ? ' job-card--loading' : ''}`}>
       <div className="job-card-header">
-        <span className="job-card-icon">{job.icon || '🔧'}</span>
+        <span className="job-card-icon">{safeJob.icon || 'Service'}</span>
         {isNearMe && (
           <span className="job-badge job-badge--near">Near You</span>
         )}
@@ -49,10 +53,10 @@ export default function JobCard({ job, available = null, onBook, showUpcoming = 
           <span className="job-badge job-badge--unavailable">Occupied</span>
         )}
       </div>
-      <h3 className="job-card-title">{job.name}</h3>
-      <p className="job-card-desc">{job.desc}</p>
-      {job.category && (
-        <span className="job-card-category">{job.category}</span>
+      <h3 className="job-card-title">{serviceName || 'Service unavailable'}</h3>
+      <p className="job-card-desc">{safeJob.desc || 'This service is missing details right now.'}</p>
+      {safeJob.category && (
+        <span className="job-card-category">{safeJob.category}</span>
       )}
       <div className="job-card-actions">
         {isDisabled ? (
@@ -60,16 +64,16 @@ export default function JobCard({ job, available = null, onBook, showUpcoming = 
             All workers occupied
           </button>
         ) : hasSpecialPage ? (
-          <button 
-            className="btn-primary" 
+          <button
+            className="btn-primary"
             onClick={handleClick}
             style={isNearMe ? { background: 'linear-gradient(135deg, #10b981, #059669)' } : {}}
           >
-            View Options →
+            View Options -&gt;
           </button>
         ) : (
           <button className="btn-primary" onClick={handleClick} disabled={isLoading}>
-            {isLoading ? 'Checking…' : 'Book Service'}
+            {isLoading ? 'Checking...' : 'Book Service'}
           </button>
         )}
       </div>

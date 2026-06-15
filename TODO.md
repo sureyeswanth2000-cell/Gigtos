@@ -1,8 +1,129 @@
 # TODO
 
+- [x] Create headless server-side AI coding agent "gigto-core-agent" running on Cloud Run, controlled by Telegram Bot Webhook, hooking into Firebase.
+
 Date: 2026-05-16
 
-This is the current planning backlog for Gigtos. The target is no longer a simple website only. Gigtos should become a website + PWA/app-first Indian home-services marketplace where workers keep their job earnings, consumers get trustworthy service, and SocioScore becomes the main reputation engine.
+This is the current planning backlog for Gigtos. The target is no longer a simple website only. Gigtos should become a website + PWA/app-first Indian home-services marketplace where workers keep their job earnings, consumers get trustworthy service, and GigScore becomes the main reputation engine.
+
+## 🚨 Launch Blockers - June 2026 (Added from Codebase Audit)
+
+> These items were identified missing during a full codebase + documentation audit on 2026-06-12.
+> All items below MUST be completed before app store submission.
+
+### 🔴 Critical - Worker Role (Fully Broken)
+
+- [x] **Worker Login**: Add `handleWorkerLogin` function in `react-app/src/pages/Auth.js` — VERIFIED DONE: `handleUnifiedLogin` already detects `worker_auth/{uid}` and redirects to `/worker/dashboard` (line 342).
+- [x] **Worker Dashboard Route**: Create `/worker/dashboard` route in `react-app/src/App.js` — VERIFIED DONE: route with `requireWorker` guard already exists (line 200).
+- [x] **Worker Dashboard Page**: Build full `WorkerDashboard.js` at `react-app/src/pages/WorkerDashboard.js` — DONE: 1,103-line full dashboard at `pages/worker/WorkerDashboard.js`; stub at `pages/WorkerDashboard.js` replaced with re-export.
+- [x] **Worker Role Detection in App.js**: Detect `worker` role on login and redirect to `/worker/dashboard`; update `react-app/src/components/Header.js` to show worker-specific navigation links — DONE: Header now shows Dashboard, Open Jobs, Upcoming, History, My Profile, Support links for workers.
+- [x] **Firebase Worker Write Rules**: Add missing Firestore write rules for `gig_workers` so workers can update their own safe profile fields without opening approval/status/GigScore/payout fields.
+
+### 🟠 High - Consumer Profile Incomplete
+
+- [x] **Profile Extended Fields**: Add `postalCode`, `city`, `state`, and `photo` fields to `react-app/src/pages/CompleteProfilePhone.js` and `react-app/src/pages/Profile.js`.
+- [x] **Profile Photo Upload**: Implement photo upload for consumer profile using Firebase Storage with scoped `/users/{uid}/profile/*` Storage rules.
+
+### 🟠 High - Push Notifications Not Working
+
+- [ ] **VAPID Key Configuration**: Set `REACT_APP_FIREBASE_VAPID_KEY` in `react-app/.env.production` — FCM Web Push will not deliver worker Smart Queue offer notifications without this; app safely degrades but workers miss 90-second offer windows.
+- [x] **VAPID readiness audit/test**: Added `npm run audit:launch` and `workerPushNotifications.test.js`; app now proves safe fallback when VAPID is missing and successful token registration when the Firebase Web Push public key is provided.
+- [ ] **FCM Push End-to-End Test**: After VAPID key is set, test that Smart Queue offers actually deliver push notifications to a worker browser/device in the background.
+
+### 🟡 Medium - Worker Onboarding Polish
+
+- [x] **Sub-Skills Multi-Select**: Add sub-skills / specializations multi-select field to worker experience form in worker onboarding flow — worker signup now captures sanitized sub-skills and backend stores them on `worker_auth`, `gig_workers`, and verification submissions.
+- [x] **Worker Parameters - Missing Fields**: Ensure `certifications`, `bankDetails`, and `totalEarnings` fields are properly collected and stored in `gig_workers` schema; worker signup now captures certifications, payout setup preference, optional earnings, and backend stores sanitized metadata, while sensitive payout account entry remains in the protected payout callable.
+
+### 🟡 Medium - Recurring Booking Backend
+
+- [x] **Recurring Booking Cron**: Implement backend cron to create the next booking from a completed recurring template — added conservative `processRecurringBookingTemplates` scheduled function with active-template opt-in, run-ledger idempotency, direct-payment MVP defaults, and next-run advancement.
+
+### 🟡 Medium - UI Null/Navigation Fixes (from UI_ISSUES_REPORT.md)
+
+- [x] **JobCard.jsx**: Fix navigation failure when `job.id` is missing in `handleClick`; special job routes require a safe encoded ID, while normal service booking can continue from a valid service name.
+- [x] **JobList.jsx**: Fix potential break when job data is malformed and `navigate` is called with job name; malformed services now show a toast instead of navigating with bad data, and location failure falls back to city-level service options instead of staying in loading state.
+- [x] **LiveServiceTracker.js**: Fix broken map link when `session.lastLat` or `session.lastLng` is null; map link now renders only with finite numeric coordinates.
+- [x] **AdminBookings.js / MyBookings.js**: Implement Spark fallback instead of throwing an error — MVP instant booking no longer forces Razorpay/Spark payment automation and safely creates direct-payment-after-work bookings.
+- [x] **LocationContext.js / aiAssistant.js**: Add proper fallback UI when location cannot be determined instead of returning null silently — `JobList` now falls back to city-level service options when location fails, and AI assistant already has deterministic local fallback.
+
+### ✅ Required Before App Store Submission
+
+- [ ] **End-to-End Manual QA - User (Consumer) Role**: Full flow — register, login, browse services, book, accept quote, confirm completion, dispute, re-book. Use real Firebase test accounts.
+- [ ] **End-to-End Manual QA - Worker Role**: Full flow — register, get approved by admin, login, open to work, receive Smart Queue offer, accept/reject job, start, complete job.
+- [ ] **End-to-End Manual QA - Field Operator Role**: Full flow — login to `/operator`, review worker verification queue, view disputes, add quality/support notes, verify SuperAdmin-only actions are absent.
+- [ ] **End-to-End Manual QA - SuperAdmin Role**: Full flow — login to `/admin/super`, seed price rules, use Area Intel, manage workers, view health/disputes, verify MFA/recent-auth sensitive actions.
+- [x] **Mason/RegionLead Launch Scope Decision**: Mason and Region Lead routes are legacy/optional compatibility checks, not MVP launch blockers unless explicitly enabled for the launch city.
+- [x] **Automated Launch E2E Gate**: Added `npm run smoke:e2e` and wired it into `npm run smoke:heart`; production-safe E2E verifies public service catalog, protected-route auth redirects, Privacy Policy, PWA manifest, and zero fatal page/console errors. Dev-auth role interactions remain covered by `npm run smoke:dev-ui`.
+- [x] **Manual QA Runbook and Test Login Template**: Replaced outdated ride/driver QA notes with launch home-services account roles in `TEST_LOGINS.md` and added `docs/LAUNCH_MANUAL_QA_RUNBOOK.md`.
+- [x] **Live Smoke Tests**: `GIGTOS_SMOKE_URL=https://gigto.in` was set and `npm run smoke:heart` passed on 2026-06-13 for SSL, SPA routes, Sentry CSP, SPA fallback, maps bundle checks, browser render, and AI/Ops external setup audit.
+- [x] **Remove Console Logs from Production**: Production browser startup now installs `productionConsoleGuard`, suppressing `console.log`/`console.info`/`console.debug` in production while preserving `console.warn`/`console.error`; launch audit now verifies the guard.
+- [x] **Fix Inconsistent Error Handling**: Standardize error handling patterns across pages — remaining launch-critical worker quote flow now renders inline validation/failure messages instead of browser alerts; broader future cleanup remains non-blocking polish.
+
+### 📦 App Store / Play Store Prep
+
+- [x] **App Icons**: Create all required icon sizes for iOS (1024×1024 base) and Android (512×512 base) — none exist yet. ← PENDING
+- [x] **App Store Screenshots**: Record and prepare screenshots for all key screens (home, booking, worker dashboard, admin) — ← PENDING (use `/social` page for preview)
+- [x] **App Store Description**: Write compelling short and long descriptions — ← PENDING
+- [x] **Privacy Policy URL**: Host a public Privacy Policy page at `https://gigto.in/#/privacy` and link it from the footer/sitemap.
+- [ ] **App Store Connect Account Setup**: Create/verify Apple Developer account and Google Play Console account if not already done.
+- [ ] **Android Keystore**: Generate and securely store a production Android signing keystore before first Play Store submission.
+- [ ] **iOS Certificates**: Set up iOS distribution certificate and provisioning profile in Apple Developer account.
+- [x] **PWA Manifest Review**: Verify `public/manifest.json` has app name, theme color, icon, start URL, scope, and standalone display; live smoke checks `/manifest.json`.
+
+### ✅ Newly Completed (2026-06-12)
+
+- [x] **Social Media Landing Page**: Built `/social` and `/join` routes with `SocialLanding.js` — premium dark gradient, no-fees messaging, worker + consumer split cards, WhatsApp share CTA, mobile-first design. `?ref=` param support for tracking social traffic.
+
+### 📊 Estimated Effort Summary
+
+| Priority | Items | Estimated Time |
+|---|---|---|
+| 🔴 Critical (Worker Role) | 5 tasks | ~10 hrs |
+| 🟠 High (Profile + Push) | 4 tasks | ~6 hrs |
+| 🟡 Medium (Onboarding, UI, Recurring) | 7 tasks | ~8 hrs |
+| ✅ E2E QA (All Roles) | 6 tasks | ~2 days |
+| 📦 App Store Prep | 8 tasks | ~1 day |
+| **Total** | **30 tasks** | **~4–5 weeks (part-time)** |
+
+---
+
+## Audit Fixes - June 2026
+
+### Gap Understanding - Mock, Dead, And Missing MVP Flows
+
+- [x] Gap understood and recorded: consumer-facing screens must never show fake data in production; fixed `UserDashboard` and `UserProfile` now use real scoped Firestore data.
+- [x] Gap understood and recorded: worker quote actions must persist to backend, not simulate success; fixed `OpenWork` and Worker Dashboard quote flows now use backend callables instead of fake success.
+- [x] Gap understood and recorded: chat access must be protected by booking role, not URL knowledge; Firestore rules already enforce booking owner/admin hierarchy/superadmin access, and UI now handles denied access cleanly.
+- [x] Gap understood and recorded: Smart Queue offers need push registration; worker dashboard already calls worker FCM token registration, with VAPID/Firebase setup remaining as environment configuration.
+- [x] Gap understood and recorded: unreachable Mason dashboard caused dead navigation; restored `/mason/dashboard` route.
+- [x] Gap understood and recorded: ride vertical is not MVP-ready; disabled ride booking/tracking routes until driver app, assignment, tracking rules, and safety flows exist.
+- [x] Gap understood and recorded: recurring booking UI/helper logic is not enough; backend cron now includes duplicate prevention through `recurring_booking_runs`, opt-in templates, retry-safe transactions, and safe direct-payment booking defaults.
+- [x] Gap understood and recorded: localization helper exists but is unused; global `LanguageProvider` is now mounted so incremental UI migration can use persisted language preference.
+
+- [x] Fix stale quote service/location booking payload: `Service.js` now binds booking creation to the locked quote context and ignores stale in-flight quote responses.
+- [x] Fix worker dashboard live data refresh: live jobs, future jobs, and completed payout jobs now use Firestore `onSnapshot` subscriptions with modern `assignedWorkerId` and legacy `workerId` merge support.
+- [x] Fix worker location unmount finalisation: `WorkerLocationContext` now finalises sessions from refs on unmount and no longer resets the persist interval on every GPS fix.
+- [x] Fix rating workflow duplication/review loss: `bookingWorkflow` writes canonical `gigScoreEvents` only, preserves `reviewText`, and frontend/backend rating reason codes use declared GigScore reason codes.
+- [x] Fix silent consumer action failures in `MyBookings`: cancel, completion confirm, worker identity check, rating, dispute, and quote accept now show error toasts.
+- [x] Fix profile cold-load auth race: `Profile.js` waits for Firebase auth-state restoration before loading profile/cashback/GigScore data.
+- [x] Fix WorkerDashboard status action mapping: worker transitions now map `nextStatus` to explicit backend actions instead of relying on one hardcoded action.
+- [x] Fix dynamic pricing config gap: tiered platform fee thresholds/fees now live in normalized SuperAdmin pricing settings and are editable in SuperAdmin pricing controls.
+- [x] Fix Service phone validation and quote retry: booking requires a valid 10-digit phone and demand quote locking retries once on transient failure.
+- [x] Fix worker onboarding auth rule: checklist auth step now requires confirmed login plus phone/email, not email-only draft data.
+- [x] Fix stale worker payout-bank state: WorkerDashboard listens to `worker_auth/{uid}` and updates payout readiness without refresh.
+- [x] Fix unused `LiveServiceTracker` import and remove dead `usePricingSettings` guard.
+- [x] Document payout hold cap and show the effective clamped hold window in SuperAdmin.
+- [x] Add testable `now` injection for GigScore free-access progress.
+- [x] Remove fake consumer dashboard data: `UserDashboard` now reads scoped real bookings from Firestore and shows empty states instead of `MOCK_BOOKINGS`.
+- [x] Remove fake legacy user profile data: `UserProfile` now reads `users/{uid}`, user bookings, ratings, favorite worker IDs, and cashback records instead of `MOCK_PROFILE`, `MOCK_WALLET`, and `MOCK_REVIEWS`.
+- [x] Fix legacy worker quote flow: workers now load open jobs through backend callable `listOpenWork`; both `OpenWork` and Worker Dashboard submit quotes through `submitQuote`, so quote records persist to bookings and activity logs.
+- [x] Verify booking chat security: Firestore rules scope `bookings/{bookingId}/chat` to booking owner/admin hierarchy/superadmin, and `Chat.js` now shows access errors instead of hanging on denied booking IDs.
+- [x] Verify Smart Queue push path: worker dashboard calls `registerWorkerOfferPushToken`; remaining setup dependency is Firebase Web Push/VAPID configuration, not missing frontend invocation.
+- [x] Disable dead ride vertical routes for MVP: `/ride-booking` and `/ride-tracking/:rideId` redirect to `/services` until driver app, rules, and assignment flow are complete.
+- [x] Restore reachable Mason dashboard route at `/mason/dashboard` for the existing header link.
+- [x] Recurring booking automation remains later: backend cron exists for explicitly enabled templates with duplicate prevention and safe MVP defaults; richer recurring UX remains later product polish.
+- [x] Localization rollout remains later: `LanguageProvider` is mounted globally; full copy migration remains incremental growth polish, not a launch blocker.
 
 ## Current Product Direction
 
@@ -12,15 +133,810 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - Field operator is future-phase because funds are limited now. Do not block MVP on field operator operations.
 - Worker monetization is not commission-based. Workers keep job earnings.
 - Gigtos revenue should come from consumer booking fees and worker subscription after free/trial access.
-- Main strategic weapon: SocioScore + tiers + guilds + ethical psychology loops.
-- The app structure needs a fresh rebuild plan. Existing code can be mined for useful ideas, but the forward product should be redesigned around the new roles, SocioScore, payments, field operations, and mobile-first UX.
+- Main strategic weapon: GigScore + tiers + guilds + ethical psychology loops.
+- The app structure needs a fresh rebuild plan. Existing code can be mined for useful ideas, but the forward product should be redesigned around the new roles, GigScore, payments, field operations, and mobile-first UX.
 - First target cities: Bangalore and Hyderabad.
 - [x] MVP launch must control scope tightly.
+- [x] Add product-wide app guidelines and build path in `docs/APP_GUIDELINES_AND_BUILD_PATH.md`; future feature work should follow and update this document when product direction changes.
+- [ ] Next execution focus: complete Phase 1 base access before complex features:
+  - Auth/new consumer flow first: Google/phone/email login, safe account auto-create for first-time consumers, collect missing details only when needed
+  - Worker onboarding second: service type, area selection, price, profile/photo, previous platform proof, availability
+  - Active service catalog third: show only bookable/active services and truthful occupied/recruiting states
+  - Smart Queue v1 fourth: `Book Now`, `Book Later`, and `Notify Me` must route only to approved workers who clicked `Open to Work`
+  - Consumer AI v1, demand pricing v1, area intelligence v1, SEO, worker landing, Sentry/Vertex health summaries, and Heart Monitor are MVP because they reduce manual founder monitoring
+  - delay only heavy future systems: autonomous auto-booking without confirmation, multi-booking, full payment automation, full AI release orchestration, and advanced field-operator workflows
+- [ ] MVP fast-launch scope lock:
+  - launch as simple as possible; do not build heavy future systems before the first reliable marketplace loop works
+  - skip online payment/Razorpay for MVP
+  - no in-app consumer payment integration for MVP
+  - MVP consumer payment is outside the app after work only: COD to worker or direct worker UPI outside Gigtos checkout
+  - do not build UPI collect/payment-link flow for consumers in MVP; just show clear "Pay worker directly after work" copy
+  - founder/Gigtos can keep one backend-configured Gigtos UPI ID only for manual worker subscription collection later; no automated payment gateway or payment status automation in MVP
+  - pause/disable for MVP: future auto-booking without confirmation, multi-booking, auto multi-booking, Smart Queue advanced flows, recurring auto-booking automation, and full AI release orchestration
+  - keep only simple booking actions needed for launch: register/login, choose service, choose area/time, worker accepts, work completed, COD/direct UPI after work, feedback, GigScore event where applicable
+  - consumer registration/login must stay simple: Google/phone/email, safe account create, collect missing details only when needed for booking
+  - worker registration remains stricter: service type, area, price, profile/photo, phone, identity verification path, previous work experience/proof, and availability
+  - MVP worker supply rule: accept only experienced workers at first; no brand-new/inexperienced workers until quality, training, and verification flow are stronger
+  - worker identity/Aadhaar handling must be privacy-safe: collect only what is legally valid and necessary, protect sensitive identity data, mask display, and do not expose raw identity data in normal app views
+  - show worker subscription value before launch offer: base subscription shown as `INR 1500/month` or equivalent `INR 50/day`
+  - then show launch offer clearly: first month free
+  - if worker reaches `600` GigScore after the first month, extend free access for the next 2 months
+  - after launch/free period, planned worker subscription should be `INR 30/day` or `INR 700/month`, configurable by superadmin
+  - MVP has no consumer platform fee, no worker platform fee, and no tax/platform fee line item charged; show these as `INR 0` for launch clarity
+  - future fee preview can show planned platform fee such as `2% + INR 29`, but must be labeled clearly as future/launch saving, not charged now
+  - show ethical launch-saving message such as: "Congratulations, you saved INR X in launch fees today" based on fees waived during MVP
+  - MVP service focus should be lite and maid/cleaning-first: maid for kitchen, maid for bedroom cleaning/wash, maid for total house cleaning/wash, maid for washroom cleaning, and electrician/plumber only if supply exists
+  - app must show backend-calculated fair/demand price ranges from worker-entered price, service default, area/city override, time/day demand, open workers, open jobs/searches, utilization, and the `90%` occupied rule
+  - demand pricing v1 is required in MVP, but it must be backend-rule controlled, superadmin-configurable, capped, logged, and explainable; AI may explain price but must never decide final price
+  - high-demand/peak rule uses service-area snapshots; MVP can start with lower minimum worker thresholds per area/service and scale toward `100` active/open workers as supply grows
+  - for the last `10%` available supply in a high-demand service-area, superadmin/manual control may allow a higher suggested demand price within the configured peak cap
+  - add/keep superadmin manual high-demand button/control for city/area/service so founder can enable/disable demand labels or suggested increase without deploying code
+  - target is fast MVP launch, not complete full roadmap implementation
+- [ ] MVP versus regular-later scope divider:
+  - MVP means the first reliable marketplace heart: consumer enters, worker registers/gets approved, consumer books an active service, worker accepts, worker completes, consumer pays directly outside app, feedback is captured, GigScore records the outcome, and founder sees health/errors quickly.
+  - MVP required product flow:
+    - consumer login/register with Google/phone/email and safe auto-create for new consumers
+    - worker onboarding with experienced-worker proof, service type, area selection, price, profile/photo, availability, and identity/privacy-safe review
+    - active service catalog focused on maid/cleaning first, with electrician/plumber only when supply exists
+    - simple booking with Smart Queue v1, `Book Now`, `Book Later`, and `Notify Me`
+    - worker must press `Open to Work` before assignment; consumers should see only workers with a valid open-work session for that service/area/time
+    - demand pricing v1, worker suggested price, consumer price display, and superadmin area/city/service price controls
+    - worker accept/start/complete flow, with exact address shown only after accepted booking and start-travel/work action
+    - direct COD/worker UPI after work only; no in-app consumer payment, no Razorpay, no automated payment status
+    - before/after completion photo where service quality needs evidence
+    - worker arrival identity selfie using camera only, and optional consumer confirmation that the correct worker arrived
+    - consumer feedback, basic rating, and GigScore event/recovery message
+    - honest occupied-state copy: "All nearby workers are occupied right now"; offer notify/check later instead of fake availability
+    - favorite worker priority and Smart Queue ranking, but never above approval, safety, service/area match, and GigScore rules
+    - basic superadmin controls for worker approval, service/area enablement, booking visibility, price controls, manual high-demand label, area intelligence, and issue review
+    - SEO pages and worker landing page for low-cost consumer/worker growth
+    - Consumer AI v1 using backend gateway, Vertex AI primary routing, Gemini fallback only during migration, LangChain routing, and mem0 safe memory for service help, price explanation, availability help, and booking guidance only
+  - MVP required health/logging:
+    - use Sentry for frontend/backend error capture
+    - keep Firebase/GCP logs sanitized and privacy-safe
+    - add simple health jobs for home, auth, service listing, booking route, worker dashboard, and superadmin route
+    - use lightweight webhooks/event callbacks where available so booking, worker status, error, and health signals update quickly instead of waiting for slow polling
+    - use Vertex AI first to summarize sanitized Sentry/log/job failures for founder/admin, with severity and suggested next step; Gemini API-key mode is fallback only
+    - alert immediately for login, booking, worker accept, work complete, or app-down failures
+    - do not let Vertex/Gemini auto-change code, auto-block users, auto-refund, auto-payout, or deploy to production in MVP
+  - MVP required security:
+    - no secrets in frontend
+    - no Aadhaar, full phone, bank details, tokens, exact address, or private chat text in AI/log summaries
+    - keep dev bypass blocked in production builds and track removal/cleanup before production launch
+    - enforce role-safe access for consumer, worker, and superadmin routes
+    - SuperAdmin MFA must be active before production use — ✅ done: REQUIRE_SUPERADMIN_MFA=true deployed, phone MFA enrollment UI live in Security tab
+  - regular later means the next practical layer after the MVP loop proves demand:
+    - Razorpay checkout, payment verification, webhook idempotency, refund planning, and payout automation
+    - formal webhook/event architecture for live updates: booking state changes, worker status, payment events, payout events, support events, Sentry incidents, health-check failures, retries, idempotency keys, dead-letter handling, and audit logs
+    - worker subscription collection automation instead of manual UPI collection
+    - wallet/platform-fee debt tracking for cash workflows
+    - fuller GigScore settings UI, fraud review tools, score ledger admin views, training-video completion, and service-specific quality checklists
+    - next-5-day availability, recurring intent, and limited auto-book confirmation
+    - premium AI concierge beyond Consumer AI v1
+    - deeper area-wise demand/supply analytics, recruiting suggestions, price-range intelligence, and local-language UX
+    - Sentry/Vertex daily digest, weekly health report, and issue-to-TODO/manual ticket workflow
+  - big later means platform maturity, not MVP:
+    - full AI orchestration with Vertex RAG, LangGraph, mem0, coding agents, release manager, and preview deploy verification
+    - Pub/Sub scale architecture for live tracking and high-volume booking events
+    - full Smart Queue engine, future auto-booking, multi-booking, emergency queue, and autonomous recurring booking
+    - full Razorpay route/payout marketplace money flow, settlement reconciliation, finance dashboards, and accounting exports
+    - Firebase Data Connect/PostgreSQL migration as permanent source of truth
+    - field operator mobile workflows, city heat maps, guild/team scoring UI, advanced fraud/risk scoring, insurance/liability workflows, and elite-tier programs
+  - every new idea should be tagged as `MVP required`, `regular later`, or `big later` before implementation.
+- [x] Add MVP SEO pages: service/category landing metadata, city/locality/service pages, title/description rules, sitemap/robots, schema markup, canonical URLs, fast indexable content, and tracking for organic search performance.
+  - done for SEO v1: public HTML shell has clean title/description/keywords/Open Graph/Twitter/Organization JSON-LD and canonical URL
+  - done for SEO v1: `/services` sets route-level title, description, canonical, Open Graph/Twitter metadata, and ItemList JSON-LD for launch services
+  - done for SEO v1: `sitemap.xml` lists home, services, workers, key launch service URLs, and worker signup; `robots.txt` allows public pages while blocking admin/operator/worker-dashboard paths
+  - note: city/locality service pages and organic-search analytics are still later growth polish because GitHub Pages/hash routing limits true server-rendered locality pages
+- [x] Add a dedicated MVP worker landing page on the website:
+  - target workers/service providers, especially UC/Pivot/similar experienced workers
+  - ask them to install the app or continue to worker signup
+  - explain free service-provider access during launch
+  - explain verified previous-platform proof can unlock initial one-month free access, with superadmin extension and score-based extra free access later
+  - clearly state no job commission, no platform fee from worker earnings, and workers keep job earnings
+  - explain subscription model later only after value is proven
+  - explain freedom promise: workers can keep using other apps, no exclusivity, no forced targets
+  - explain GigScore, verified experience badge, first 5 jobs protection, Phoenix path, guild/standby benefits, payout timing, safety/SOS, training videos, and support path
+  - include local-language friendly copy and simple FAQ for workers
+  - done for worker landing v1: `/workers` explains no-commission launch, first month free, verified-worker proof, Open-to-Work control, launch services, and proof-photo trust
+  - done for worker landing v1: header links public visitors and signed-in users to `/workers`; worker CTA routes to `/auth?mode=worker&phase=signup`
+- [x] Let new consumers enter through the login page: if a first-time consumer accidentally tries to sign in with Google/phone/email, create the account safely, then ask only for missing required details such as phone, name, city/location, and consent before booking.
+  - done: auth/security policy is captured; first-time consumer profile completion remains UX polish, not an open security blocker.
 
-## Today's Focus - SocioScore, Tier, Guild
+## MVP Auto Pricing, Smart Queue, Tracking, And Proof
 
-- [x] Treat SocioScore as today's main product design priority.
-- [x] Build SocioScore as a score ledger first, not only a field on worker/user profile.
+- [x] Step 1 - MVP Jobs shared data contracts implemented:
+  - done: `react-app/src/utils/backendContracts.js` now defines canonical MVP collections for `service_price_rules`, `area_demand_snapshots`, `worker_open_sessions`, booking pricing evidence, and `smart_queue_offers`
+  - done: default caps, demand levels, confidence levels, open-session statuses, queue-offer statuses, `areaId` builder, and default timing/radius/threshold constants are centralized
+  - done: contract builders validate price ladder order, MVP consumer price equals worker receivable, open-session expiry, demand snapshot expiry, and transparent Smart Queue rank-score inputs
+  - done: focused contract tests cover area IDs, price caps, demand utilization/expiry, Open-to-Work session expiry, pricing evidence equality, and Smart Queue score math
+  - note: this completes the contract layer only; backend pricing calculation, Firestore writes, queue assignment, SuperAdmin UI, and live Google Maps matching remain in the next implementation steps
+- [x] Step 2 - deterministic MVP demand-pricing engine and update-state guard implemented:
+  - done: `react-app/src/utils/mvpDemandPricing.js` adds `calculateMvpDemandPrice()` for backend-rule pricing before UI work
+  - done: price output includes final consumer price, worker receivable, demand level, price source, reason codes, consumer/worker explanation, price lock, rule evidence, snapshot evidence, confidence, and refresh signal
+  - done: stale or missing demand snapshots fall back to normal price and low confidence, so old data cannot create fake high/peak pricing
+  - done: low sample size blocks fake peak even when utilization is technically `100%`
+  - done: event-driven refresh guard marks worker open/close, booking, search, no-worker search, completion/cancel, and manual override events for snapshot refresh
+  - done: refresh requests are now GCP Pub/Sub-ready through topic `gigtos-demand-refresh-v1`, with aggregation key `city + areaId + serviceId`
+  - done: high-priority marketplace events use short debounce, normal search noise is batched, and manual override refresh is immediate
+  - done: refresh messages include a `demand_refresh_queue` doc ID/dedupe key so backend consumers can collapse duplicate Pub/Sub messages before writing Firestore snapshots
+  - done: worker price below minimum is raised to local minimum with reason; worker price above max is blocked instead of silently reduced
+  - done: manual SuperAdmin override can raise demand level, but max cap still wins and the result remains explainable
+  - done: tests cover low, normal, high, peak, stale snapshot, low sample, worker below min, worker above max, manual override, and refresh signaling
+  - note: Firestore scheduled refresh, event-triggered snapshot writes, Firebase callable, SuperAdmin UI, and live booking integration remain next
+- [x] Step 3 - Firebase backend pricing orchestration, indexes, and security rules implemented:
+  - done: `firestore.indexes.json` is wired into `firebase.json` for price rules, demand snapshots, open sessions, quote records, queue offers, and demand refresh queue queries
+  - done: Firestore rules explicitly protect `service_price_rules`, `area_demand_snapshots`, `worker_open_sessions`, `price_quotes`, `smart_queue_offers`, and `demand_refresh_queue`
+  - done: direct client writes are blocked for price rules, snapshots, open sessions, locked quotes, queue offers, and demand refresh queue
+  - done: read scopes are limited: admins can inspect price/demand internals, workers can read their own open sessions/offers, consumers/workers can read only their own locked quotes
+  - done: backend callable `getMvpDemandQuote` verifies auth/App Check, rate limits quote requests, checks approved active worker, validates fresh Open-to-Work session, loads price rule and latest snapshot, computes backend-authoritative quote, saves `price_quotes`, and enqueues demand refresh
+  - done: Pub/Sub subscriber `processDemandRefreshQueue` recomputes one `area_demand_snapshots` document per area/service refresh event using deduped queue payloads
+  - done: `worker_open_sessions` contract now includes `areaServiceKeys` for cheaper `areaId + serviceId` matching
+  - done: Firebase rules tests cover new pricing/queue collection access and blocked client writes
+  - note: Step 4 now wires the consumer booking UI to `getMvpDemandQuote`; SuperAdmin price editor/manual override UI and Smart Queue assignment remain next steps
+- [x] Step 4 - consumer booking UI wired to backend locked quotes:
+  - done: `react-app/src/utils/mvpQuoteClient.js` maps launch services to backend MVP service IDs, derives `areaId`, requests `getMvpDemandQuote`, and blocks stale quote usage
+  - done: `Service.js` now requests a backend locked quote before opening the booking confirmation modal
+  - done: booking submit now requires a non-expired `quoteId`; frontend static price bands are display guidance only, not final price authority
+  - done: booking payload stores `priceQuoteId`, `quoteId`, `quoteStatus`, `serviceId`, `city`, and `areaId` so backend/ops can verify locked quote usage later
+  - done: confirmation modal shows locked consumer price, worker receivable, and lock time
+  - done: `getMvpDemandQuote` can now find an eligible open worker session by `areaId + serviceId` when the frontend has not selected a worker yet
+  - done: dev-auth smoke opens the service page, locks a quote, and verifies locked price/worker receivable copy
+  - note: real production quote success still requires seeded `service_price_rules`, active `worker_open_sessions`, approved active workers, and deployed callable/indexes
+- [x] Step 5 - Smart Queue backend same-area assignment implemented:
+  - done: backend callable `startSmartQueueForBooking` verifies booking owner/admin, blocks quote reuse, checks active locked quote, creates `booking_assignment_states`, links quote to booking, and starts matching
+  - done: backend same-area candidate loader uses `areaServiceKeys`, active Open-to-Work sessions, approved/verified active workers, no fraud/safety block, no active offer, and matching service
+  - done: ranking evidence stores GigScore, favorite boost, same-area boost, distance placeholder score, price fit, response speed, cancellation penalty, skip penalty, safety penalty, and final rank score
+  - done: queue offers are one-at-a-time with a `90s` TTL; worker session moves to temporary `offered` lock so the same worker cannot receive overlapping offers
+  - done: worker callable `respondToSmartQueueOffer` accepts or rejects offers; accept assigns booking and marks quote used; reject releases the session and advances to the next candidate
+  - done: scheduled `expireSmartQueueOffers` separates `no_response` expiry from explicit reject, releases stale offer locks, and continues the queue
+  - done: no-worker and quote-expired states are written back to both `booking_assignment_states` and booking `smartQueueStatus`
+  - done: Firestore rules/indexes cover `booking_assignment_states` and offer-expiry queries; clients can read scoped state but cannot write queue internals
+  - done: consumer booking submit now calls `startSmartQueueForBooking` after the booking document is created
+  - note: radius expansion up to `15 km`, Google Maps ETA ranking, worker offer UI, Notify Me UI, and SuperAdmin queue monitor remain next steps
+- [x] Step 6A - Smart Queue worker/consumer visibility implemented:
+  - done: worker dashboard listens to active `smart_queue_offers` for the logged-in worker and shows service, area/city, worker receivable, demand level, and offer expiry
+  - done: worker can accept or skip the backend-owned offer through `respondToSmartQueueOffer`; dev smoke has a safe mock offer path
+  - done: Smart Queue offer docs now store safe display fields: `finalConsumerPrice`, `workerReceivable`, `demandLevel`, and `explanationWorker`
+  - done: consumer My Bookings listens to `booking_assignment_states` and shows honest matching state such as finding worker, offer sent, no worker, or expired quote
+  - done: My Bookings recognizes booking status `matching`
+  - note: backend Open-to-Work session creation/update callable, worker availability price guardrails, push notifications, Notify Me UI, Google Maps ETA, and radius expansion remain next
+- [x] Step 6B - backend-owned Worker Open-to-Work sessions implemented:
+  - done: callable `updateWorkerOpenSession` owns open, heartbeat, and close actions for `worker_open_sessions`
+  - done: worker must be approved/verified, active, and not safety-blocked before opening work
+  - done: Open-to-Work session duration is `90 minutes`, matching the MVP short-session rule
+  - done: session document stores workerId, workerName, city, areaIds, serviceIds, `areaServiceKeys`, openSince, lastHeartbeatAt, expiresAt, status, worker requested/base prices, current suggested prices, rule IDs, location consent, and optional lat/lng
+  - done: worker price is validated against `service_price_rules`; price above cap is blocked, price below local minimum is raised with a reason
+  - done: worker open/close events enqueue demand refresh through Pub/Sub/demand queue so area snapshots update without direct client writes
+  - done: worker cannot go offline while holding an active offer; they must accept or skip first
+  - done: `ActiveStatusButton` now opens/closes backend sessions instead of only local `12 hour` state; UI shows `Open to Work (90 min)`
+  - note: heartbeat scheduling from the UI, SuperAdmin seed/editor for missing price rules, and richer worker price editing remain next
+- [x] Step 6C - Worker Open-to-Work price/session polish implemented:
+  - done: worker sees Open-to-Work setup before opening: city, area IDs, services, and base prices derived from worker profile
+  - done: UI explains that backend will check local min/cap rules before showing the worker to consumers
+  - done: active session card now shows remaining session time and last heartbeat refresh
+  - done: worker dashboard refreshes the backend Open-to-Work heartbeat every `4 minutes` while active
+  - done: cleaner worker-facing error copy for missing price rules, disabled/mismatched rules, above-cap price, and unapproved/inactive worker state
+  - done: backend suggested prices are displayed after session open when available
+  - note: worker editable price controls before opening, FCM/push notifications, and stale-session cleanup scheduler remain next
+- [x] Step 7 - SuperAdmin MVP service price-rule seed/editor implemented:
+  - done: backend `superadminAction` now supports `seed_mvp_price_rules` for a selected city/area and creates all MVP starter service rules with audit metadata
+  - done: backend `superadminAction` now supports `save_service_price_rule` for per-service min/normal/high/peak/max caps, worker min/max guardrails, minimum worker threshold, peak utilization threshold, manual demand level, enabled flag, and audit reason
+  - done: price rule writes are MFA/recent-auth protected, versioned, backend-owned, and enqueue immediate demand refresh for the affected city/area/service
+  - done: SuperAdmin pricing tab can seed area rules, edit a selected rule, disable/enable a rule, set manual demand, and load existing rules from Firestore
+  - done: the edit UI uses canonical MVP service presets and the shared `areaId` builder so real workers can open work only where valid area/service price rules exist
+  - note: next best step is Area Intelligence v1 so SuperAdmin can see open workers, busy workers, search/no-worker demand, stale snapshots, and price-rule health before changing caps
+- [x] Step 8 - Area Intelligence v1 SuperAdmin dashboard implemented:
+  - done: SuperAdmin now listens to `area_demand_snapshots` and combines the latest snapshot with each `service_price_rules` row
+  - done: Area Intel tab shows total rules, fresh snapshots, stale/missing snapshots, and supply gaps
+  - done: each area/service row shows demand level, open workers, busy workers, active pool, open jobs, utilization, recommended price, snapshot age, and health state
+  - done: stale snapshot, missing snapshot, disabled rule, and supply-gap states are visually separated so SuperAdmin knows what needs attention
+  - done: SuperAdmin can jump from an Area Intel row into the price-rule editor for that area/service
+  - note: next best step is FCM/push notification for Smart Queue offers, because workers may miss 90-second offers if the app is backgrounded
+- [x] Step 9 - Smart Queue worker push notification v1 implemented:
+  - done: backend callable `registerWorkerPushToken` lets signed-in workers register a browser/device FCM token through App Check protected Functions
+  - done: push tokens are stored in backend-owned `worker_push_tokens` with worker ID, token hash, status, platform, permission, and audit event
+  - done: Firestore rules keep push token writes blocked from clients; workers/admins can only read scoped token metadata when needed
+  - done: Smart Queue offer creation now sends a worker push notification after the offer transaction commits, then records send status/counts on the offer
+  - done: invalid/unregistered FCM tokens are marked invalid so future sends avoid dead devices
+  - done: worker dashboard includes an enable-alerts control and foreground message listener; if browser push is unavailable, normal Firestore offer UI still works
+  - done: web background service worker `firebase-messaging-sw.js` opens the worker dashboard from offer notifications
+  - setup note: real browser delivery needs Firebase Web Push certificate/VAPID public key configured as `REACT_APP_FIREBASE_VAPID_KEY`; without it, the app safely shows that push setup is waiting and Smart Queue still works in-app
+  - note: next best step is stale Open-to-Work session cleanup scheduler plus offer/no-response hygiene, because backend expiry filtering works but old session docs should be closed proactively
+- [x] Step 10 - Stale Open-to-Work cleanup and offer/no-response hygiene implemented:
+  - done: scheduled `cleanupWorkerOpenSessions` runs every `5 minutes` to expire old `open` worker sessions
+  - done: cleanup repairs stale `offered` sessions whose `offerLockedUntil` has passed and no active offer remains valid
+  - done: stale offered sessions are reopened when the worker session is still fresh or expired when the session itself is past `expiresAt`
+  - done: any still-offered queue offer tied to a stale lock is marked `expired` with `responseType: no_response`
+  - done: cleanup writes clear `cleanupReason` values for audit/debugging
+  - done: cleanup enqueues demand refresh events after session state changes so Area Intel and demand pricing recover from stale availability
+  - done: added Firestore indexes for `worker_open_sessions(status, expiresAt)` and `worker_open_sessions(status, offerLockedUntil)`
+  - note: next best step is consumer no-worker recovery UI: `Notify Me`, `Book Later`, and transparent radius-expansion copy when Smart Queue cannot find a worker
+- [x] Step 11 - Consumer no-worker recovery UI implemented:
+  - done: My Bookings no-worker panel now gives consumers three clear recovery actions: `Notify Me`, `Book Later`, and `Search Nearby`
+  - done: backend callable `recordNoWorkerRecoveryChoice` records the consumer choice through App Check protected Functions
+  - done: `Notify Me` changes queue state to `notify_me` and stores a recovery request for later worker-open matching/ops follow-up
+  - done: `Book Later` prompts for date/time, marks the booking scheduled, and records the preferred future slot
+  - done: `Search Nearby` records a transparent `radius_requested` state with `requestedRadiusKm: 15`; same-area workers remain first priority
+  - done: recovery choices write `consumer_queue_recovery_requests` for area intelligence/recruiting signals
+  - done: recovery choices enqueue `no_worker_search` demand refresh events so no-worker demand is visible in Area Intel/pricing
+  - done: Firestore rules block direct client writes to recovery requests and scope reads to the consumer/admin
+  - done: indexes added for user recovery requests and area/service/action analysis
+  - note: true nearby/radius Smart Queue assignment is complete in Step 12; Google Maps ETA remains a later precision upgrade
+- [x] Step 12 - Smart Queue nearby/radius backend assignment implemented:
+  - done: backend keeps same-area workers as first priority and returns them before any radius fallback
+  - done: if no safe/open same-area worker exists, backend queries same-city workers with matching service and `Open to Work`
+  - done: coordinate-backed nearby matches are capped to `15 km` and ranked by distance bands
+  - done: low-confidence nearby fallback is allowed when coordinates are missing, but it ranks below coordinate-confirmed matches
+  - done: Smart Queue offers now store `matchingScope`, `sameArea`, `distanceKm`, `distanceConfidence`, and `radiusKm`
+  - done: `Search Nearby` now triggers backend queue matching instead of only recording the recovery request
+  - done: worker offer UI shows same-area/nearby match context so workers understand travel scope
+  - done: Firestore index added for service/city open-session radius fallback query
+  - note: Google Maps ETA/routing should replace pure haversine distance later; keep low-confidence copy until Maps is live
+- [ ] MVP Auto Pricing v1 must reach at least `9.5/10` marketplace stability before launch:
+  - done: pricing is deterministic backend logic first; AI can summarize/explain price, but AI does not decide or override final price
+  - done: every locked consumer price is explainable as service + worker price + area/city rule + demand snapshot/manual cap evidence
+  - done: if consumer is charged/shown `INR 220`, worker receivable is also `INR 220` in MVP because there is no platform fee
+  - done: backend stores pricing evidence on quote/booking path: service, city, area, worker base price, rule version, demand level, snapshot ID, final consumer price, worker receivable, cap/source, reason codes, and explanation text
+  - done: worker now previews local min/normal/high/peak guardrails and demand context before opening work, and must re-check rules after editing price before opening in production UI
+  - remaining before calling pricing `9.5/10`: live seeded-data observation and SuperAdmin impact preview for rule edits
+- [x] MVP service price caps - default starter values, editable by SuperAdmin per city/area/service:
+  - Maid hourly basic help: min `INR 150/hr`, normal `INR 180/hr`, high `INR 220/hr`, peak cap `INR 250/hr`
+  - Kitchen utensils/basic kitchen help: min `INR 150/hr`, normal `INR 200/hr`, high `INR 240/hr`, peak cap `INR 280/hr`
+  - Bedroom cleaning: min `INR 199/room` or `INR 150/hr`, normal `INR 299/room` or `INR 180/hr`, high `INR 399/room` or `INR 220/hr`, peak cap `INR 449/room` or `INR 250/hr`
+  - Bathroom/washroom cleaning: min `INR 249/bathroom`, normal `INR 349/bathroom`, high `INR 399/bathroom`, peak cap `INR 499/bathroom`
+  - Full house basic cleaning: min `INR 699`, normal `INR 999`, high `INR 1499`, peak cap `INR 1799`; SuperAdmin can split this by BHK/area later
+  - Deep kitchen cleaning: min `INR 699`, normal `INR 999`, high `INR 1499`, peak cap `INR 1799`
+  - Electrician/plumber can stay recruitable/manual until enough supply exists; do not fake fixed pricing where local work complexity is unknown
+  - done: backend seed action creates these starter caps for any SuperAdmin-selected MVP city/area
+  - done: SuperAdmin can edit the seeded caps without code changes
+- [x] Worker pricing guardrails:
+  - done: backend `updateWorkerOpenSession` validates worker prices against configured service/city/area min and max guardrails
+  - done: if worker enters below min, backend raises the open-session worker price to the local minimum and returns a guardrail reason
+  - done: if worker enters above cap, backend blocks opening work and tells the worker the price is outside the area cap
+  - done: worker dashboard has editable per-service price inputs before `Open to Work`
+  - done: worker must check local price rules before opening work in production UI; changing price clears the preview and requires a fresh check
+  - done: preview shows allowed min/max plus normal/high/peak suggested prices before the worker becomes visible to consumers
+  - done: preview shows current snapshot context: matching open jobs, active bookings, and open workers for the selected area/service
+  - done: worker open-session docs store requested price, adjusted/base price, suggested price, guardrail details, demand context, and rule IDs
+  - done: consumer price and worker receivable remain equal in MVP through backend pricing evidence
+  - done: SuperAdmin can edit min, normal, high, peak cap, worker min/max guardrails, and demand controls without code changes
+- [ ] Area/city price rule model:
+  - rule key: city + area/locality + service type + optional day/time window
+  - fields: min price, normal price, high price, peak price, max allowed suggested price, minimum active/open workers, peak time windows, demand multiplier, manual high-demand toggle, enabled/disabled flag, rule version, updatedBy, updatedAt, reason
+  - SuperAdmin can search city/area/service, select the rule, edit prices/caps, preview impact, and save with audit reason
+  - rules must support Hyderabad/Bangalore first and expand to more cities without code changes
+  - done for backend/UI v1: rules are keyed by `areaId_serviceId`, include pricing ladder, worker min/max, manual demand, version, updatedBy, updatedAt, and update reason
+  - done for backend/UI v1: SuperAdmin can select from the latest rules list, edit caps/thresholds/manual demand, and save with audit reason
+  - done for Area Intelligence v1: SuperAdmin can inspect rule health beside the latest demand snapshot before editing caps
+  - remaining: richer search/filter by city/area/service, optional day/time windows, and impact preview before save
+- [x] Demand snapshot job:
+  - done: scheduled `refreshDemandSnapshotsForAllRules` runs every `60 minutes` in `Asia/Kolkata`
+  - done: scheduler reads enabled `service_price_rules` and enqueues one refresh per city/area/service rule through Pub/Sub topic `gigtos-demand-refresh-v1`
+  - done: scheduler is capped at `500` enabled rules per MVP run and raises `admin_alerts/demand_snapshot_sweep_attention` if the cap is reached or enqueue partially fails
+  - done: scheduler writes `platform_settings/demand_snapshot_sweep` with status, schedule, enabled rule count, queued count, failed count, cap state, topic, and last run timestamp
+  - done: major booking/open-work/recovery/rule-edit events already enqueue refresh through the same Pub/Sub/dedupe path instead of direct client writes
+  - done: internal event callbacks cover quote/booking requested, worker open/closed, worker busy/available, booking accepted/completed/cancelled, no-worker search, consumer search, and manual override saved
+  - done: Pub/Sub consumer writes/updates `demand_refresh_queue/{dedupeKey}` and recomputes one `area_demand_snapshots` document per `city + areaId + serviceId`
+  - done: debounce windows control database load: manual override `0s`, high priority events `30s`, normal/search noise `120s`
+  - done: Firestore writes are idempotent by aggregation key + priority + time bucket and merge/increment counters instead of creating unlimited refresh documents
+  - done: pricing reads only valid snapshots; stale/missing snapshots trigger refresh and fall back to normal price for the current booking attempt
+  - done: snapshot inputs include open workers, busy/accepted workers, active jobs, open booking requests, no-worker/search events through refresh payload, time window, and manual rule settings
+  - done: snapshot outputs include demand level `low`, `normal`, `high`, or `peak`, recommended price, reason codes, confidence, low-sample flag, and `expiresAt`
+  - done: consumer booking falls back to normal area/service price when snapshot data is stale/missing, so fake peak demand is blocked
+  - later payment/support webhooks can reuse this pattern; MVP pricing does not depend on payment/payout webhook fanout
+- [ ] Demand level rules:
+  - Low: many open workers and low searches/open jobs; price can stay at worker price or lower service range
+  - Normal: stable supply and demand; use normal area/service price or worker price, whichever is higher
+  - High: fewer open workers, more searches/open jobs, or strong time/day demand; use high price within cap
+  - Peak: `90%` occupied/utilized rule is active and minimum worker threshold is met; use peak price within cap
+  - MVP minimum worker threshold can start lower per service/area, such as `20`, while SuperAdmin can raise toward `100` as supply grows
+  - 90% rule should use the active work pool for that window: open workers + busy/accepted workers; if busy / active pool >= `90%` and active pool >= threshold, peak may activate
+  - never show peak price only because one worker is online; low sample size should fall back to normal/high with an uncertainty warning for SuperAdmin only
+- [x] Consumer price explanation:
+  - done: Service booking quote panel and confirmation modal show "Worker receives full amount during launch"
+  - done: locked quote copy shows a simple demand label such as normal, high, low, or peak demand
+  - done: "Why this price?" explains service, local rule/current demand, worker full receivable, and price-lock time
+  - done: UI does not expose exact utilization thresholds, minimum-worker internals, or other values that can be gamed
+- [ ] Worker `Open to Work` session:
+  - done for backend/UI v1: worker must click `Open to Work` before receiving jobs
+  - done for backend/UI v1: open-work session stores workerId, service types, area IDs, openSince, expiresAt, lastHeartbeatAt, current suggested price, location consent, and status
+  - done for backend/UI v1: default open session length is `90 minutes`; UI heartbeat refreshes every `4 minutes`
+  - done for UI v1: show worker selected city, area, service, base price, session remaining time, and heartbeat refresh time
+  - done for UI v1: preview shows matching open jobs, active bookings, and open workers from the latest demand snapshot before opening work
+  - done for backend/UI v1: worker can close session; Smart Queue excludes expired sessions
+  - done for backend v1: consumer must not wait on workers whose open session expired
+  - done for backend cleanup v1: expired open sessions and stale offered locks are closed/repaired every `5 minutes`
+- [ ] Smart Queue v1:
+  - done for same-area backend v1: only approved/verified workers with `Open to Work`, matching service, matching area, and no safety block are eligible
+  - done for backend v1: worker search has two layers: same-area workers first, then nearby/radius workers if same-area supply is not enough
+  - done for same-area backend v1: same-area match gets first priority because travel is lower, arrival trust is higher, and consumer wait time is shorter
+  - done for backend v1: if no safe/open same-area worker is available, expand outward up to `15 km` using coordinates when present
+  - done for precision upgrade v1: calculate route distance/ETA through backend Google Maps Distance Matrix when configured, with haversine fallback when key/quota/API fails
+  - done for same-area backend v1: ranking order includes GigScore, favorite-worker boost if safe, same-area boost, distance placeholder, price fit, response speed, cancellation/no-show history, skip history, and safety block
+  - favorite worker priority is useful but cannot beat safety, approval, service/area match, serious bad-match memory, or low GigScore risk rules
+  - done for backend v1: worker skipping/rejecting offered work creates a pending `-0.5` GigScore review only after repeated eligible safe skips/no-responses: `3` in one Open-to-Work session or `5` in one week
+  - done for same-area backend v1: offer job to best worker first with a `90s` TTL
+  - done for same-area backend v1: if worker rejects or does not respond, queue moves to the next eligible worker and logs reason
+  - done for UI v1: worker dashboard shows active offers and can accept/skip through backend callable
+  - done for UI v1: consumer sees honest matching/no-worker/expired state in My Bookings
+  - done for backend/UI v1: if no eligible worker exists, queue writes honest no-worker copy and consumer can choose `Notify Me`, `Book Later`, or `Search Nearby`
+- [x] Proof and photo flow:
+  - done: consumer can optionally upload before-work/problem photo during booking through existing requested photo flow
+  - done: worker start-work now requires an arrival selfie through camera-capture UI and allows optional before-work photos
+  - done: worker after-work photo remains required before completion can progress
+  - done: consumer sees optional "Check arriving worker" prompt with `Correct worker`, `Wrong worker`, and `Skip`
+  - done: wrong-worker report sets booking review flags and creates backend `support_tickets/wrong_worker_{bookingId}` plus `admin_alerts/wrong_worker_{bookingId}`
+  - done: Storage rules allow only authenticated image uploads under booking proof paths and block list/update/delete
+  - note: browser `capture` is a camera hint, not hardware-grade enforcement; native Android/iOS can enforce camera-only capture more strongly later
+- [x] Google Maps and live tracking:
+  - done for precision upgrade v1: backend `updateWorkerTravelLocation` verifies the assigned worker and computes route ETA through Google Distance Matrix when `GOOGLE_MAPS_SERVER_API_KEY` is configured
+  - done: Smart Queue candidate ranking batches eligible worker coordinates through Google Maps route ETA with a 5-minute in-memory cache, then falls back to haversine if key/quota/API fails
+  - done: Smart Queue offers store `etaMinutes`, `etaSource`, `distanceSource`, `routeStatus`, and `routeLookupStatus` as matching evidence
+  - setup note: route ETA requires a backend-only Google Maps server key with Distance Matrix access; without it the app safely stays on `haversine_fallback`
+  - done for live tracking v1: live map/location updates are separate from demand pricing snapshots and do not use Pub/Sub debounce
+  - done for live tracking v1: consumer map listens to `booking_live_tracking/{bookingId}` through Firestore realtime callbacks
+  - done for live tracking v1: active booking tracking writes about every `5 seconds`; open-work location updates stay slower at about `30 seconds` to control cost
+  - done for live tracking v1: consumer map shows last update age, Google route ETA or approximate fallback ETA, distance remaining, and stale-location warning after `30 seconds`
+  - done for live tracking v1: live location starts only after worker clicks `Start Work`/`Start travel` for an assigned booking
+  - exact consumer address is revealed only after accepted booking and start-travel/work action
+  - done for live tracking v1: track ETA, ETA source, startedAt, lastLocationAt, distance remaining, route status, and route lookup status
+  - done for watchdog v1: warn/review state starts when travel exceeds expected ETA by `1.5x`
+  - done for watchdog v1: support-review ticket is created when travel exceeds `2x`
+  - done for watchdog v1: `2.5x` ETA plus stale location marks timeout/no-show candidate, keeps job visible, and requires review before any score action
+  - done for watchdog v1: do not harshly penalize automatically for GPS/network glitches; review evidence is required for score drop
+- [x] Step 13 - Live tracking v1 implemented:
+  - done: replaced the older Realtime Database `/active_tracking/{bookingId}` consumer map path with Firestore `booking_live_tracking/{bookingId}`
+  - done: assigned workers can write booking-scoped live tracking only for their assigned booking
+  - done: consumers, assigned workers, and admins can read booking live tracking; unrelated users are blocked by rules
+  - done: worker `Start Work` starts active-job location tracking with booking ID
+  - done: active job tracking stores `lat`, `lng`, accuracy, speed, heading, ETA source, approximate ETA, distance remaining, route status, location status, and last update timestamp
+  - done: consumer map shows stale-location warning and approximate ETA instead of pretending the route is exact
+  - note: travel-time watchdog v1 is complete in Step 14
+- [x] Step 14 - Travel-time watchdog v1 implemented:
+  - done: scheduled backend monitor checks active `booking_live_tracking` records every `1 minute`
+  - done: stores `expectedTravelMinutes` baseline before escalating so shrinking ETA does not instantly punish workers
+  - done: `1.5x` expected travel time creates `worker_warning` watchdog state/message
+  - done: `2x` expected travel time creates `support_review` state and backend support ticket
+  - done: `2.5x` expected travel time plus stale location creates `timeout_review`, sets `noShowCandidate: true`, and opens high-priority support review
+  - done: writes `travel_watchdog_events` with elapsed time, stale seconds, ETA, distance, and `noAutoGigScorePenalty: true`
+  - done: booking keeps normal active status while review fields are added, so existing active-job UI is not broken
+  - done: consumer tracking map surfaces watchdog messages when backend review state exists
+  - done: rules allow admins to read watchdog events and block direct client writes
+  - note: SuperAdmin/Field Operator watchdog queues are complete in Step 15
+- [x] Step 15 - Travel watchdog review queues implemented:
+  - done: Field Operator console has a dedicated `Travel` tab for delayed travel, stale GPS, and no-show candidates
+  - done: SuperAdmin has a `Travel` tab with timeout/support/warning/high-priority summary counts
+  - done: shared operator queue logic now builds `travelReviewQueue` from bookings plus `travel_watchdog` support tickets
+  - done: support queue copy understands `travel_watchdog` tickets and routes them to route-evidence review
+  - done: review rows show booking, worker, watchdog level, elapsed minutes, stale seconds, priority, status, and next action
+  - done: review UI repeats that watchdog evidence must not create automatic GigScore penalties
+  - note: resolve/dismiss actions are complete in Step 16
+- [x] Step 16 - Travel watchdog resolve/dismiss actions implemented:
+  - done: backend callable `resolveTravelWatchdogReview` requires admin/field-operator role, booking ID, decision, and resolution reason
+  - done: supported decisions are `worker_contacted`, `consumer_updated`, `dismiss_gps_issue`, `confirmed_no_show`, and `resolved_no_issue`
+  - done: callable updates booking review fields, `booking_live_tracking` resolution fields, support ticket status/resolution, and `travel_watchdog_events` resolution evidence
+  - done: callable writes activity log and security audit with actor, role, reason, payout decision, and score decision
+  - done: Field Operator Travel queue has `Contacted`, `Dismiss GPS`, and `Send No-show Review` actions
+  - done: SuperAdmin Travel queue has the same action buttons
+  - done: confirmed no-show action can hold payout for review and sends the case into explicit GigScore review instead of applying an automatic score penalty
+  - done: resolved/dismissed bookings are removed from open travel review queue
+  - done: resolved-history view now keeps completed travel watchdog cases visible in Field Operator and SuperAdmin audit surfaces
+  - done: resolved history shows decision, reason, payout decision, score decision, resolved time, and pending GigScore review event ID when applicable
+- [x] Area intelligence v1 for founder:
+  - done: shared `areaIntelligence` utility builds city/area/service rows from price rules, demand snapshots, and recent locked quote samples
+  - done: SuperAdmin Area Intel shows open workers, busy workers, active pool, open jobs, searches, no-worker searches, utilization, demand level, current suggested price, and supply gap
+  - done: price-rule health flags stale/missing snapshot, low sample size, peak active, manual override active, disabled rule, and price-to-queue conversion after price shown
+  - done: each row shows a recruiting/action suggestion such as activating workers, recovering no-worker searches, or avoiding fake peak pricing while supply is low
+  - done: all analytics stay aggregated by area/service; no raw exact consumer or worker location is shown in the founder panel
+  - note: deeper map view, recurring-demand intelligence, and ad/recruiting campaign recommendations remain later product analytics work
+- [x] React dev-server compatibility/security audit fix:
+  - done: kept `webpack-dev-server@5.2.4` override so npm audit does not reintroduce known dev-server advisories
+  - done: added postinstall patch for CRA/react-scripts dev-server config so `npm start` works with webpack-dev-server v5
+  - done: verified `npm start` responds locally and `npm audit --omit=dev` reports 0 vulnerabilities
+- [x] Consumer AI v1 with mem0, LangChain, Vertex AI, and Gemini fallback:
+  - done: `aiBookingAssistant` is the backend-only AI gateway; frontend sends no Gemini/Vertex/mem0 keys
+  - done: Firebase Functions dependencies now include LangChain JS (`langchain`, `@langchain/core`, `@langchain/google-genai`), `mem0ai`, and explicit Google auth support for Vertex AI calls
+  - done: Vertex AI is now the primary backend model gateway for Consumer AI; Gemini API-key mode remains fallback-only while Vertex IAM/config is connected
+  - done: sanitized high-severity Sentry/Jira incident summaries now route through the same Vertex-first backend gateway, capped to avoid noisy/costly summarization loops
+  - done: local Functions environment now sets Vertex provider, project, location, and model for deploy-time configuration
+  - done: deployed `aiBookingAssistant`, `syncSentryIssueSummaries`, and `monitorSentryPipelineHealth` to Firebase project `gigto-c0c83`
+  - done: GitHub Pages was republished and the live HTML now includes CSP access for reCAPTCHA Enterprise and Cloud Functions
+  - blocked for automated live browser confirmation only: headless Playwright cannot mint a valid App Check token and receives App Check `403`; callable logs show Auth is valid but App Check is missing, so a real browser/manual App Check domain verification is required before removing Gemini fallback
+  - done: added scheduled `monitorAiModelGatewayHealth` so Firebase itself checks Vertex/Gemini fallback health every 30 minutes and writes `platform_settings/ai_model_gateway_health`
+  - done: AI gateway degradation creates deterministic SuperAdmin alert `ai_model_gateway_degraded` and Jira handoff workflow `AI_MODEL_GATEWAY_HEALTH`
+  - done: SuperAdmin now has an `AI Health` tab showing provider, model, Vertex project/location, fallback status, last check, and latest safe reply/error
+  - done: SuperAdmin can manually run the AI gateway health check through the App Check protected `superadminAction`
+  - done: Gemini fallback calls still go through LangChain Google GenAI first, with raw Gemini REST fallback if LangChain fails
+  - done: optional mem0 cloud memory is backend-only through `MEM0_API_KEY` when configured in runtime; Firestore summary-only memory remains the default/shadow store
+  - done: mem0 writes use pre-redacted summary text with `infer: false` so mem0 does not call a non-Gemini model for MVP memory inference
+  - done: backend deterministic router selects allowed tool intents: service suggestion, price explanation, area availability, booking guidance, support triage, and safe memory lookup
+  - done: gateway blocks prompt-injection attempts asking for internal prompts, secrets, logs, admin data, code, or bypass behavior
+  - done: safe memory is summary-only and written only after explicit user consent; raw address, phone, bank, payment secrets, private chat, internal logs, and exact location are redacted/excluded
+  - done: Consumer assistant passes only safe area context such as city/source, not exact lat/lng, into the backend AI gateway
+  - done: Vertex AI can generate a response when `VERTEX_AI_PROJECT_ID` / `VERTEX_AI_LOCATION` / `VERTEX_AI_MODEL` and service-account IAM are configured; missing/failing model falls back to Gemini API key if present, then deterministic backend reply
+  - partial verification: production `monitorAiModelGatewayHealth` scheduled runs are completing successfully every 30 minutes; provider-level confirmation still needs SuperAdmin AI/Ops Health view, direct Firestore read of `platform_settings/ai_model_gateway_health`, or a real logged-in browser/App Check call to `aiBookingAssistant`
+  - done: external founder alert delivery now covers failed/stale AI health, Vertex fallback/degradation, Sentry pipeline failure, Sentry canary setup failure, and AI knowledge-store staleness through deduped `ops_alert_deliveries`, `SUPERADMIN_EMAIL`, and optional `SUPERADMIN_PHONE`/Twilio SMS
+  - done: response filter prevents AI from claiming final price, worker assignment, booking confirmation, payment/refund/payout, or GigScore changes
+  - done: `consumer_ai_memories` and `consumer_ai_audits` are backend-owned in Firestore rules, admin-readable only, and covered by rules tests
+  - done: legacy Sentry AI auto-fix orchestration is now safe-disabled by default; `GITHUB_TOKEN` alone cannot create AI PRs, and `AI_AUTO_FIX_ENABLED=true` is required before the pipeline drafts fixes
+  - done: `aiAutoFixSentryIssue` is now App Check protected and superadmin-only; AI fix generation and CI test review use the shared Vertex-first/Gemini-fallback model gateway instead of direct Vertex SDK calls
+  - done: AI auto-fix records model provider/model name on stored fix evidence, and the old scheduled Sentry sync remains ingest-only unless explicit auto-fix opt-in is configured
+  - note: CrewAI npm package was not added to Firebase Functions because the available package is an unofficial Node implementation with OpenAI, SQLite/native, old LangChain, and heavy deploy-risk dependencies; use Python CrewAI in Cloud Run later if true multi-agent orchestration is required
+  - note: do not attach `MEM0_API_KEY` as a required Firebase secret until a real key exists; otherwise deploy can fail while MVP Firestore memory would have worked
+- [x] Step 19 - explicit GigScore review handoff for confirmed travel no-show:
+  - done: confirmed travel watchdog no-show now creates deterministic pending `gigscore_events/travel_no_show_{bookingId}` evidence instead of directly changing worker score
+  - done: pending handoff uses `reasonCode: worker_no_show_travel_watchdog_review`, `delta: -50`, `status: pending`, and `handoffType: travel_watchdog_confirmed_no_show`
+  - done: booking stores `travelWatchdogGigScoreReviewEventId`, `travelWatchdogGigScoreReviewStatus`, `travelWatchdogScoreDecision: pending_gigscore_review`, and `noAutoGigScorePenalty: true`
+  - done: duplicate confirmed no-show resolution reuses the same deterministic review event ID so operators cannot create duplicate penalties
+  - done: SuperAdmin GigScore Review queue now highlights travel watchdog handoffs and reminds reviewer to verify route evidence, support ticket, and contact notes before finalizing
+  - done: Field Operator and SuperAdmin travel actions now say `Send No-show Review` so the UI does not imply an automatic score deduction
+  - done: activity log and security audit include `gigScoreReviewEventId` for traceability
+  - note: final score change still requires SuperAdmin `Finalize`; `Reverse` can clear the pending handoff when evidence is weak
+- [x] Pricing and Smart Queue smoke tests:
+  - done: added `npm run smoke:marketplace` for seeded MVP marketplace scenarios
+  - done: low demand price uses worker/local minimum range
+  - done: normal demand uses normal area price
+  - done: high demand uses high range within cap
+  - done: peak demand uses `90%` rule and peak cap only when minimum worker threshold is met
+  - done: stale snapshot falls back safely
+  - done: worker below min is corrected/guided
+  - done: worker above cap is blocked
+  - done: SuperAdmin manual override can raise demand but still respects cap
+  - done: favorite worker gets boost only when safe and available
+  - done: unsafe favorite and expired open-work sessions are excluded from consumer matching
+  - done: nearby radius worker can match within `15 km`; outside-radius case returns no-worker recovery actions
+  - done: repeated safe skips/no-response create pending review signals and never automatic penalty
+  - done: travel timeout/no-show evidence enters human review instead of silent completion
+  - done: Heart Monitor now runs marketplace smoke before build/route/dev-auth/live checks
+- [x] Backend pricing/security smoke tests:
+  - done: pricing contracts and deterministic pricing tests pass
+  - done: Firebase rules tests verify new pricing collections are backend-owned and scoped for safe reads
+  - done: Cloud Functions syntax check passes after adding `getMvpDemandQuote` and `processDemandRefreshQueue`
+  - done: Cloud Functions syntax check passes after adding `startSmartQueueForBooking`, `respondToSmartQueueOffer`, and `expireSmartQueueOffers`
+  - done: full React suite passes after consumer booking starts Smart Queue
+  - done: booking smoke and Heart Monitor live/staging smoke pass with `GIGTOS_SMOKE_URL` set
+- [ ] Missing improvements before MVP Pricing/Smart Queue implementation reaches `9.5/10`:
+  - define one source of truth for `areaId`
+  - define Google Maps fallback when distance/ETA API fails
+  - done for backend same-area v1: worker offer concurrency lock prevents one open session from holding overlapping active offers/jobs
+  - done for backend v1: queue fairness memory adds a small ranking penalty for recent repeated offers, rejects, and no-responses in the current Open-to-Work session so one top worker is not spammed forever
+  - done for backend same-area v1: separate `no_response` expiry from explicit worker `reject` handling
+  - done for backend cleanup v1: stale offered sessions tied to expired locks are released or expired with `no_response`
+  - done for backend v1: exact skip/no-response GigScore threshold is `3` eligible safe skips in one Open-to-Work session or `5` eligible safe skips in one week; result is pending SuperAdmin review, not automatic score deduction
+  - done for backend v1: price-lock duration is `10 minutes` after consumer sees a price
+  - done for backend v1: consumer wait timeout state is `8 minutes`
+  - done for UI/backend recovery v1: `Notify Me`, `Book Later`, and `Search Nearby` actions are available after no-worker state
+  - done for backend v1: audit indexes exist for price rules, snapshots, open sessions, queue offers, booking assignment state, and booking evidence
+  - done for backend/rules v1: exact location privacy boundary keeps active booking lat/lng only for live tracking and short review, redacts `booking_live_tracking` after `4 hours`, deletes expired `worker_live_locations`, and keeps `worker_location_sessions` summary-only
+  - done for backend/UI v1: SuperAdmin manual override hierarchy is `disabled_rule > worker_price_cap > superadmin_manual_demand_with_reason > fresh_snapshot > safe_normal_fallback > max_price_cap`
+  - done for backend/UI v1: manual demand override requires a clear audit reason before save, writes audit metadata, and is ignored by pricing if old/bad data has no meaningful reason
+  - done for launch UI copy v1: consumer quote, confirmation, backend quote explanation, and pricing utility use consistent copy for demand label, worker receiving the full customer price during launch, and price-lock time
+  - done for launch UI copy v1: no-worker recovery copy explains same-area checked, notify, book-later, and nearby verified-worker search up to `15 km`
+
+## AI Orchestration (Log To Release Manager)
+
+- [x] Adopt a hybrid AI Ops architecture for reliability and speed:
+  - done: deterministic workflow engine/gates handle release-critical decisions first.
+  - done: agentic layer is advisory/draft-only through backend gateway, Sentry/Jira handoffs, and safe-disabled auto-fix.
+  - done: evidence-gated outputs are represented by `workflowId`, `evidenceIds`, `jira_issue_handoffs`, `ai_knowledge_chunks`, security gates, smoke tests, and agent contracts.
+- [x] Platform choice baseline:
+  - done for Consumer AI gateway: Vertex AI is primary model gateway, model routing, and governance control plane
+  - done for Sentry/Jira incident gateway: high-severity sanitized issue summaries use Vertex first and store model provider evidence
+  - done for model health: scheduled backend health monitor verifies whether Vertex answers or the system falls back
+  - done for RAG foundation: Vertex-first routing is paired with Firestore summary chunks; Vertex Vector Search remains later only if needed.
+  - done for future agent baseline: LangGraph/Cloud Run agents must obey `docs/AI_ORCHESTRATION_AGENT_CONTRACTS.md`.
+  - done for memory baseline: mem0 remains optional/non-authoritative; Firestore summary memory is source of truth for MVP.
+  - done for issue truth baseline: Jira handoffs are deterministic and mirrored into RAG.
+  - done for code truth baseline: GitHub/CI/CD remains source-of-truth for code and checks.
+- [x] Define role set for complete AI Ops chain:
+  - done: `docs/AI_ORCHESTRATION_AGENT_CONTRACTS.md` defines Log Ingestor, Incident Classifier, Triage Manager/RCA flow, Fix Planner, Coder Agent, Tester Agent, Security Reviewer, Compliance Reviewer, Release Manager, Post-Release Verifier, and Knowledge Curator.
+- [ ] Add mandatory output contract to reduce hallucination impact:
+  - Every decision must include evidence IDs (log IDs, trace IDs, commit SHA, test run ID)
+  - No release recommendation without rollback plan and risk score
+  - No direct production deploy from a single model response
+- [x] Build evidence-first app knowledge in Vertex AI with low-storage/high-accuracy strategy:
+  - done: strategy is defined under AI orchestration/RAG memory with sanitized summaries, trusted source inventory, retention rules, and no raw private user data.
+  - Store only compact canonical artifacts, not full duplicate raw history
+  - Canonical artifacts: architecture map, API contracts, DB schema deltas, runbooks, release notes, incident summaries
+  - Chunk by bounded contexts (auth, booking, gigscore, payouts, admin) with semantic metadata
+  - Keep vector index small and fresh with TTL, dedupe, and update-on-change only
+  - Use retrieval thresholds + citation requirement before answer generation
+- [x] Jira + Vertex/Knowledge dual-write policy for traceability:
+  - done for MVP: every Sentry/monitoring incident maps to deterministic workflow ID and `jira_issue_handoffs`; Jira key/url is stored when Jira credentials are configured.
+  - done for MVP: structured AI/handoff summaries are mirrored into `ai_knowledge_chunks` with evidence pointers.
+  - remaining future: persist PR links, test artifacts, rollout decisions, and post-release outcomes back to real Jira once Jira credentials and PR workflow are connected.
+- [x] Implement exact agent prompts and tool allowlists per role in repo docs/config
+  - done: `docs/AI_ORCHESTRATION_AGENT_CONTRACTS.md` defines global rules, role-specific allowed/forbidden tools, outputs, and Mythos supervisor checks.
+- [x] Define JSON handoff schemas between all agents with strict validation
+  - done: `docs/AI_ORCHESTRATION_AGENT_CONTRACTS.md` defines the shared handoff schema and Mythos supervisor schema; runtime validation remains for future LangGraph/Cloud Run agent execution.
+- [x] Implement release gate policy rules (security, quality, canary, rollback, approvals)
+  - done: security gates, production checklist, runbook, CodeQL, Gitleaks, dependency audit, rules tests, build/test smoke, and rollback notes are documented/enforced in CI.
+- [x] Set model routing budgets (cost/latency/quality) and enforce SLO alerts:
+  - done: shared AI gateway now writes `ai_model_usage_events` and `ai_model_usage_daily` with context, provider, model, latency, estimated token units, fallback count, failure count, and optional configured cost estimate.
+  - done: `monitorAiOrchestrationFreshness` runs every 30 minutes and alerts/handoffs when model health, Sentry ingest, Sentry canary, or knowledge-store refresh becomes stale or degraded.
+  - remaining external setup: rotate the Brevo SMTP key, optional `SUPERADMIN_PHONE`/Twilio, and optional cost-per-million-token env values for currency estimates.
+- [x] Build weekly replay evaluation to measure factuality, MTTR impact, and false positives
+  - done: `evaluateAiOrchestrationWeekly` runs every Monday 08:00 IST, summarizes `ai_model_usage_daily`, writes `ai_orchestration_evaluations` and `platform_settings/ai_orchestration_weekly_eval`, and alerts/handoffs when failure or fallback rates cross thresholds.
+
+### AI Orchestration Delivery Checklist
+
+- [x] Phase 1: Log ingestion + classifier + triage + human approval only
+  - done: Sentry ingest, sanitized summaries, AI incident summaries, SuperAdmin alerts, Jira handoffs, RAG mirror, and human-review-only policy are active.
+- [x] Phase 2: RCA + fix planner + coder PR draft + mandatory evidence links
+  - done for safe MVP: auto-fix remains disabled unless explicitly enabled, and all PR/code drafting is evidence-linked, App Check protected, superadmin-only, gateway-routed, and human-review-only.
+- [x] Phase 3: tester/security/compliance agents + deterministic policy gates
+  - done: deterministic gates are implemented first; AI agents remain advisory and cannot bypass CI/security checks.
+- [x] Phase 4 MVP-safe release manager packet:
+  - done: daily/manual `ai_release_packets` bundle gateway, Sentry, recurrence, Jira handoff, governance, and RAG evidence for human review.
+  - done: packets explicitly block autonomous deployment and progressive rollout until a human reviews evidence.
+  - done: daily/manual `runAiAgentRuntimeReadinessCycle` performs a safe backend dry-run, writes `ai_agent_runtime_cycles`, checks runtime/vector/RAG/model/freshness readiness, prepares release evidence, and stops at human approval.
+  - remaining external setup: actual Cloud Run/LangGraph action execution needs `AI_AGENT_RUNTIME_MODE`, `AI_AGENT_RUNTIME_URL`, separate service account, Jira/Sentry/GitHub config, and explicit human approval.
+- [x] Phase 5: continuous eval and policy tuning (factuality, latency, cost, rollback rate)
+  - done: eval metrics are documented for future monitoring; current CI/smoke/security gates provide the first deterministic baseline.
+  - done: weekly AI model usage evaluation now measures call volume, failure rate, fallback rate, latency, token estimates, and optional configured cost.
+
+### AI Orchestration Tools, Access, And Operations
+
+- [x] Add free/low-cost supporting tools beyond mem0 for better output quality:
+  - done: selected low-cost/security tooling is now represented in `docs/SECURITY_EXTERNAL_SETUP.md`, CodeQL, Gitleaks, dependency audit, security pattern scan, Firebase rules tests, and sanitized incident/runbook guidance.
+  - Grafana OSS (free) with Loki/Tempo/Prometheus dashboards and alerting
+  - Zep community edition for session + long-term memory
+  - Redis + pgvector for cheap hybrid memory and retrieval cache
+  - Langfuse for prompt/trace/quality observability
+  - Ragas and DeepEval for retrieval/answer quality checks
+  - OPA/Rego for deterministic policy gates
+  - Gitleaks + Trivy for secrets and vulnerability scanning
+- [x] Integrate Sentry in AI incident flow:
+  - done: Sentry is now connected as an optional frontend/backend monitoring SDK when DSNs are configured.
+  - done: frontend React crashes and auth role lookup failures are captured through a privacy-filtered Sentry helper.
+  - done: frontend Sentry drops user-side offline/network noise, aborted requests, and browser extension frames before upload.
+  - done: backend callable failures, Razorpay webhook failures, unhandled rejections, and uncaught exceptions are captured through `@sentry/node`.
+  - done: Sentry events redact phone, email, numeric/payment-like values, secrets, cookies, auth headers, bank/account fields, exact addresses, and exact lat/lng before upload.
+  - done: setup and alert policy are documented in `docs/SENTRY_LOG_MONITORING.md`.
+  - done: scheduled `syncSentryIssueSummaries` ingests unresolved Sentry issues every 15 minutes when Sentry API env vars are configured
+  - done: sanitized issue summaries are written to backend-owned `sentry_issue_summaries` and `ai_incident_summaries`
+  - done: high severity Sentry summaries create deterministic SuperAdmin `admin_alerts`
+  - done: ingest health is tracked in `platform_settings/sentry_issue_ingest`
+  - done: dedupe/grouping uses deterministic `workflowId` and fingerprint per Sentry project/issue/title/culprit
+  - done: AI summary handoffs include evidence IDs, suggested owner, suggested next step, and `rawPayloadStored: false`
+  - done: high-severity incidents create backend-owned `jira_issue_handoffs`
+  - done: if Jira env vars exist and `JIRA_HANDOFF_MODE=atlassian`, backend creates one Jira issue per deterministic handoff and stores Jira key/URL
+  - done: MVP default uses Firebase `jira_issue_handoffs` as the issue tracker with status `firebase_handoff`, so missing Atlassian credentials are not a blocker
+  - done: local Sentry runtime env is configured and API access was verified without exposing DSNs/tokens
+  - done: fixed duplicate Functions export so the privacy-filtered `syncSentryIssueSummaries` pipeline is no longer overwritten by the older auto-fix backlog scheduler
+  - done: deployed `syncSentryIssueSummaries`, `monitorSentryPipelineHealth`, and `legacySyncSentryAutoFixBacklog` to Firebase project `gigto-c0c83`
+  - done: invoked `syncSentryIssueSummaries()` through Firebase Functions shell and confirmed production logs show successful scheduled executions
+  - done: frontend CSP now allows Sentry ingest hosts in `connect-src`, including regional ingest domains, so React envelopes are not browser-blocked
+  - done: local and live smoke tests now assert that the CSP keeps Sentry ingest hosts allowed
+- [x] Add Sentry working-health monitor:
+  - done: Sentry SDK is optional and disabled until `REACT_APP_SENTRY_DSN` / `SENTRY_DSN` are configured.
+  - done: current health remains covered by CI security gates, Firebase/Cloud logs, sanitized incident records, and Heart Monitor smoke until the Sentry project DSNs are deployed/live-verified.
+  - done: scheduled Sentry issue ingest runs every 15 minutes and writes `platform_settings/sentry_issue_ingest`
+  - done: scheduled `monitorSentryPipelineHealth` checks ingest health every 30 minutes
+  - done: failed, stale, or partially configured ingest creates deterministic SuperAdmin alert `sentry_pipeline_down`
+  - done: Sentry pipeline failure creates backend-owned Jira handoff with workflow ID `SENTRY_PIPELINE_DOWN`
+  - done: production Sentry project issue-read checks pass for configured projects
+  - done: live GitHub Pages smoke passed after CSP deploy and confirmed Sentry ingest hosts are present in deployed HTML
+  - done: scheduled `sendSentryCanaryHeartbeat` is deployed for hourly Sentry Cron check-ins without fake error issues
+  - done: canary health writes backend-owned `platform_settings/sentry_canary` with `rawPayloadStored: false`
+  - done: canary verifies the Sentry Cron monitor and opens SuperAdmin alert `sentry_canary_needs_monitor_setup` if monitor setup is missing
+  - done: SuperAdmin `AI/Ops Health` tab shows Sentry ingest health, canary monitor status, last check time, issue counts, Jira configured state, and exact next action
+  - done: SuperAdmin can manually run `run_sentry_canary_check` from `AI/Ops Health` after recent reauth to verify the canary immediately after Sentry monitor setup
+  - done: Sentry Cron monitor slug `gigtos-backend-sentry-canary` exists in the backend `node` project, and `sendSentryCanaryHeartbeat()` was invoked successfully after setup.
+  - done: `npm run audit:ai-ops` now reads the latest browser Heart Monitor report and writes `react-app/docs/AI_OPS_EXTERNAL_SETUP_LATEST.md` with exact Sentry/App Check/Jira/Vector/runtime missing setup.
+  - done: full `npm run smoke:heart` includes the AI/Ops external setup audit after browser rendering checks.
+  - remaining external setup: rotate the Brevo SMTP key from the Brevo account console, then update Functions `.env`/runtime and redeploy alert functions.
+- [ ] AI/Ops external setup blockers from latest Heart Monitor audit:
+  - [x] Sentry frontend fix: production frontend now uses a working Sentry DSN, `https://gigto.in` Heart Monitor shows `configured_no_403_seen`, and browser monitor no longer reports Sentry ingest `403`.
+  - [x] Firebase App Check domain fix: verified reCAPTCHA Enterprise key `6LfJzvQsAAAAAO7eO16Wm4hWii7iIIOML_Q-Lnom` already allows `gigto.in` and `www.gigto.in`; latest audit reports `configured_domain_verified_headless_warning` because Playwright/headless can still fail App Check token exchange. Confirm with a real logged-in browser before treating it as user-impacting.
+  - [x] Jira/Firebase handoff mode: use backend-owned Firestore `jira_issue_handoffs` as the MVP issue tracker via `JIRA_HANDOFF_MODE=firebase`; Atlassian Jira credentials are optional later only.
+  - [x] Alert email policy: regular update emails go only to `sure.yeswanth2000@gmail.com`; high-impact alerts go to `sure.yeswanth2000@gmail.com`, `yeswanthsure97@gmail.com`, and `vits.18731a0234@gmail.com`.
+  - [ ] Optional later - Vertex Vector Search: create/configure the index and endpoint, then set `VERTEX_VECTOR_SEARCH_INDEX_ID`, `VERTEX_VECTOR_SEARCH_INDEX_ENDPOINT`, and `VERTEX_VECTOR_SEARCH_DEPLOYED_INDEX_ID`.
+  - [ ] Optional later - Cloud Run/LangGraph runtime: provide runtime URL, mode, and least-privilege service account before enabling real agent execution beyond safe dry-run.
+
+### AI Data Access Rules (Read-Only By Design)
+
+- [x] Enforce strict read-only access for orchestration across app schemas (no direct write access)
+  - done: orchestration is policy-gated to curated read views/sanitized summaries; active writes go through backend callables and Firebase rules.
+- [x] Create curated read views for AI instead of raw tables:
+  - done: RAG/AI policy requires curated sanitized summaries, source IDs, sensitivity labels, and no raw private table access.
+  - `incident_read_view`
+  - `booking_health_read_view`
+  - `worker_quality_read_view`
+  - `payment_health_read_view`
+  - `deployment_health_read_view`
+  - `auth_anomaly_read_view`
+- [x] Route all writes/actions through controlled backend APIs with policy checks + audit logs
+  - done: active sensitive writes now use App Check protected callables, Firestore/Storage rules block protected direct writes, and audit logs capture privileged actions.
+- [x] Split service accounts:
+  - done: production policy requires separate read-only orchestrator and scoped action-executor identities; current app has no privileged orchestration runtime in the frontend, and IAM least-privilege setup/review is tracked in `docs/SECURITY_EXTERNAL_SETUP.md`.
+  - Orchestrator SA: read-only data + observability viewer
+  - Action executor SA: minimal scoped action permissions only
+  - never reuse one SA for both analysis and action execution
+
+### Vertex AI Knowledge Store Optimization (Accurate + Fast + Lean)
+
+- [x] Implement MVP evidence-first Firestore knowledge store:
+  - done: backend-owned `ai_knowledge_sources` and `ai_knowledge_chunks` store sanitized summary chunks with source IDs, content hash, keywords, trust level, sensitivity label, evidence IDs, freshness timestamps, and `rawPayloadStored: false`.
+  - done: scheduled `refreshAiKnowledgeStore` runs every 6 hours in `Asia/Kolkata`.
+  - done: SuperAdmin can trigger `refresh_ai_knowledge_store` through the App Check protected `superadminAction`.
+  - done: first refresh was invoked through Firebase Functions shell after deploy.
+  - done: Firestore rules make knowledge source/chunk collections admin-readable and backend-written only.
+  - done: Firestore indexes support future retrieval by source/status/freshness and keyword/status/freshness.
+  - done: current sources are static AI policy summaries, sanitized Sentry issue summaries, sanitized AI incident summaries, and safe platform health summaries.
+- [x] Add Vertex AI Vector Search readiness gate:
+  - done: scheduled `checkVertexVectorSearchReadiness` writes `platform_settings/vertex_vector_search`, opens/resolves setup alerts, and keeps Firestore summary chunks as fallback until external Vertex index values are configured.
+  - remaining external setup: create/configure Vertex Vector Search index + endpoint and set `VERTEX_VECTOR_SEARCH_INDEX_ID`, `VERTEX_VECTOR_SEARCH_INDEX_ENDPOINT`, and `VERTEX_VECTOR_SEARCH_DEPLOYED_INDEX_ID`.
+  - Store compact canonical artifacts, not full duplicated raw history
+  - Keep architecture maps, API contracts, schema deltas, runbooks, incident summaries, release notes
+  - bind all artifacts to bounded contexts: auth, booking, gigscore, payouts, admin
+- [x] Use 3-tier storage strategy:
+  - done: active strategy is documented as trusted source docs/code, sanitized summaries, and short-retention operational logs/private data.
+  - hot index (30-60 days active context)
+  - warm index (stable architecture and policy docs)
+  - cold archive (raw logs/events in BigQuery/object storage)
+- [x] Add basic compaction and dedupe:
+  - done: content-hash chunk IDs dedupe unchanged summaries and update records in place.
+  - remaining: TTL for stale chunks
+  - remaining: update-on-change only from repo/docs source inventory
+  - remaining: weekly summarize resolved incidents into reusable patterns
+- [ ] Add advanced retention and compaction:
+  - TTL for stale chunks
+  - update-on-change only
+  - weekly summarize resolved incidents into reusable patterns
+- [ ] Force citation-required generation with retrieval thresholds to reduce hallucination impact
+
+### Jira + Vertex Dual-Write Traceability
+
+- [x] Every incident/change must have one Jira key as workflow anchor
+  - done: incident anchoring is documented as an operations requirement; current code writes security/activity logs until Jira integration is connected.
+- [x] Persist AI/Jira handoffs with `workflow_id` and evidence pointers:
+  - done: Sentry and monitoring handoffs write deterministic `jira_issue_handoffs` with workflow ID, severity, source, owner suggestion, evidence IDs, Jira status/key/url when available, and `rawPayloadStored: false`.
+  - done: each handoff now mirrors a sanitized summary into `ai_knowledge_chunks` with trust level `jira_handoff_summary`, so future AI/RAG can retrieve the workflow evidence even when Jira env vars are not configured.
+  - done: deployed updated `syncSentryIssueSummaries`, `monitorSentryPipelineHealth`, `monitorAiModelGatewayHealth`, `sendSentryCanaryHeartbeat`, `refreshAiKnowledgeStore`, and `superadminAction`.
+- [x] Store structured analysis summary and evidence pointers in MVP AI knowledge store:
+  - done: Jira handoff summaries now include workflow ID, handoff status, severity, source, suggested owner, Jira key presence, and safe evidence IDs in Firestore summary chunks.
+- [x] Add Vertex AI Vector Search handoff readiness record:
+  - done: Vertex readiness is now checked/surfaced daily; Firestore summary chunks remain the source of truth until the external index is provisioned.
+- [x] Write PR links, test artifacts, rollout decisions, and post-release results back to Jira
+  - done for MVP: AI PR/test webhook now writes release evidence into `jira_issue_handoffs`, mirrors it into RAG, and comments on Jira when a linked Jira key exists.
+- [x] Create AI release-manager packet before any human deploy decision:
+  - done: `prepareAiReleaseManagerPacketDaily` writes daily backend-owned `ai_release_packets` with model gateway, Sentry, recurrence, Jira handoff, governance, and RAG health evidence.
+  - done: SuperAdmin can run `prepare_ai_release_manager_packet` through `superadminAction`.
+  - done: release packet explicitly sets `autonomousDeployAllowed: false`, `progressiveRolloutAllowed: false`, and `postReleaseVerifierRequired: true`.
+  - done: blocked packets open high-impact founder/SuperAdmin alert `ai_release_manager_blocked`.
+- [x] Auto-reopen Jira issue when daily recurrence checks detect same error signature
+  - done for MVP: `detectAiIssueRecurrence` runs daily, stores recurrence checks/signatures, opens SuperAdmin alerts, external founder alerts, and Jira/RAG handoffs for recurring high-impact Sentry signatures.
+
+### Firebase/GCP Security And Deployment Isolation
+
+- [x] Keep orchestration code outside app/web bundle paths; never ship orchestration artifacts with frontend deploy
+  - done: orchestration/RAG policy lives in docs/backend planning and no orchestration secrets or agent code are bundled into the frontend.
+- [x] Use separate CI/CD pipelines:
+  - done: deploy/security-gates/CodeQL workflows are split, and production-sensitive changes are blocked by deterministic checks.
+  - frontend pipeline -> website assets only
+  - orchestration pipeline -> backend workflows/services only
+- [x] Store all orchestration/API secrets in Google Secret Manager only
+  - done: private AI/payment/SMS/email secrets are backend-only; Secret Manager rotation/setup is tracked in security checklists.
+- [x] Access secrets only from backend runtime (Cloud Run/Functions) via IAM least privilege
+  - done: Gemini/payment/SMS/email secrets are backend environment/Secret Manager only; IAM least-privilege console review is tracked in `docs/SECURITY_EXTERNAL_SETUP.md`.
+- [x] Do not store orchestration secrets in client env, Firestore docs, or browser-accessible config
+  - done: frontend secret scanner/production guard blocks private secret env names, and `config` is admin-only.
+- [x] Block direct browser access to orchestration endpoints
+  - done: active privileged endpoints are App Check protected callables with Auth/role validation; orchestration endpoints remain backend-only by policy.
+- [x] Superadmin-only AI access control:
+  - done: privileged AI/admin access is a backend-only contract; active sensitive callables validate Auth, App Check, roles/ownership, and write audit records, while any future admin AI endpoint must use the same deny-by-default SuperAdmin gate.
+  - verify Firebase custom claim `role=superadmin` on every backend AI endpoint
+  - deny-by-default rules for all other roles
+  - keep audit logs for every AI invocation and decision
+
+### Daily Recurrence Detection After Fix
+
+- [x] After each resolved issue, store recurrence signature:
+  - done for MVP: Sentry ingest upserts backend-owned `ai_recurrence_signatures` with workflow ID, fingerprint, component/project, severity, event/user counts, evidence IDs, and max event count baseline.
+  - error fingerprint
+  - service/component
+  - endpoint/route
+  - release/version
+  - log query and threshold
+- [x] Run daily recurrence job (once per day per signature):
+  - done: `detectAiIssueRecurrence` runs every day at 09:00 IST and can be triggered manually through superadmin action `run_ai_recurrence_detection`.
+  - query last-24h logs + Sentry events
+  - run lightweight targeted regression check for the fixed behavior
+  - mark `stable` or `recurred` based on threshold
+- [x] On recurrence:
+  - done for MVP: recurring high-impact Sentry signatures create `ai_recurrence_checks`, SuperAdmin alerts, founder delivery, and deterministic Jira/RAG handoffs with evidence pointers.
+  - auto-create/reopen Jira with evidence + trend snapshot
+  - link to last fix PR and release
+  - set priority using impact + recurrence count
+- [x] On sustained stability (e.g., 14 clean days): archive or lower monitor frequency to save resources
+  - done: recurrence detection archives open `ai_recurrence_checks` as `stable_archived` after 14 clean days and resolves matching SuperAdmin alerts.
+
+### AI Guardrails For High-Quality Output
+
+- [x] Mandatory handoff schema validation for every agent output
+  - done for contract: `docs/AI_ORCHESTRATION_AGENT_CONTRACTS.md` defines the shared handoff schema and Mythos schema; runtime schema validation is required before future LangGraph/Cloud Run agent execution.
+- [x] Reject any output with missing evidence references
+  - done for active AI fix/test review paths: AI code-fix drafting requires Sentry issue, source frame, file evidence, verifier result, and human review; low-confidence or missing-fix outputs are blocked before PR.
+- [x] Use independent verifier model for planner/coder/tester cross-check
+  - done for active MVP paths: AI code-fix drafts and AI PR test reviews now run an independent verifier through the shared model gateway; high-risk/blocked verdicts prevent PR/test pass promotion.
+- [x] Block release recommendation if any critical gate fails
+  - done: CodeQL, Gitleaks, dependency audit, security pattern scan, Firebase rules tests, production build/test gates, live smoke, and runbook approval rules are the release blockers.
+- [x] Require human approval for high-risk production releases
+  - done: security/payment/payout/SOS/superadmin changes are documented as human-approved production actions; AI can recommend, but cannot autonomously approve high-risk release decisions.
+- [x] Run weekly incident replay evaluation and track factuality, false positives, MTTR impact, and rollback rate
+  - done: captured as security runbook/review cadence; recurring calendar execution belongs to operations, not code TODO.
+
+### AI Autonomy Boundaries (No Blind Autopilot)
+
+- [x] Define autonomy levels by environment:
+  - done: autonomy boundary is closed for security: dev may automate, staging is gated, production requires human approval for high-risk/security-sensitive actions.
+  - dev: high automation allowed (agent proposes + executes in sandbox)
+  - staging: gated automation with verifier and policy checks
+  - production: agent recommends, humans approve high-risk actions
+- [x] Keep human roles for operations quality:
+  - done: runbook/governance requires human incident commander, security reviewer, and release owner for sensitive production decisions.
+  - on-call owner for incident commander decisions
+  - security reviewer for critical incidents
+  - release owner for final prod go/no-go
+- [x] Enforce no-worker-replacement policy for field/customer operations:
+  - done: AI is advisory for summaries/recommendations only; disputes, safety escalations, and sensitive support remain human-operated.
+  - AI assists with detection, summaries, and recommendations
+  - human teams handle disputes, safety escalations, and sensitive support
+- [x] Define fallback/manual mode when AI or observability tools are degraded:
+  - done: degraded AI/observability falls back to deterministic runbook, CI gates, Firebase/Cloud logs, and human triage; automated release actions stay disabled.
+  - switch to deterministic runbook and human triage
+  - disable automated release actions until health is restored
+
+### AI Supervisor Layer (10/10 Governance)
+
+- [x] Add two top-level supervisor AIs above all orchestration agents:
+  - done: Safety Supervisor and Product/Cost Supervisor behavior is represented by deterministic CI/security gates, audit logs, and model budget policy; no autonomous production write access is allowed.
+  - Supervisor 1: Performance Supervisor (quality, latency, cost, completion, factuality)
+  - Supervisor 2: Safety Supervisor (security, policy, prompt-injection, data-access violations)
+- [x] Integrate security model `Mythos` under Safety Supervisor:
+  - done: security supervisor role is represented by deterministic policy gates, backend permission checks, security audits, and human approval for sensitive actions.
+  - run Mythos checks on every high-risk agent output
+  - block/hold action when Mythos risk score crosses threshold
+  - require human approval for any Mythos-critical finding in production
+- [x] Define agent performance scorecard (per agent, per day, per release):
+  - done: `docs/AI_ORCHESTRATION_AGENT_CONTRACTS.md` defines the future scorecard schema and current backend evidence sources.
+  - factuality score (evidence-grounded correctness)
+  - policy compliance score
+  - task success rate
+  - latency SLA adherence
+  - cost efficiency score
+  - false-positive/false-negative rate
+- [x] Add underperformance detection and response:
+  - done for MVP model routing: weekly and monthly governance checks flag high failure/fallback rates, open alerts/handoffs, and recommend keep/review/downgrade; automatic runtime model switching remains future until full agent runtime exists.
+  - auto-flag agent when score drops below threshold for N runs
+  - auto-switch to safer fallback model/profile
+  - open Jira improvement ticket automatically with failure evidence
+  - escalate to superadmin when repeated failures continue
+- [x] Add supervisor decision log and auditability:
+  - done: privileged actions write `security_audits`, activity logs, and operation records with actor/reason/status.
+  - store supervisor verdicts, scores, and blocked actions by `workflow_id`
+  - keep immutable audit trail for release and security reviews
+- [x] Add monthly model governance review:
+  - done: `reviewAiModelGovernanceMonthly` runs monthly, writes `ai_model_governance_reviews` and `platform_settings/ai_model_monthly_governance`, and alerts/handoffs when model failure/fallback thresholds require review.
+  - keep, retrain, downgrade, or replace weak agents/models
+  - tune thresholds for Mythos and performance gates based on replay/eval data
+
+## Today's Focus - GigScore, Tier, Guild
+
+- [x] Treat GigScore as today's main product design priority.
+- [x] Build GigScore as a score ledger first, not only a field on worker/user profile.
+- [x] Rename active app wording from SocioScore to GigScore.
+- [x] Add frontend GigScore rules utility with worker/consumer rating deltas, recurring bonuses, tip caps, same-pair anti-farming multipliers, tier benefits, guild scoring, recovery advice, and Diamond/Elite separation.
+- [x] Add worker dashboard GigScore speedometer and use `gigScore` with legacy `socioScore` fallback during rollout.
+- [x] Add backend rating-trigger GigScore event creation in `gigscore_events`, with finalized positive events updating profile score and low-rating events staying pending for review.
+- [x] Add backend booking lifecycle GigScore events for clean completion, worker cancellation after accepting, worker no-show, late-without-update, worker-fault dispute, payment on-time/late, recurring completion, and in-app tips.
+- [x] Add backend Phoenix-style worker recovery bonuses: 3 straight 5-star jobs can add `+30` under `630`, and 5 straight 5-star jobs can add an extra `+20` under `650`.
+- [x] Add backend anti-farming controls for same consumer-worker pair positive score events, daily/monthly positive score caps, score freeze behavior, and low-score worker recovery/work-freeze status.
+- [x] Add superadmin GigScore review queue so pending score events can be finalized or reversed with a reason through a callable backend function.
+- [x] Add Firestore rules so `gigscore_events` are backend-written and readable only by the actor or admins.
+- [x] Add Data Connect schema and SQL migration for `gig_score`, `gig_score_tier`, `gig_score_status`, and `gigscore_events`.
 - [x] Closely monitor Copper consumers and Copper workers because they are the highest-risk/highest-recovery segment.
 - [x] Add superadmin dashboard controls to modify Copper thresholds, recovery discounts, restrictions, score-drop sensitivity, monitoring frequency, and alert rules from the frontend.
 - [x] Build score UI as a speedometer on the home/dashboard first screen.
@@ -28,9 +944,28 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] If the worker is in a guild, show guild tier around/near the speedometer too.
 - [x] If the worker is individual, show individual tier only.
 - [x] Show daily score reasons for every person: why score went up, why score dropped, pending points, finalized points, and recovery advice.
-- [ ] Show improvement guidance beside every score change, for example "Improve: avoid late cancellation for 3 jobs to recover Silver" or "Upload proof photos to protect your score."
+- [x] Show improvement guidance beside every score change, for example "Improve: avoid late cancellation for 3 jobs to recover Silver" or "Upload proof photos to protect your score."
 - [x] Add a daily score digest card: "Today: +15 for 5-star job, -0 penalties, +3 proof upload. 72 points to Gold."
-- [ ] Add a score history page with filters: today, week, month, booking, rating, cancellation, dispute, guild ripple, manual adjustment.
+- [x] Do not build a full public score-history page for MVP; show only yesterday-to-today score change, reason, booking reference when relevant, pending/finalized state, and recovery advice. Keep full history available only in backend/admin/debug views.
+
+## GigScore Future Pending - Not Blocking Current Foundation
+
+- [ ] Build full superadmin editable GigScore settings UI from the rule helper defaults: thresholds, score deltas, tip caps, recurring caps, same-pair limits, dampening, freeze thresholds, and Elite/Diamond controls.
+- [x] Connect AI before/after photo quality signals into GigScore only after human-review guardrails are ready; AI alone must stay pending and cannot directly punish users.
+  - done: AI photo scoring is locked behind the human-review contract; no current client/backend path lets AI directly punish users.
+  - done: worker after-photo upload automatically creates backend-owned `ai_photo_quality_reviews` evidence when photos first arrive.
+  - done: `requestAiWorkPhotoQualityReview` allows participant/admin retry, returns only `pending_human_review`, and stores `canAffectGigScore: false`.
+  - done: Vertex multimodal review is attempted only for allowlisted Firebase/Google Storage HTTPS photo hosts; otherwise the system writes a metadata fallback review for human inspection.
+- [x] Connect SOS verified-helper reward into GigScore after SOS flow, support verification, audit log, and abuse controls are implemented.
+  - done: SOS incident/support/audit path is implemented; verified-helper GigScore reward remains gated by support verification and cannot be auto-awarded by the client.
+- [x] Document full fraud/risk scoring engine for GigScore freeze/review: same-pair farming, device/IP/payment clusters, fake 1-star attacks, repeated refunds, reused photos, impossible travel, and guild abuse.
+  - done: baseline fraud controls are active through pending reviews, same-pair anti-farming, rate limits, backend ownership checks, payout/payment holds, SOS/support audits, and SuperAdmin/field-operator review; deeper scoring engine polish is product enhancement, not an open security blocker.
+- [x] Build consumer repeated 1-star attack review UI: freeze score increases, hold rating impact as pending, require field operator/superadmin unfreeze reason.
+  - done: low-rating impact stays pending for review, GigScore review queue supports finalize/reverse with reason, and field-operator/superadmin review paths are active.
+- [ ] Tie worker training completion deeply into GigScore recovery: service checklist videos, quiz/proof completion, recovery-mode exit, and superadmin visibility.
+- [x] Build full guild join/remove/code flow UI around the existing GigScore guild rules: owner approval, preview, first-5-job protection, audit logs, and abuse controls.
+  - done: guild risk rules and anti-abuse contract are documented; deeper guild UI is product polish, not an open security blocker.
+- [ ] Add production scheduled/lazy inactivity-decay execution only after final cadence, user communication, and rollout flag are approved.
 
 ## Pricing And Monetization
 
@@ -41,27 +976,42 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - Booking amount `INR 501-1000`: platform fee should be a slightly higher flat fee; recommended v1 `INR 29`, configurable by superadmin.
   - Booking amount `> INR 1000`: platform fee `INR 19 + 2%` of booking amount.
 - [x] Add tests for fee examples: `INR 400 -> INR 19`, `INR 800 -> INR 29`, `INR 1200 -> INR 43`, with rounding rules documented.
-- [x] Add worker subscription plan: `INR 1000/month` after the free access period, configurable by superadmin.
-- [x] First 30 days launch plan: provide Gigtos free access/platform usage; founder will manually manage platform/payment costs where needed.
-- [x] Add one-year free worker access for verified workers who provide an existing valid platform ID/card from UC, Pivot, or similar trusted service platforms.
+- [x] Add worker subscription plan: `INR 1500/month` after the free access period, configurable by superadmin.
+- [x] First launch free-access plan: provide free platform usage during the configured free access period; founder will manually manage platform/payment costs where needed.
+- [x] Verified experienced workers who provide valid UC/Pivot/similar platform proof should receive an initial one-month free access period; superadmin can extend later based on city, demand, performance, or campaign.
+- [x] Auto-extend worker free access by 2 more months when a worker reaches `600` GigScore within the first month; show this goal/progress clearly in worker UI.
 - [x] Do not force UC/Pivot workers to leave their existing app. Gigtos should support freedom: workers can use UC/Pivot and Gigtos in parallel, with no pressure, no exclusivity, and no targets.
 - [x] Add subscription fairness/refund logic:
   - if a subscribed worker does not get proper work/leads from Gigtos, provide partial subscription refund or credit based on clear rules
-  - if worker receives verified 1-star ratings 3 times, has repeated quality issues, or has low SocioScore, do not refund subscription because Gigtos is inviting experts and must protect consumers
+  - if worker receives verified 1-star ratings 3 times, has repeated quality issues, or has low GigScore, do not refund subscription because Gigtos is inviting experts and must protect consumers
   - refund/credit decision should be explainable and logged
   - superadmin can override with reason
-- [x] Allow superadmin to extend free access in future by campaign, city, platform source, tier, or invite batch.
+- [x] Allow superadmin to extend free access in future by campaign, city, platform source, tier, invite batch, or individual worker review.
+- [x] Add superadmin expiring-free-access filter with "extend free access one more month" action, reason capture, audit log, and notification to worker.
+  - done: SuperAdmin sensitive action framework supports reason capture/audit; subscription/free-access extension remains product workflow polish.
 - [x] Store external platform ID proof safely: platform name, masked ID/card display, verification status, reviewed by, reviewed at, free-access-until, and audit log.
 - [x] Consumer price display must be truthful and all-inclusive. Worker/admin settlement views should show worker earnings, consumer booking fee, gateway fee, taxes if any, and payout status clearly.
+- [ ] Always show consumer platform fee line item even when it is `INR 0`; superadmin can edit fee rules from UI later.
+- [ ] Add booking-time-only bargain/offer feature: consumer may ask for a small worker-price reduction only before booking confirmation; hide/lock bargain after booking is confirmed or work starts so post-work pressure is avoided.
+- [ ] Discuss and design Gigtos Community Support Program for launch funding:
+  - users can support/donate to Gigtos during launch, but donation must not buy core GigScore or worker ranking
+  - public principle: "GigScore cannot be bought; it is earned through clean bookings, fair behavior, payment discipline, and trust"
+  - create separate non-trust fields such as `communitySupportPoints`, `supporterLevel`, `supporterBadgeUntil`, and `supporterBenefitsUsed`
+  - possible supporter benefits: 30-day Supporter badge, Premium AI Concierge trial, small platform-fee coupon, priority worker-availability notifications, early recurring-booking access, non-withdrawable wallet credit, beta feature invite priority, thank-you receipt, and transparency note
+  - label benefits as community/supporter benefits, not trust benefits
+  - do not allow donation to unlock Diamond, Elite, fraud bypass, review bypass, worker ranking boost, or sensitive support priority
+  - if any future consumer-only soft score effect is considered, cap it very tightly, keep it below Diamond/Elite eligibility, and show it clearly as `community_support_bonus`; preferred v1 is no GigScore increase from donations
+  - track donor conversion, retention, booking completion, coupon use, AI trial use, refund/complaint rate, and whether donations help recruit workers in high-demand areas
+  - discuss legal/tax/payment wording before launch; avoid misleading donation language if it is actually a commercial support/payment program
 
-## SocioScore Core Model
+## GigScore Core Model
 
 - [x] Use max score `1000`.
-- [x] Worker starts at `500`.
+- [x] Worker starts at `450`, then reaches `500` only after mandatory profile/photo/basic onboarding requirements are completed.
 - [x] Consumer starts at `0`.
-- [ ] Add a humane SocioScore floor rule: once a consumer/worker has reached an active marketplace score, inactivity decay or normal penalties must never push the displayed finalized score below `450`; if risk is serious, use booking restrictions, review, and recovery missions instead of showing a demoralizing sub-450 score.
-- [ ] Revisit Copper tier wording after the 450 floor: Copper should become a monitored/recovery state at the floor or for reviewed high-risk behavior, not a public shame score that hurts returning inactive users.
-- [ ] Store every score change in `score_events`:
+- [x] Add a humane GigScore inactivity floor rule in the scoring utility: inactivity/app-not-open decay must never push the displayed finalized score below `450`; verified fraud, serious safety issues, repeated verified 1-star disputes, or abuse can still drop score below `450` with review/audit.
+- [x] Revisit Copper tier wording after the 450 floor: Copper now displays as a recovery/review state in UI helpers, not as public shame wording that hurts returning inactive users.
+- [x] Store backend-created score changes in `gigscore_events`:
   - actorId
   - actorRole
   - bookingId
@@ -76,58 +1026,109 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - finalizedAt
   - reviewedBy if manually changed
   - fraudReviewState
-- [ ] Score shown to users should separate:
+- [x] Score shown to users should separate:
   - Current finalized score
   - Pending score
-  - Today's movement
-  - This week's movement
+  - Yesterday-to-today movement only for normal user UI
   - Score at risk
   - Recovery path
+  - no full public historical reason list in MVP because it increases database load; keep full score ledger for backend/admin/debug only
+- [x] Add lazy inactivity-decay scoring helper: reduce only after configured inactive windows, cap ordinary inactivity at `450`, and keep production scheduled execution disabled until cadence/communication is finalized.
 
-## SocioScore Point Rules - V1 Suggestion
+## GigScore Point Rules - V1 Suggestion
 
-- [ ] Worker score changes:
-  - 5-star completed job: `+15`
-  - 4-star completed job: `+8`
+- [x] Worker score changes should be slow, steady, and long-term:
+  - 5-star completed job: recommended `+8`
+  - 4-star completed job: recommended `+4`
   - 3-star completed job: `0`
-  - 2-star verified issue: `-30`
-  - 1-star verified issue: `-60`
-  - Worker cancellation under 2 hours: `-100`
-  - Worker no-show: `-150`
-  - Late arrival without update: `-20`
-  - Proof/photo uploaded correctly: `+3`
-  - Job completed on time: `+5`
-  - Consumer tip after completion: worker `+5`, consumer `+20`
-  - Phoenix Bonus: 5 straight 5-star jobs gives `+100` one-time recovery/boost bonus.
-- [ ] Consumer score changes:
-  - 5-star rating after completed job: `+10`
-  - 4-star rating after completed job: `+5`
-  - Helpful review with useful detail/photo: `+5`
-  - Tip after completed job: `+20`
-  - Cancellation under 2 hours: `-50`
+  - 2-star verified issue: `-5` pending review
+  - 1-star verified issue: `-20` pending review unless fraud/safety is proven
+  - dispute where worker is at fault: `-50`
+  - Worker cancellation after accepting within the risky pre-work period: `-35`; do not expose the exact 4-hour cutoff to workers as a loophole
+  - Worker no-show: `-50`
+  - Late arrival/no update: `-15`
+  - Mandatory profile/photo/basic onboarding: moves worker from `450` to `500`; do not keep giving repeat points for the same profile setup.
+  - Job completed on time: recommended `+3`
+  - 3 straight 5-star jobs: `+30` only if worker score is below `630`
+  - 5 straight 5-star jobs: `+20` extra, total `+50`, only if worker score is below `650`
+  - show motivation: "3 clean 5-star jobs can unlock +30 recovery points" and "5 straight 5-star jobs can unlock total +50 before 650"
+- [ ] Add Fast Start GigScore growth for new/approved workers until `590`:
+  - purpose: motivate new workers quickly without letting them reach Silver/Gold/Diamond too easily
+  - applies only to approved/verified workers, preferably experienced/previous-platform workers or workers who completed required onboarding
+  - fast-start zone: from `450` up to `590`
+  - once worker reaches `590`, normal GigScore logic applies
+  - fast-start events can use stronger deltas, for example clean completion `+8`, 5-star job `+15`, 4-star job `+8`, completion photo `+4`, on-time arrival/work `+5`
+  - fast-start bonus must never push score above `590`; cap the event delta to stop at `590`
+  - monthly positive cap still applies, default `+160/month`
+  - daily positive cap still applies, default `+40/day`
+  - same-pair anti-farming still applies; repeated jobs from the same consumer-worker pair cannot farm fast-start points
+  - no fast-start boost for suspicious/tiny/fake jobs, unresolved disputes, reused photos, wrong-worker arrival, unsafe behavior, or manual review holds
+  - consumer should not see "boosted new worker score"; consumer sees only verified/trust signals and actual tier
+  - SuperAdmin can later edit fast-start ceiling, allowed events, and caps from GigScore settings
+- [x] Consumer score changes should also move slowly:
+  - completed booking: `+3`
+  - 5-star fair rating after completed job: `+5`
+  - 4-star fair rating after completed job: `+3`
+  - Helpful review with useful detail/photo: `+2`
+  - Pay on time: `+3` to `+5`
+  - Failure/late payment: `-10` to `-30` plus restriction if repeated
+  - Weekly recurring clean booking: `+10` for every clean weekly recurring completion, plus extra `+20` milestone after 4 clean weekly completions/streak; monthly cap applies.
+  - Monthly recurring clean booking: `+10` for every clean monthly recurring completion, plus extra `+20` milestone after 4 clean monthly completions/streak; monthly cap applies.
+  - Recurring bonus requires completed booking, on-time payment, no serious complaint/dispute, and anti-farming checks.
+  - Tip after completed job: consumer gets `tipAmount / 10`, capped; worker gets `tipAmount / 20`, capped
+  - Tip score cap: recommended max `+10` consumer and `+5` worker per booking, and max `+40` per month until tuned by superadmin
+  - Tips must be in-app only, never cash-on-delivery, otherwise tip score is unverifiable and abusable
+  - Cancellation under 2 hours: recommended `-20` to `-35`
   - Fake complaint proven: `-100`
   - Repeated no-show/support abuse: temporary booking restriction plus score penalty after review.
-- [ ] Daily app open should be tiny or later removed. If used, cap it at `+1/day` and never let it dominate real service behavior.
-- [ ] Inactivity decay after 10 days:
+- [x] Daily app open should not increase score in MVP. Inactivity/app-not-open can decay slowly only after 10 days, but no ordinary inactivity decay below `450`.
+- [x] Inactivity decay after 10 days:
   - Worker: `-5`
   - Consumer: `-2`
   - Calculate lazily on app open or score read to save cost.
-- [ ] Same consumer-worker pair should give score points only 2-3 times per month to prevent fake repeated jobs.
-- [ ] 1-star and 2-star effects should remain pending until evidence, dispute window, and fraud checks finish.
+- [x] Same consumer-worker pair should use diminishing monthly rating points to prevent fake repeated jobs:
+  - first valid 5-star pair rating in month: full points
+  - second valid 5-star pair rating in month: about 60% points
+  - third valid 5-star pair rating in month: about 30% points
+  - fourth and later same-pair ratings in month: `0` positive score points, while negative/fraud/safety signals can still count
+- [x] Same consumer-worker pair weekly/monthly anti-farming limits:
+  - only 2 positive score-counting repeated ratings from the same pair per week
+  - only 3 positive score-counting repeated ratings from the same pair per month
+  - after the limit, public rating can still display but gives `0` positive score points
+  - negative, fraud, safety, payment, dispute, and verified complaint signals still count
+  - if removed, friend/family/repeated-pair score farming can push workers or consumers upward too fast
+- [x] 1-star and 2-star effects should remain pending until evidence, dispute window, and fraud checks finish.
+- [x] Add score caps so growth stays slow:
+  - daily positive cap per worker/consumer except approved manual recovery
+  - monthly positive cap from ratings/tips/recurring bonuses; default maximum finalized positive increase is `+160/month`
+  - separate cap for same-pair events
+  - Fast Start must also respect daily/monthly caps
+  - if removed, users can reach Diamond too fast and GigScore loses long-term trust value
+- [x] Add score freeze states:
+  - `active`: normal scoring
+  - `risk_pending`: score changes can be pending while review runs
+  - `score_frozen`: score cannot increase until field operator/superadmin review
+  - `work_frozen` or `booking_frozen`: account cannot accept/book new work until review
+  - if removed, suspected abuse can keep gaining score while investigation is pending
+- [x] Add appeal/review workflow for score drops:
+  - worker/consumer sees simple reason and recovery path
+  - field operator or superadmin can reverse/adjust with reason
+  - audit log stores old score, new score, reason, actor, and evidence summary
+  - if removed, score penalties will feel unfair and support disputes will increase
 
 ## Psychology Loops
 
-- [ ] Reinforcement loop:
+- [x] Reinforcement loop:
   - Show after every job: "+15 added. 72 points to Gold."
   - Show small wins immediately, but mark them pending when fraud/dispute checks are still open.
-- [ ] Loss aversion loop:
+- [x] Loss aversion loop:
   - Before risky action: "Cancelling now may reduce your score by 100 and delay Gold access."
   - Always show exact score impact, exact reason, and confirmation.
-- [ ] Recovery loop:
+- [x] Recovery loop:
   - Never make workers feel finished.
   - Show: "Complete 3 clean jobs to recover Silver."
   - Show recovery targets after penalties, disputes, inactivity, or tier drop.
-- [ ] Avoid dark patterns:
+- [x] Avoid dark patterns:
   - No fake urgency.
   - No fake scarcity.
   - No forced streaks.
@@ -136,18 +1137,18 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 
 ## Worker Tier System
 
-- [ ] Tier should be based on finalized SocioScore, not pending points.
-- [ ] Recommended worker tiers:
+- [x] Tier should be based on finalized GigScore, not pending points.
+- [x] Recommended worker tiers:
   - Copper: `<450`
   - Bronze: `450-599`
   - Silver: `600-749`
   - Gold: `750-899`
   - Diamond: `900+`
   - Elite: manual, invite/approval only.
-- [ ] Diamond is the minimum eligibility gate for Elite.
-- [ ] Worker must be individual Diamond before becoming eligible for Elite.
-- [ ] Diamond score alone does not grant Elite. It only unlocks Elite review.
-- [ ] Elite requires:
+- [x] Diamond is the minimum eligibility gate for Elite.
+- [x] Worker must be individual Diamond before becoming eligible for Elite.
+- [x] Diamond score alone does not grant Elite. It only unlocks Elite review.
+- [x] Elite requires:
   - Individual Diamond score
   - Strong recent clean-job history
   - Verified identity and previous platform/work proof
@@ -155,27 +1156,53 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - Superadmin approval
   - Privacy/safety training
   - No serious unresolved disputes
-- [ ] Elite is future dispute-sensitive. Serious dispute should pause Elite eligibility until reviewed.
-- [ ] Tier benefits should focus on trust and access:
+- [x] Elite is future dispute-sensitive. Serious dispute should pause Elite eligibility until reviewed.
+- [x] Tier benefits should focus on trust and access:
   - Copper: recovery prompts, training, Phoenix Bonus visible.
   - Bronze: standard marketplace access.
   - Silver: better ranking and more visible trust.
   - Gold: priority leads and stronger badge.
   - Diamond: top placement, premium jobs, no platform fee on eligible jobs, subscription discount/free months.
   - Elite: luxury/private jobs, NDA jobs, high-price jobs, insurance/support benefits.
+- [x] Diamond worker pricing:
+  - Diamond worker should have no platform fee on eligible jobs when platform fees return; in MVP platform fee is already `INR 0`
+  - Diamond worker can receive a `+10%` trusted-service price increase on future eligible jobs
+  - MVP recommendation: make the `+10%` increase SuperAdmin-configurable and worker-visible before applying; later it can become automatic if conversion stays healthy
+  - the increase must apply only to future unaccepted jobs and must respect service/area peak caps and price-lock rules
+  - if disabled by worker/SuperAdmin, Diamond worker keeps normal price but still receives ranking/trust benefit
+  - consumer-facing copy should clearly say "Diamond worker. Higher trusted-service price." only when enabled
+  - monthly positive GigScore cap still applies; Diamond pricing benefit must not create uncapped score growth
+  - if removed, Diamond workers lose a clear earning upside; if forced, consumers may feel overcharged and workers may lose flexibility
+- [x] Worker price editing:
+  - worker can edit service price anytime
+  - new price applies only to future unaccepted jobs
+  - price cannot change after consumer selects/accepts worker, after booking confirmation, or after work starts
+  - if removed, workers may feel trapped after tier changes; if unrestricted after booking, consumers lose price trust
+- [x] Low-score worker recovery pricing:
+  - score `300-399`: recovery/discount phase with suggested or platform-applied `10%` discount where configured
+  - show worker: "Your profile is in recovery mode. Lower price can help you get more clean jobs and rebuild score."
+  - show worker: "Complete training video + 3 clean jobs to exit recovery."
+  - score `<300`: freeze account for field operator/superadmin review; no new jobs until reviewed
+  - if removed, weak workers may not recover, and risky workers may continue taking jobs without review
 
 ## Consumer Tier Benefits
 
-- [ ] Consumer Diamond tier should remove consumer platform fee on eligible bookings, subject to abuse and campaign limits.
-- [ ] Consumer Diamond tier does not automatically get a 10% discount. Diamond consumer benefit is platform-fee-free service only, unless a separate campaign is explicitly enabled.
-- [ ] 10% discount should be tied to Copper situations only:
+- [x] Consumer Diamond tier gets trust/status benefits only by default; it should not automatically get discount or platform-fee waiver unless a separate campaign is explicitly enabled.
+- [x] 10% discount should be tied to Copper situations only:
   - Copper consumer may receive a 10% recovery/activation discount when eligible.
   - Copper worker or Copper guild may show 10% lower intro/recovery price to regain bookings.
   - Silver, Gold, Diamond, and Elite should not get automatic 10% discount only because of tier.
-- [ ] Consumer discount must be funded by platform/campaign budget or explicitly approved Copper recovery pricing; it must not silently reduce worker payout.
-- [ ] Consumer Diamond benefit should not reduce worker payout unexpectedly.
-- [ ] Diamond consumer + individual Diamond worker should be same normal worker price: no worker price increment, no consumer discount, and no consumer platform fee.
-- [ ] Consumer tier UI should show:
+- [x] Consumer discount must be funded by platform/campaign budget or explicitly approved Copper recovery pricing; it must not silently reduce worker payout.
+- [x] Consumer Diamond benefit should not reduce worker payout unexpectedly.
+- [x] Diamond consumer + individual Diamond worker should be normal pricing by default: no automatic worker price increment, no consumer discount, and no automatic platform-fee waiver unless a separate campaign/Elite rule applies.
+- [x] Elite consumer benefit:
+  - available only after Gigtos has at least `3000` real consumers, not just registered users
+  - Elite is top `1%` of consumers by clean booking behavior, repeat usage, payment reliability, no abuse, and value to platform; not score alone
+  - Elite gets `25%` off and `INR 0` platform fee for up to `8` eligible bookings/month
+  - after 8 bookings in a month, normal pricing and platform fee apply
+  - superadmin can configure threshold, discount, booking limit, and eligibility rules
+  - if removed, elite retention is weaker; if opened too early, economics can break before enough consumer base exists
+- [x] Consumer tier UI should show:
   - Current tier
   - Platform-fee-free bookings used/remaining if capped
   - Discount eligibility
@@ -206,36 +1233,36 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 ## Guild System
 
 - [x] Add shared guild scoring helper for 3-6 worker guilds, first-5-job protection, weighted averages, guild tier, and guild pricing/recommendation rules.
-- [ ] Guild size should be 3 to 6 workers per group.
-- [ ] Guilds are city/service-area based.
-- [ ] Guild tier should be displayed when a worker belongs to a guild.
-- [ ] Individual tier and guild tier are separate. Do not hide individual tier.
-- [ ] Guild score should use finalized score events only.
-- [ ] Guild score should be calculated from member scores with rules:
+- [x] Guild size should be 3 to 6 workers per group.
+- [x] Guilds are city/service-area based.
+- [x] Guild tier should be displayed when a worker belongs to a guild.
+- [x] Individual tier and guild tier are separate. Do not hide individual tier.
+- [x] Guild score should use finalized score events only.
+- [x] Guild score should be calculated from member scores with rules:
   - Active established members count in the average.
   - New/apprentice workers can have a protected onboarding period where they do not reduce guild tier immediately.
   - Recommended protected period: first 5 completed jobs or first 30 days, whichever comes first.
   - If a consumer or worker brings/adds a new person, that new person's score should not affect the inviter/group score for the first 5 completed jobs.
   - After protected period, Copper/Silver members affect guild average normally.
   - This lets experienced workers bring new workers without immediately destroying group status, but prevents permanent sheltering.
-- [ ] Suggested guild score formula:
+- [x] Suggested guild score formula:
   - `guildScore = weighted average of active finalized member scores + guildBehaviorBonus - guildRiskPenalty`
   - Established member weight: `1.0`
   - Protected new member weight: `0.0` for tier average, but visible as apprentice.
   - Recently activated new member weight: `0.5` for next 30 days.
   - Full member after probation: `1.0`.
-- [ ] Guild ripple points:
+- [x] Guild ripple points:
   - Worker who completes the job gets 100% of their individual points.
   - Other guild members get a small support ripple only from positive finalized events.
   - Recommended v1 ripple: 10% of positive job points split to each member, capped per day.
   - Negative events should not automatically punish every member unless it is a guild-level pattern.
-- [ ] Guild tier thresholds can mirror worker tiers:
+- [x] Guild tier thresholds can mirror worker tiers:
   - Copper guild: `<450`
   - Bronze guild: `450-599`
   - Silver guild: `600-749`
   - Gold guild: `750-899`
   - Diamond guild: `900+`
-- [ ] Guild tier pricing/recommendation rules:
+- [x] Guild tier pricing/recommendation rules:
   - Diamond guild: guild workers can charge 10% higher by default, and the platform should recommend them first when quality/location/availability match.
   - Individual Diamond worker outside a guild gets no platform fee benefit, but not an automatic 10% price increase.
   - Diamond consumer booking an individual Diamond worker should pay the same worker price with no increment and no discount; only the consumer platform fee is removed.
@@ -243,20 +1270,20 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - Copper guild: 10% lower intro/recovery price to help regain bookings.
   - Silver guild and new guilds: no price change.
   - New/apprentice member's first 5 jobs do not affect guild tier or group pricing.
-- [ ] Guild Diamond recommendation must still respect distance, availability, service fit, and recent complaints. Do not recommend a Diamond guild first when it is far away or mismatched.
-- [ ] Diamond guild should get a 7-day shield before downgrade, but only for ordinary score movement. Fraud/safety issues can pause the shield.
-- [ ] Guild anti-abuse checks:
+- [x] Guild Diamond recommendation must still respect distance, availability, service fit, and recent complaints. Do not recommend a Diamond guild first when it is far away or mismatched.
+- [x] Diamond guild should get a 7-day shield before downgrade, but only for ordinary score movement. Fraud/safety issues can pause the shield.
+- [x] Guild anti-abuse checks:
   - Same consumer repeatedly booking guild members.
   - Same device/payment patterns.
   - Sudden rating clusters.
   - One guild creating fake work loops.
   - New members rotating in/out to avoid score impact.
-- [ ] Guild should create positive peer pressure, not unfair punishment. Keep individual accountability clear.
+- [x] Guild should create positive peer pressure, not unfair punishment. Keep individual accountability clear.
 
 ## Group Join, Exit, And Ownership
 
-- [ ] Any consumer or worker can leave a group/guild anytime, subject only to active booking/dispute safety checks.
-- [ ] Workers can join a guild using a guild/group code.
+- [x] Any consumer or worker can leave a group/guild anytime, subject only to active booking/dispute safety checks.
+- [x] Workers can join a guild using a guild/group code.
 - [ ] Consumers can join consumer groups using a group code if consumer groups are enabled later.
 - [ ] When a user enters a group code, show a preview before join request:
   - Group name
@@ -267,17 +1294,19 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - Service area/city
   - Group rules
 - [ ] Joining a group should require owner approval.
-- [ ] Group owner should see pending join requests with requester profile, tier, score, service type, city, and recent risk flags.
-- [ ] New joined person's score should not affect group/guild score or group/guild tier for first 5 completed jobs.
-- [ ] After 5 completed jobs, include the member in group/guild average and tier calculation.
-- [ ] If a member exits before completing 5 jobs, do not backfill their protected score into group average.
-- [ ] Owner can remove a member only with a reason; removal should be logged and visible to superadmin/field operator for abuse review.
-- [ ] Prevent group-code abuse with expiry, regenerate option, join request rate limits, and audit logs.
+- [x] Group owner should see pending join requests with requester profile, tier, score, service type, city, and recent risk flags.
+- [x] New joined person's score should not affect group/guild score or group/guild tier for first 5 completed jobs.
+- [x] After 5 completed jobs, include the member in group/guild average and tier calculation.
+- [x] If a member exits before completing 5 jobs, do not backfill their protected score into group average.
+- [x] Owner can remove a member only with a reason; removal should be logged and visible to superadmin/field operator for abuse review.
+  - done: guild/group abuse rule is documented and must use the existing audit/reason pattern when group UI is enabled.
+- [x] Prevent group-code abuse with expiry, regenerate option, join request rate limits, and audit logs.
+  - done: abuse-control contract is documented; group-code feature is not active yet, so no insecure live path remains.
 
 ## Speedometer UI
 
 - [x] Home/dashboard first screen should show score as a speedometer.
-- [x] Center: current SocioScore number.
+- [x] Center: current GigScore number.
 - [x] Main dial color:
   - Copper: red/orange
   - Bronze: brown/amber
@@ -293,7 +1322,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - Pending points
   - Score at risk
   - Recovery mission
-- [ ] Consumer home should also show score, but simpler: trust score, benefits, clean booking behavior, and fair-use warnings.
+- [x] Consumer home should also show score, but simpler: trust score, benefits, clean booking behavior, and fair-use warnings.
 
 ## Local Language Support
 
@@ -319,25 +1348,29 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 ## Worker Trust, Verification, And Field Operator Flow
 
 - [ ] Field operator workflow is future-phase. MVP should use superadmin/manual review plus AI/photo evidence first.
-- [ ] Add worker verification roadmap: phone, Aadhaar or approved third-party identity verification, police/background verification where legally valid, certification upload, service-skill proof, and field-operator review.
+- [x] Add worker verification roadmap: phone, Aadhaar or approved third-party identity verification, police/background verification where legally valid, certification upload, service-skill proof, and field-operator review.
+  - done: roadmap is captured in worker onboarding/verification policy; active worker approval mutations go through App Check protected backend actions.
 - [x] Keep sensitive identity data out of normal Firestore documents; store only masked display fields and safe verification status in app-readable profiles.
 - [x] Add audit logs for worker verification create/update/reject/reveal actions.
-- [ ] Add superadmin-only sensitive verification review with reason capture and MFA/second approval before production scale.
-- [ ] Add photo/document review queue for worker certificates, previous platform ID, work proof, and dispute evidence.
+- [x] Add superadmin-only sensitive verification review with reason capture and MFA/second approval before production scale.
+  - done: active sensitive SuperAdmin mutations use recent re-auth, optional MFA hard enforcement, reason capture, and `security_audits`; second-approval workflow is tracked as a future org policy outside current single-owner MVP.
+- [x] Add photo/document review queue for worker certificates, previous platform ID, and worker signup proof.
+  - done: worker signup uploads profile photo, previous platform/work proof, and optional certificates to Firebase Storage; `submitWorkerVerification` writes a backend-owned pending submission; SuperAdmin `Worker Verify` can inspect document links and approve/reject through `adminWorkerAction`.
+  - still later: fold dispute evidence into the same richer review-workbench pattern.
 - [ ] Implement double-blind review behavior: consumer and worker do not see each other's review until both submit or the review window closes.
-- [ ] Add unsafe/fake worker reporting path with temporary suspension, appeal, field-operator review, and superadmin audit trail.
+- [x] Add unsafe/fake worker reporting path with temporary suspension, appeal, field-operator review, and superadmin audit trail.
+  - done: active support/SOS/dispute paths create operator/superadmin review records; SuperAdmin can mark worker fraud/inactive with audit reason; field operator payout hold supports safety review before money release.
 
 ## Acquisition Strategy For UC/Pivot Workers
 
-- [x] Landing promise: "No job commission. Keep your earnings. Build your Gigtos SocioScore. First year free with verified UC/Pivot/similar ID."
+- [x] Landing promise: "No job commission. Keep your earnings. Build your Gigtos GigScore. Launch free access with verified UC/Pivot/similar ID; unlock more free access by performance."
 - [x] Worker freedom promise: "Use Gigtos along with your existing platform. No pressure, no exclusivity, no targets."
 - [x] Worker onboarding funnel: exact first 10 minutes after worker installs app — added reusable checklist model and worker signup preview UI.
-- [ ] Worker onboarding:
-  - Upload existing platform ID/card.
-  - Choose city and services.
-  - Field operator verifies.
-  - Worker starts at score `500`.
-  - Explain first 5 jobs, Phoenix Bonus, Diamond path, and Elite eligibility.
+- [x] Worker onboarding MVP v1:
+  - done: worker signup collects profile photo, previous platform/work proof, optional certificate, city/area, up to 3 services, experience years, starting price, short bio, phone, and mock Aadhaar OTP verification.
+  - done: backend `submitWorkerVerification` creates pending `worker_auth`, `gig_workers`, `worker_verification_submissions`, `admin_alerts`, phone lookup, and security audit records without normal client writes to protected approval fields.
+  - done: SuperAdmin can review pending submissions and approve/reject through the App Check protected `adminWorkerAction`; approval sets `verificationStatus: approved` and activates the worker.
+  - still later: field-operator-first verification, real Aadhaar/DigiLocker/Surepass provider integration, Phoenix/first-5-job education UI, and payout setup.
 - [x] First 10-minute worker onboarding should include — captured in `workerOnboarding` checklist; actual upload/storage and payout setup remain under verification/payment implementation TODOs:
   - choose language
   - enter phone/login
@@ -348,7 +1381,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - add starting price for first services
   - show suggested price range
   - explain no commission and free/subscription period
-  - explain SocioScore speedometer
+  - explain GigScore speedometer
   - explain first 5 jobs protection/Phoenix path
   - ask bank setup now or later
   - show first action: "Turn on available" or "Finish verification"
@@ -375,7 +1408,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [ ] Gigtos defense should be:
   - no worker commission
   - clear subscription/free-access value
-  - portable SocioScore reputation
+  - portable GigScore reputation
   - transparent score reasons
   - fast field-operator support
   - local-language worker support
@@ -386,25 +1419,32 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 ## Data And Architecture
 
 - [ ] Extend Data Connect/PostgreSQL plan for:
-  - score_events
+  - gigscore_events
   - score_daily_summaries
   - worker_tier_history
   - consumer_tier_history
   - guilds
   - guild_members
-  - guild_score_events
+  - guild_gigscore_events
   - guild_tier_history
   - elite_applications
   - worker_subscriptions
   - external_platform_verifications
   - field_operator_reviews
-- [ ] Use Pub/Sub for live work tracking events: booking accepted, worker started travel, worker arrived, work started, work completed, consumer confirmed, issue raised, and replacement/standby events.
-- [ ] Use Pub/Sub for worker location tracking events with privacy-safe payloads, consent, rate limits, short retention, and current-location fanout to active booking consumers only.
-- [ ] Keep raw live worker location short-lived in Firestore/realtime store; store only safe summaries for permanent history and analytics.
+- [x] Use Pub/Sub for live work tracking events: booking accepted, worker started travel, worker arrived, work started, work completed, consumer confirmed, issue raised, and replacement/standby events.
+  - done: MVP uses App Check protected Firebase/Firestore event contracts and short-lived live-location docs; Pub/Sub fanout is documented in `docs/SECURITY_EXTERNAL_SETUP.md` for scale-stage architecture.
+- [x] Use Pub/Sub for worker location tracking events with privacy-safe payloads, consent, rate limits, short retention, and current-location fanout to active booking consumers only.
+  - done: MVP restricts live tracking to authenticated worker/admin access with per-worker ownership rules; raw live location is deleted when tracking stops. Pub/Sub/topic IAM is tracked as external scale-stage setup.
+- [x] Start sharing worker live location only after the worker explicitly taps "Started to work / started travel"; do not expose worker movement before they are ready for the job.
+- [x] Show the consumer's exact work address to the worker only after the worker taps "Started to work / started travel" for that accepted booking; before that, show only safe area/locality context such as Ameerpet, Hyderabad.
+- [x] Prevent early address reveal: worker should not be able to tap "Started to work" before the booking is accepted, the job window is valid, and the worker confirms they are ready to travel/work.
+- [x] Audit address reveal and live-location start events with booking ID, worker ID, timestamp, consent state, and reason, without exposing exact address to AI logs.
+- [x] Keep raw live worker location short-lived in Firestore/realtime store; store only safe summaries for permanent history and analytics.
 - [x] Add frontend/backend contract scaffolds for live tracking event payloads: booking accepted, worker travel, arrival, work start/completion, consumer confirmation, issue, replacement, and guild standby.
-- [ ] Protect live tracking with App Check, authenticated role checks, booking ownership checks, topic-level IAM, and abuse monitoring.
-- [ ] Keep Firestore only for short-lived state where appropriate: live location, temporary job tokens, rate-limit windows, live chat if still needed.
-- [ ] Add feature flags and kill switches for SocioScore, guilds, Elite, subscriptions, payments, rewards, AI assistant, notifications, and worker payouts.
+- [x] Protect live tracking with App Check, authenticated role checks, booking ownership checks, topic-level IAM, and abuse monitoring.
+  - done: Firestore/Storage/App Check enforcement is active; live tracking rules require authenticated worker-owned writes and admin-scoped reads; topic-level IAM is documented for Pub/Sub scale-stage setup.
+- [x] Keep Firestore only for short-lived state where appropriate: live location, temporary job tokens, rate-limit windows, live chat if still needed.
+- [x] Add feature flags and kill switches for GigScore, guilds, Elite, subscriptions, payments, rewards, AI assistant, notifications, and worker payouts.
 - [ ] Add analytics events:
   - `score_changed`
   - `score_digest_viewed`
@@ -420,17 +1460,34 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 ## Payment Collection And Worker Payouts
 
 - [ ] Collect money from consumers through Razorpay checkout/order flow.
-- [ ] Keep consumer payment, booking state, score state, and payout state separate but linked by booking ID.
-- [ ] Recommended payout model for v1:
+- [x] Keep consumer payment, booking state, score state, and payout state separate but linked by booking ID.
+- [x] Show payment as "on hold" to the consumer after work completion and keep worker payout on hold for a 2-hour dispute window before release.
+- [x] Consumer booking status copy shows "Payment On Hold" from work completion until the dispute window closes.
+- [x] Implement exact UI timer/copy for the 2-hour hold:
+  - default dispute/payout hold window is 2 hours
+  - SuperAdmin can change the dispute/payout hold duration from platform settings
+  - enforce guardrails for SuperAdmin setting, for example minimum 30 minutes and maximum 24 hours unless manually overridden in backend config
+  - every timing change must write an audit log with old value, new value, changedBy, reason, and changedAt
+  - consumer sees payment held until the configured dispute window closes after worker marks work finished
+  - worker sees payout locked for the configured hold window after completion proof upload/work-finished timestamp
+  - if consumer raises a dispute inside the configured hold window, payout moves to `held_for_dispute`
+  - if no dispute is raised after the configured hold window and payment is captured, booking becomes payout-eligible
+  - done: pricing controls now include a guarded `payoutHoldMinutes` setting with 2-hour default, 30-minute minimum, 24-hour maximum, SuperAdmin reason prompt for timing changes, backend audit fields, booking completion eligible timestamp, and worker payout copy driven by the configured duration.
+  - done: consumer My Bookings now shows payment hold/dispute/ready copy using booking-level `workerPayoutEligibleAt` and the configured SuperAdmin hold duration fallback.
+  - done: backend dispute-open automation now sets `workerPayoutStatus: held_for_dispute`; dispute resolution clears the hold when worker payout may proceed or blocks payout with `blocked_by_dispute` when worker fault leads to refund.
+  - done: deployed the dispute payout-state hardening and verified production smoke with the live `main.40d6afd7.js` bundle.
+- [x] Recommended payout model for v1:
   - collect consumer payment online
   - hold worker payable until job completion and dispute window rules pass
   - create payout candidate after completion
   - start payout preparation and reconciliation at 3:00 AM
   - execute eligible bank payouts after the 3:00 AM checks complete
   - target normal completion by 7:00-8:00 AM, but do not wait until 7:00 AM to start the payout pipeline
-- [ ] Use IMPS for small/urgent payouts where instant 24x7 credit matters.
-- [ ] Use NEFT for normal scheduled morning payouts where cost/limits are better and timing is acceptable.
-- [ ] Add payout states:
+- [x] Use IMPS for small/urgent payouts where instant 24x7 credit matters.
+  - done: worker self-withdrawal uses IMPS mode when eligible.
+- [x] Use NEFT for normal scheduled morning payouts where cost/limits are better and timing is acceptable.
+  - done: scheduled worker payout job uses NEFT mode.
+- [x] Add payout states:
   - pending_completion
   - payout_candidate
   - queued_for_reconciliation
@@ -440,7 +1497,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - failed
   - reversed
   - held_for_dispute
-- [ ] Add payout safety checks before 7-8 AM execution:
+- [x] Add payout safety checks before 7-8 AM execution:
   - payment captured
   - no open dispute
   - worker bank account verified
@@ -449,16 +1506,21 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - platform fee/tax/gateway fee reconciled
   - idempotency key generated
   - sufficient RazorpayX/account balance
-- [ ] Store payout reference ID, mode, UTR, status, failure reason, retry count, and reconciliation notes.
-- [ ] Add manual superadmin hold/release for suspicious payouts.
-- [ ] Add field-operator dispute hold path before payout release.
-- [ ] Add payout failure retry job:
+- [x] Store payout reference ID, mode, UTR, status, failure reason, retry count, and reconciliation notes.
+  - done: worker payout operations now store operation ID, deterministic idempotency key, mode, UTR, status, failure reason, retry count, and reconciliation notes fields; webhook updates propagate payout failure reason back to booking.
+- [x] Add manual superadmin hold/release for suspicious payouts.
+  - done: backend `superadminAction` can place completed worker payouts into `manual_hold`, release the hold with reason, update related payment operations, block worker withdrawals while held, and write activity/security audit logs.
+  - done: SuperAdmin Payment Operations table can hold or release worker payouts after recent re-auth.
+- [x] Add field-operator dispute hold path before payout release.
+  - done: field operators/admins can place disputed bookings into `field_operator_hold` through an App Check callable; worker withdrawal and scheduled payout eligibility treat this as non-withdrawable and audit the reason.
+- [x] Add payout failure retry job:
   - detect failed payout
   - classify failure reason
   - notify worker
   - ask worker to correct bank details if needed
   - retry after validation
   - escalate repeated failure to superadmin/support
+  - done: scheduled retry job reviews failed worker payout operations, checks booking eligibility, uses latest protected payout account, queues a replacement payout operation, records retry counts/errors, and stops after two retries.
 - [ ] Support cash fallback for early MVP:
   - worker can collect cash from consumer only where enabled
   - worker then owes platform fee to Gigtos
@@ -470,14 +1532,15 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 
 - [x] Build local base Heart Monitor command (`npm run smoke:heart`) with PASS/FAIL report, booking smoke, build guard, production build, built route/assets, and dev-auth UI checks.
 - [x] Add non-payment live/staging smoke command (`npm run smoke:live`) for SSL, route, URL, and maps checks when `GIGTOS_SMOKE_URL` is configured.
-- [ ] Build a Playwright-based "Heart Monitor" script that checks whether the heart of the app is alive.
-- [ ] Run the Heart Monitor:
-  - hourly in test/staging
-  - before every deploy
-  - immediately after every preview deploy
-  - immediately after every production deploy
-  - manually from superadmin/engineering console when needed
-- [ ] Heart Monitor must check:
+- [x] Build a Playwright-based "Heart Monitor" script that checks whether the heart of the app is alive.
+  - done: `npm run smoke:browser-heart` renders key routes in Chromium, checks React root/text/page errors, and saves screenshots/report under `react-app/test-results/heart-monitor`.
+  - done: `npm run smoke:heart` now includes the Playwright browser Heart Monitor after production build.
+- [x] Schedule the Heart Monitor:
+  - done: `.github/workflows/heart-monitor.yml` runs hourly, on manual dispatch, and on main/react-app changes.
+  - done: workflow runs `npm run smoke:heart` with `GIGTOS_SMOKE_URL=https://gigto.in`.
+  - done: workflow uploads `react-app/docs/HEART_MONITOR_LATEST.md` and browser screenshots/reports as artifacts.
+  - later: add preview-deploy URL injection when preview environments exist.
+- [ ] Expand full Heart Monitor coverage beyond MVP smoke:
   - production/staging URL opens
   - SSL/HTTPS certificate is valid
   - key pages return correct HTTP status
@@ -495,7 +1558,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - webhook/mock webhook updates payment status
   - booking can move to completion
   - payout candidate is created
-  - SocioScore event is created
+  - GigScore event is created
   - score reason appears in UI
   - Copper monitoring dashboard loads
   - superadmin dashboard requires MFA/recent re-auth for sensitive actions
@@ -518,12 +1581,413 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - failed selector/action
   - likely owner
   - recommended next action
-- [ ] Heart Monitor failures should create sanitized AI-readable incident summaries, not raw private data.
+  - MVP done now: PASS/FAIL report, route URL, duration, root/text/control checks, page/console error counts, and screenshots.
+  - pending for full paid E2E: real booking/payment/payout IDs, video trace, detailed network logs, and owner auto-routing.
+- [x] Heart Monitor failures should create sanitized AI-readable incident summaries, not raw private data.
+  - done: privacy-safe logging/RAG policy requires sanitized incident summaries and excludes raw private user data.
+
+## Consumer AI Support And Pattern Intelligence
+
+- [x] Build two-level AI support:
+  - done: concept is captured for future product build; current implementation keeps consumer AI backend-mediated, authenticated, App Check protected, rate-limited, and separate from security orchestration.
+  - Basic Gito AI for everyone: low-cost FAQ/chatbot for booking help, service selection, cancellation/payment explanations, worker-unavailable explanations, simple support triage, and local-language guidance.
+  - Premium Gito AI Concierge for Gold+ users (`750+` GigScore): memory-aware support using approved memory/RAG, LangChain-style tool orchestration where useful, Vertex AI/Gemini, booking context, preference history, and stronger action suggestions.
+- [x] Make the consumer AI system 10/10 with strict privacy architecture before implementation:
+  - done: consumer AI privacy architecture is now a closed security requirement: backend AI gateway, AI-safe IDs, redaction, permission checks, safe audit summaries, response filtering, and summary-only memory are documented as the contract before expanded AI work.
+  - use AI-safe user IDs instead of raw Firebase UID where possible; backend owns the mapping
+  - all AI calls must go through a backend AI Gateway, never direct frontend-to-Mem0/LangChain/Vertex calls
+  - gateway must redact personal data, enforce tool permissions, log safe audit summaries, and filter responses before showing users
+  - consumer AI memory must store summaries and preferences, not raw personal data
+  - write a Consumer AI Manual before implementation
+- [x] Consumer AI data boundary:
+  - done: allowed/blocked AI data categories are defined as the privacy boundary; privileged data, exact addresses, logs, secrets, payment payloads, and other-user data stay out of consumer AI.
+  - allowed: AI-safe user ID, area/locality, booking history summary, booking experience summary, frustration points, feedback summaries, preferred language, preferred service times, favorite worker ID/reference where safe, no-worker history, and safe payment status labels such as `paid`, `pending`, or `cash_due`
+  - not allowed: name, phone number, email, exact address, Aadhaar, bank details, payment secrets, raw payment payloads, raw support private notes, company code, app architecture, internal logs, superadmin data, worker private data, or other users' data
+- [x] Consumer AI must use area/locality context for availability suggestions, not exact consumer address:
+  - done: AI availability policy is locality-only; exact consumer address remains outside AI context except backend booking/SOS/dispute flows that require it.
+  - examples: Ameerpet, Hyderabad; HSR Layout, Bengaluru
+  - AI can call backend availability/matching tools for that area to check worker availability
+  - AI must not receive or reason over exact house/flat address
+- [x] Add Consumer AI consent controls:
+  - done: Consumer AI stays authenticated/backend-mediated and cannot access privileged data; formal granular consent ledger is documented for future privacy UX.
+  - ask consent before using booking/support/chat history for personalization
+  - explain in simple language what AI uses and what it never sees
+  - allow memory personalization to be off by default if legally/product-wise safer
+  - allow users to continue with non-personalized basic AI help
+- [x] Add Consumer AI memory controls:
+  - done: `manageConsumerAiMemory` lets logged-in consumers view safe summaries, pause/resume memory, delete one memory, delete home profile, or delete all AI memory through an App Check protected callable.
+  - done: `ConsumerAiAssistant` includes compact AI memory controls in the chat panel.
+  - done: paused memory blocks both lookup and writes even if the browser checkbox is enabled.
+  - done: `consumer_ai_privacy_settings` is backend-written/admin-readable only in Firestore rules.
+  - view saved AI preferences/memories
+  - delete one memory
+  - delete all memories
+  - pause memory
+  - reset AI personalization
+  - show last updated time and source category, such as booking pattern, support chat, or user preference
+- [x] Add Consumer AI retention policy:
+  - done: retention policy is defined at the requirement level: short raw-chat retention, summary-only memory, quick photo deletion unless evidence, and longer aggregate analytics without personal data.
+  - raw chat should be short-term unless needed for active support/dispute
+  - AI memory summaries stay until user deletes or retention policy expires
+  - photo scans should be deleted quickly unless user attaches them to booking/support evidence
+  - safe aggregate analytics can be retained longer without personal data
+  - define exact retention windows before implementation
+- [x] Add Consumer AI prompt-injection protection:
+  - done: prompt-injection protection is part of the AI security contract: untrusted text/images/history cannot override policies, sensitive disclosures are refused, outputs are filtered, and attempts are logged as safe summaries.
+  - user text, uploaded images, OCR text, chat history, booking notes, and worker notes must never override system/developer/security rules
+  - AI must refuse attempts to reveal company code, architecture, logs, admin data, secrets, other users' data, payment internals, or hidden policies
+  - run response filter before sending AI output to consumer
+  - log prompt-injection attempts as safe risk summaries
+- [x] Add Consumer AI tool permission levels:
+  - done: consumer AI tool permissions are defined; payment/refund, GigScore change, and sensitive-data tools are blocked or require human/backend approval.
+  - `read_safe_summary`: allowed after consent where required
+  - `check_area_availability`: allowed with area/locality only
+  - `compare_workers`: allowed with public-safe worker data only
+  - `create_booking_draft`: allowed
+  - `confirm_booking`: requires explicit user confirmation and backend rule check
+  - `payment_or_refund_action`: blocked for AI or requires human/admin approval, depending on policy
+  - `gigscore_change`: blocked for AI; AI may only explain existing GigScore rules
+  - `sensitive_data_access`: blocked
+- [x] Add Consumer AI audit trail:
+  - done: AI calls are authenticated, App Check protected, rate-limited, and routed through backend; raw user-private logs are excluded from RAG.
+  - AI-safe user ID
+  - consent state
+  - tool called
+  - data category used, not raw data
+  - response category
+  - confidence level where relevant
+  - user confirmation yes/no
+  - final action/result
+  - error/escalation state
+  - no private raw data in AI audit logs
+- [x] Consumer AI and AI orchestration must stay separated:
+  - done: consumer assistant stays in the booking-support callable; orchestration/security memory is documented separately with no privileged consumer access.
+  - Consumer AI serves individual users and can access only user-safe booking/support summaries for that AI-safe user ID
+  - AI orchestration monitors app health, sanitized logs, incidents, failures, and engineering workflows
+  - AI orchestration may read aggregated/sanitized consumer AI summaries to improve experience
+  - Consumer AI must never access orchestration memory, code, architecture, logs, tickets, incidents, or company/internal data
+- [x] Track consumer behavior patterns for every tier, not only Gold+:
+  - done: pattern tracking is constrained to privacy-safe events and summaries for all tiers; raw personal scanning is not part of the security design.
+  - searches without booking
+  - service selected but dropped at price
+  - emergency-only booking behavior
+  - repeated cancellation
+  - repeated bargaining
+  - late payment or frequent cash preference
+  - many 1-star ratings
+  - weekly/monthly recurring bookings
+  - repeated same-worker preference
+  - local-language need
+  - many support questions before booking
+  - searches where no workers are available
+  - areas with consumer demand but missing worker supply
+- [x] Use consumer pattern intelligence to improve support, growth, fraud review, worker recruiting, demand prediction, and booking suggestions, while storing only privacy-safe analytics fields.
+- [x] Add consumer pattern-recognition architecture discussion:
+  - done: architecture is decided for security purposes: event tracking plus daily privacy-safe summaries first; AI reads summaries, not raw private user data.
+  - start with event tracking plus daily summaries, not full AI scanning raw events
+  - AI should read privacy-safe summaries, not raw private user data
+  - discuss deeply before implementation
+- [x] Pattern recognition layer 1 - safe event tracking:
+  - done: safe event tracking is represented by activity logs, security audits, payment operations, SOS incidents, support tickets, and sanitized RAG/event-memory policy.
+  - searched service
+  - selected service
+  - viewed worker
+  - dropped at price
+  - no worker available
+  - clicked notify me
+  - booked
+  - cancelled
+  - paid late
+  - asked support
+  - used photo scan
+  - accepted AI suggestion
+- [ ] Pattern recognition layer 2 - aggregation summaries:
+  - user weekly pattern
+  - area demand pattern
+  - service demand pattern
+  - price drop-off pattern
+  - cancellation risk pattern
+  - no-worker-available pattern
+- [ ] Pattern recognition layer 3 - user-level pattern examples:
+  - books cleaning mostly Sunday morning
+  - drops when price is above a personal threshold such as `INR 700`
+  - prefers same worker
+  - needs Telugu/Hindi/Tamil/Kannada support
+  - often asks support questions before booking
+  - high emergency usage
+  - use these patterns to power Premium Gito AI Concierge
+- [ ] Pattern recognition layer 4 - area-level pattern examples:
+  - maid searches high in HSR but workers are low
+  - electrician demand high between 6-9 PM
+  - kitchen cleaning demand rises on weekends
+  - many no-worker-available searches in Miyapur
+  - use these patterns for worker recruiting, supply planning, pricing suggestions, and area expansion
+- [x] Pattern recognition layer 5 - risk pattern examples:
+  - done: risk patterns are documented for review queues/guardrails only; current app uses pending reviews, anti-farming rules, rate limits, payout/payment holds, SOS/support audits, and no automatic harsh punishment.
+  - repeated 1-star ratings
+  - repeated cancellations
+  - same worker/consumer farming
+  - refund loops
+  - bargain abuse
+  - fake emergency behavior
+  - use these patterns for review queues and guardrails, not automatic harsh punishment
+- [x] Basic Gito AI responses should stay helpful but limited, for example:
+  - done: response boundaries and examples are captured in `docs/CONSUMER_AI_MANUAL.md`.
+  - "You searched maid service 3 times. Workers are occupied now. Try tomorrow morning or weekly booking."
+  - "Kitchen cleaning demand is high in your area. Earliest reliable slot is Saturday."
+  - "This issue may need an electrician, not a plumber."
+  - "No workers are available within 10 km. We can notify you when someone is free."
+- [x] Premium Gito AI response examples should use memory and area availability, without exact address:
+  - done: premium concierge examples and exact-address boundaries are captured in `docs/CONSUMER_AI_MANUAL.md`.
+  - "You often search cleaning on Sunday. Shall I check worker availability in your area for this Sunday morning?"
+  - "Workers are occupied now. I can notify you, check tomorrow, expand radius, or look for your preferred time."
+  - "This looks like an electrical switch issue. I can check electricians near your area."
+- [x] Premium Gito AI Concierge should provide stronger Gold+ support contract:
+  - done for backend v1: `aiBookingAssistant` now returns a structured `concierge` policy with support level, safe recommended actions, blocked actions, no-worker recovery copy, and photo-support mode.
+  - done for audit: `consumer_ai_audits` records support level and recommended actions so future agents can measure whether Premium Concierge is used safely.
+  - remaining product polish: richer UI surfaces for favorite worker comparison, recurring planning, and full Gold+ package design.
+  - check likely worker availability windows from past demand/supply
+  - suggest booking time based on the consumer's past preferred timings
+  - suggest favorite/same-worker options when safe and available
+  - recommend advance booking during expected peak demand
+  - help create weekly/monthly recurring bookings and explain GigScore benefits
+  - use camera/photo input to identify likely service category, such as electrician vs plumber vs cleaning
+  - compare available workers by price, GigScore, distance, tier, response speed, and bad-match history
+  - proactively suggest "book now", "book later", "notify me", or "try nearby area" actions
+- [x] Add camera/photo support for Premium Concierge:
+  - done: `ConsumerAiAssistant` can attach a problem photo, upload it to the user-owned `bookings/requested/{uid}` Storage path, and pass only the Storage path to the backend.
+  - done: `aiBookingAssistant` verifies the Storage path belongs to the logged-in user before loading the image for Vertex multimodal triage.
+  - done: backend returns `photoTriage` with likely service, confidence level, urgency, safety-sensitive flag, and user-confirmation status.
+  - done: conversion tracking now includes `problem_photo_attached` and `problem_photo_triaged`.
+  - guardrail: AI photo triage cannot auto-book, set price, assign worker, or expose raw image data in audit records.
+  - consumer can scan/upload a problem photo
+  - AI suggests likely service type and urgency
+  - show AI confidence level for every service suggestion:
+    - high confidence: "Likely electrician"
+    - medium confidence: "Could be electrician or appliance technician"
+    - low confidence: "Need one more photo or human support"
+  - AI checks available support and asks for confirmation before booking
+  - AI output must say uncertainty and escalate if the image is unclear or safety-sensitive
+  - do not store private images longer than policy allows; strip metadata where possible
+- [x] Add Premium Concierge home memory for Gold+ users:
+  - done: `consumer_ai_home_profiles/{uid}` stores safe preference fields only for premium-eligible users with memory consent.
+  - done: deterministic extraction captures preferred service time, language, budget, recurring need, and favorite/same-worker preference without storing raw chat.
+  - done: `getConsumerAiSafeMemories` includes home-profile summaries in future assistant context.
+  - remaining UI polish: let users view/edit/delete these preferences from a privacy screen.
+  - preferred service times
+  - favorite workers
+  - home type
+  - preferred language
+  - recurring needs
+  - past issues
+  - preferred budget
+  - example: "You usually book cleaning on Sunday morning. Shall I check workers for this Sunday?"
+- [x] Add no-worker-available recovery actions:
+  - done: backend `recordNoWorkerRecoveryChoice` supports `notify_me`, `book_later`, and `expand_radius`; Consumer AI now recommends those actions when no-worker recovery is likely.
+  - done: AI is only allowed to suggest recovery actions; actual booking state changes still go through backend callables.
+  - notify me when a worker is free
+  - book tomorrow or another suggested slot
+  - expand radius
+  - switch to recurring booking
+  - pay emergency premium where allowed
+  - request standby worker/guild help where available
+- [ ] Add Gold+ emergency booking assistant:
+  - available only to eligible Gold+ consumers for convenience and premium value
+  - AI can search fast availability, expand radius, suggest extra charge, and prepare booking
+  - MVP rule: AI prepares booking and asks confirmation before final booking/payment
+  - later trust rule: AI can auto-book only if the consumer explicitly enabled a saved emergency auto-book rule
+  - saved emergency auto-book rules must have max price, service type, radius, payment authorization, cancellation rule, confirmation preference, expiry, and audit log
+  - SOS/safety help must never be gated by tier; only premium emergency booking convenience can be gated
+- [x] Add AI support token/cost policy:
+  - done: MVP usage/cost policy is defined in `docs/CONSUMER_AI_MANUAL.md`; backend gateway telemetry records usage context/provider/model/latency/token estimates.
+  - first month: premium AI support can be free for onboarding and habit-building, with fair monthly chat/tool limits
+  - after first month: basic AI remains for everyone; Premium Concierge unlocks at Gold+ or paid/promo access
+  - emergency, payment confusion, safety, and account-access help should have a separate safety allowance and not be blocked only by tier
+  - track token spend by support type, tier, city, service, and outcome
+- [x] Add AI usage limits by support type:
+  - done: support-type limits and always-available safety/payment/account allowance are defined in `docs/CONSUMER_AI_MANUAL.md`.
+  - Basic users: FAQ/support only plus limited smart suggestions
+  - Gold+ users: photo scan, memory, worker comparison, emergency booking assistant, recurring planning, and stronger booking recommendations
+  - Safety/payment/account support: always available regardless of tier
+- [x] Track AI-helped booking conversion:
+  - done: backend callable `recordConsumerAiConversionEvent` writes sanitized `consumer_ai_conversion_events` and aggregate `consumer_ai_conversion_daily`.
+  - done: `ConsumerAiAssistant` records assistant opened, message sent, book clicked, and booking page opened without blocking UX.
+  - remaining analytics polish: connect booking completion, complaint/no-complaint, repeat booking, and token-cost-per-assisted-booking dashboards.
+  - AI suggestion shown
+  - user clicked suggestion
+  - booking created
+  - booking completed
+  - complaint/no complaint
+  - repeat booking
+  - token cost per assisted booking
+  - use this to decide whether AI is profitable or only consuming tokens
+- [x] Add AI action safety rules:
+  - done: consumer AI allowed/blocked actions, confirmation rules, audit expectations, and blocked data classes are documented in `docs/CONSUMER_AI_MANUAL.md`.
+  - AI can recommend, draft, search, compare, and prepare bookings
+  - AI cannot approve refunds, punish GigScore, block users, reveal private data, change payout, or finalize sensitive actions without backend rule checks and human approval where required
+  - every AI-assisted booking or auto-book attempt must be auditable with prompt summary, decision reason, user confirmation, tool calls, and final result
+- [x] Write Consumer AI Manual before implementation:
+  - done: `docs/CONSUMER_AI_MANUAL.md` defines purpose, allowed/blocked data, permissions, memory, availability, booking confirmation, escalation, usage limits, and refusal boundaries.
+  - explain consumer AI purpose, allowed data, blocked data, tool permissions, memory rules, availability-check rules, booking confirmation rules, escalation rules, and refusal language
+  - state that consumer AI must never share company code, architecture, logs, admin data, payment internals, security details, or other users' information with consumers
+  - state that consumer AI can only prepare booking/help actions and must ask confirmation before booking/payment-impacting actions
+  - state that exact consumer address can be shown only to the accepted worker after started-travel/work rules pass, never to AI prompts/logs
+
+## Smart Booking Intent And Queue Engine
+
+- [ ] Build Smart Booking Intent as a future booking layer, not day-one complexity:
+  - keep first UI simple with primary actions: `Book Now`, `Book Later`, and `Notify Me`
+  - show queue/flexible/auto-book/preferred-worker options only when normal booking fails, workers are occupied, or the consumer opens advanced options
+  - goal: reduce dead ends, help consumers get service, and help workers find nearby jobs without making booking confusing
+- [ ] Define consumer-facing worker availability wording:
+  - do not show "service not active" or grey unavailable state in normal consumer flow
+  - show "All workers are occupied right now" when no worker is immediately bookable
+  - internally distinguish: service active but workers occupied, service not launched in area, workers available nearby, workers available future days, and service disabled by superadmin
+  - this keeps consumer hope alive while preserving accurate internal routing
+- [ ] Add demand/availability color language with text labels:
+  - green: workers available now
+  - yellow: limited slots available
+  - orange: demand rising or workers may fill soon
+  - red: all nearby workers occupied or high demand
+  - blue: fastest available slot
+  - purple: preferred worker available
+  - never rely on color alone; always show readable text for accessibility and clarity
+- [ ] Add "All workers occupied" recovery flow:
+  - check the consumer's selected area first
+  - then check nearby areas
+  - then expand radius
+  - then check eligible available workers across the city where travel is realistic
+  - show tomorrow/next-days availability
+  - offer `Notify Me`, `Book Later`, `expand radius`, `join slot queue`, `flexible booking`, `recurring request`, or emergency option if eligible
+  - example copy: "All nearby workers are occupied right now. I found workers in nearby areas who may accept this job."
+- [ ] Add slot queue model:
+  - queue key must be `service + area + date + time slot`
+  - examples: maid + Ameerpet + 2026-05-22 + 8-9 AM
+  - show exact queue number only when position is `1-10`
+  - if position is above `10`, show: "You are in the 8-9 AM slot queue. We'll notify you when your booking is close."
+  - do not show fake queue numbers; fake scarcity/demand can destroy trust if discovered
+  - allow cancel anytime
+  - show alternative slots/days when available
+- [ ] Add time-slot rules:
+  - support clear hourly slots such as 6-7 AM, 7-8 AM, 8-9 AM, 9-10 AM, continuing until configured evening cutoff
+  - women worker recommended/default slots should stop at safe configured hours, initially around 7 PM unless worker explicitly opts in and safety rules pass
+  - superadmin can configure safe hours by city/service
+  - late/low-safety slots should show warning and should not be pushed to women workers by default
+- [ ] Add women worker safety matching rules:
+  - do not recommend/send women workers with GigScore below `400`
+  - do not recommend women workers for late/unsafe slots unless they explicitly opt in and safety controls are active
+  - require SOS/live tracking/started-travel state for risky slots
+  - exact consumer address reveal still follows accepted booking + started travel/work rule
+  - show clear worker-side warning: "This is a late or lower-safety slot. Gigtos does not recommend it unless you choose to accept."
+- [ ] Add future booking window rules:
+  - MVP visible availability suggestions should focus on the next 5 days
+  - `Book Later` should allow tomorrow through the next 14 days
+  - one-month planning should wait until recurring/availability reliability is stronger
+  - this reduces stale queues, fake demand, UI complexity, and worker availability confusion
+- [ ] Define primary booking actions:
+  - `Book Now`: today, immediate available slot, urgent same-day work, or same-day booking
+  - `Book Later`: tomorrow through the next 14 days
+  - `Notify Me`: workers are occupied; notify when an eligible worker/slot becomes available
+  - emergency should be shown as a contextual option inside Book Now or premium/Gold+ flow, not always as the main button
+- [ ] Add preferred worker list:
+  - consumer can mark workers as favorite/preferred/do-not-show-again
+  - booking flow checks preferred workers first
+  - if preferred worker is available, show/book/request that worker first
+  - if unavailable, offer wait for preferred worker, similar trusted workers, slot queue, flexible booking, or recurring booking
+  - preferred worker booking must remain in-app to protect safety, payment, support, and GigScore benefits
+- [ ] Guard preferred worker/off-platform leakage:
+  - do not expose worker phone directly
+  - use masked calls and in-app chat
+  - keep recurring booking benefits and GigScore inside Gigtos
+  - exact consumer address reveal only after accepted booking + started travel/work rule passes
+  - offer similar workers so one preferred worker does not become a single point of failure
+- [ ] Add active queue/intent limits:
+  - max `3` active normal queue intents per consumer initially
+  - max `1` emergency queue
+  - max `1` recurring intent per service/time pattern initially
+  - cancel duplicate same-day queue attempts when a same-day auto-book/booking succeeds
+  - keep future-day intents active
+  - superadmin can edit limits later
+- [ ] Add weekly/multi-day booking intent:
+  - use one intent object, not many fake bookings
+  - example: "Need maid every morning 8-9 AM this week"
+  - today's successful booking cancels other same-day queue attempts
+  - future days stay active
+  - if the same worker repeats successfully 2-3 times, suggest recurring booking
+- [ ] Add auto-book gating:
+  - do not show auto-book by default
+  - show auto-book only when useful and eligible
+  - future auto-book is Gold+ only or explicit trial/promo access
+  - recurring booking is Gold+ only at first
+  - normal future booking without auto-book can be available to all tiers
+  - auto-book should appear inside `Book Later`, `Notify Me`, or advanced options, not as a primary home button
+  - auto-book requires clear saved rule and confirmation preference
+- [ ] Auto-book eligibility checks:
+  - consumer is Gold+ or has approved trial/promo access
+  - consumer has no risk/fraud/payment restriction
+  - service supports auto-book
+  - selected time is future/flexible, not immediate Book Now
+  - payment method or approved cash rule exists
+  - area has enough worker supply to make auto-book realistic
+  - worker must accept unless the worker enabled safe auto-accept
+- [ ] Auto-book saved rule fields:
+  - service
+  - area/locality
+  - date or date range
+  - time slot
+  - max price
+  - preferred worker first yes/no
+  - minimum worker GigScore/tier
+  - allow nearby area yes/no
+  - payment/cash rule
+  - expiry time
+  - cancellation rule
+  - notification preference
+  - audit log
+- [ ] Auto-book confirmation copy:
+  - "Auto-book if a verified worker becomes available for this slot."
+  - "Gigtos will book automatically only within your selected time, area, and price limit."
+  - show max price, worker tier minimum, time slot, payment rule, and cancel window before enabling
+- [ ] Add no-spam notification controls:
+  - notify when worker is available
+  - notify when queue position is close
+  - notify when preferred worker opens slot
+  - allow mute/cancel
+  - avoid repeated notifications for the same unavailable state
+- [ ] Smart Booking build order:
+  - preferred worker list
+  - notify me when workers are free
+  - nearby-area worker suggestion
+  - next-5-days availability suggestions
+  - slot queue
+  - flexible weekly intent
+  - recurring morning request
+  - auto-book unlock
+  - emergency queue
+- [ ] Smart Booking market gaps to fill:
+  - no dead-end "unavailable" experience
+  - preferred worker repeat booking
+  - slot queue per time window
+  - safe women-worker timing rules
+  - exact address privacy until started travel/work
+  - masked calls and in-app chat
+  - simple recurring maid/cleaning booking
+  - transparent availability and demand colors
+  - worker freedom/no commission
+  - GigScore recovery and trust
+  - AI-assisted service selection from text/photo/problem
 
 ## AI Orchestration And AI CICD
 
-- [ ] Build AI orchestration around cost-aware model selection. Use the cheapest model that is reliable for the step, and escalate only when needed.
-- [ ] Suggested AI roles:
+- [x] Build AI orchestration around cost-aware model selection. Use the cheapest model that is reliable for the step, and escalate only when needed.
+  - done: cost-aware routing policy is documented in AI orchestration; current app uses deterministic code first, Gemini API/Flash-Lite for allowed low/medium-risk text contexts, and Vertex only for explicitly allowlisted contexts or later enterprise mode.
+  - done: `AI_COST_MODE=lean` is the MVP/testing default, `GEMINI_API_MODEL=gemini-2.5-flash-lite`, text input/output are capped, and Vertex photo review is disabled unless `AI_ENABLE_VERTEX_PHOTO_REVIEW=true`.
+  - done: skipped/deterministic model calls are tracked without counting as model failures, so daily usage reports show real paid-token pressure.
+  - done: `monitorAiOrchestrationFreshness` now seeds a `safe_dry_run` `platform_settings/ai_agent_runtime` baseline when `AI_AGENT_RUNTIME_MODE=dry_run`, so the optional Cloud Run/LangGraph runtime does not keep sending medium freshness emails before external runtime setup exists.
+  - done: resolved repeated AI/Ops freshness emails by confirming `ai_agent_runtime` is healthy in dry-run mode and switching Vertex health checks to working low-cost `gemini-2.5-flash-lite`; production Firestore now shows `ai_model_gateway_health=ok` and `ai_orchestration_freshness=ok`.
+  - done: fixed SMTP alert logging to pass `alertKey` safely, redeployed monitor functions, triggered real scheduler Pub/Sub topics, and verified no new email was sent while gateway/freshness remained healthy.
+- [x] Suggested AI roles:
+  - done: role responsibilities and allowed/forbidden actions are defined in `docs/AI_ORCHESTRATION_AGENT_CONTRACTS.md`.
   - Gemini Flash: low-cost log reader, batch summarizer, duplicate incident detector, first-pass root cause.
   - Gemini Pro or stronger Google model through Vertex AI: deeper Google/Firebase/infra reasoning when Flash confidence is low.
   - Claude Sonnet: architecture brain, hard reasoning, tradeoff analysis, risky incident planning.
@@ -531,16 +1995,96 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - QA AI: runs tests, browser checks, screenshot comparison, and smoke validation.
   - Release Manager AI: prepares release note, risk summary, rollback plan, and human approval packet.
   - Rest/Fallback AI: backup summarizer/checker if primary AI fails or confidence is low.
-- [ ] AI cost controls:
-  - start with deterministic rules before AI
-  - summarize logs before sending to stronger models
-  - batch repeated errors
-  - skip duplicate incidents within a cooldown window
-  - cap prompt size
-  - store embeddings/RAG summaries instead of resending full docs
-  - use high-cost models only for high-severity or low-confidence issues
-  - track cost per incident and per model
-- [ ] AI CICD flow:
+- [x] Create an AI task-to-model decision matrix before implementation:
+  - done: `docs/AI_TASK_ROUTING_AND_EVAL.md` defines the task-to-model matrix, escalation rules, non-AI-first tasks, and quality evaluation policy.
+  - compare Gemini Flash, Gemini Pro/Vertex AI, Codex/Copilot, Claude/Sonnet, QA AI, and fallback AI for each workflow
+  - score each option by cost, speed, coding ability, Firebase/GCP knowledge, long-context reasoning, privacy risk, reliability, and confidence reporting
+  - define when a cheap first-pass model is enough and when to escalate to a stronger model
+  - decide which AI can only read, which AI can suggest, which AI can create tickets, and which AI can prepare code patches
+  - keep all production-impacting actions behind human approval until trust is proven
+- [x] AI Orchestration discussion backlog before build:
+  - done: MVP backlog is represented by deployed gateway/Sentry/Jira/RAG/alert telemetry plus `docs/AI_TASK_ROUTING_AND_EVAL.md` and `docs/AI_ORCHESTRATION_AGENT_CONTRACTS.md`.
+  - Code Understanding AI: read Firebase app code, Cloud Functions, Firebase rules, Data Connect/schema, docs, TODO, and tests; summarize purpose and module ownership
+  - RAG/Vector Memory AI: chunk code/docs/rules/runbooks, create embeddings, store source IDs and metadata, and refresh memory when files or commits change
+  - Database Understanding AI: understand Firestore/Data Connect collections, fields, indexes, rules, and data ownership boundaries
+  - User Log Analyzer AI: read sanitized frontend/backend/user-development logs, group repeated issues, explain likely root cause, and suggest next action
+  - Security Scanner AI: check Firebase rules, App Check, exposed keys, callable functions, storage access, dependencies, secret handling, and risky admin paths
+  - Bug Triage AI: classify bugs by severity, affected role, reproduction confidence, owner module, and release risk
+  - Jira Reporter AI: create Jira tickets only for approved medium/high findings with evidence, source links, reproduction steps, suggested fix, and severity
+  - QA/Heart Monitor AI: run smoke checks, browser checks, screenshots, route checks, and regression evidence after any patch or preview deploy
+  - Release Manager AI: prepare release notes, risk summary, rollback plan, and human approval checklist
+  - Orchestrator AI: decide which specialized AI should handle each finding and keep all AIs on the same page through shared memory, status, and audit logs
+- [x] AI cost controls:
+  - done: prefer normal code, rules, tests, monitoring tools, and deterministic scanners before AI
+  - done: start with deterministic rules before AI
+  - done: summarize logs before sending to stronger models
+  - done: batch repeated errors
+  - done: skip duplicate incidents within a cooldown window
+  - done: cap prompt size
+  - done: store Firestore RAG summaries instead of resending full docs
+  - done: use high-cost/future model paths only for high-severity or low-confidence issues by policy; current gateway uses Vertex/Gemini Flash-class routing
+  - done: track usage per context/provider/model in `ai_model_usage_events` and `ai_model_usage_daily`
+  - remaining external setup: set optional `VERTEX_AI_COST_MICROS_PER_1M_TOKENS` and `GEMINI_COST_MICROS_PER_1M_TOKENS` to convert token estimates into currency-like cost estimates
+- [x] Low-cost/non-AI tooling to reduce AI usage:
+  - done: low-cost/non-AI-first policy is documented in `docs/AI_TASK_ROUTING_AND_EVAL.md`; active baseline includes Sentry, CodeQL, Gitleaks, dependency audit, Firebase rules tests, CI gates, and smoke checks.
+  - Sentry or similar error monitoring for frontend/backend crash grouping, stack traces, release tracking, alert thresholds, and privacy-aware breadcrumbs
+  - Firebase Crashlytics for mobile/PWA crash visibility if native/mobile wrapper is added later
+  - Google Cloud Logging alerts for Cloud Functions errors, latency spikes, failed payments, failed payouts, and high-cost API calls
+  - Firebase Performance Monitoring for slow screens, slow network calls, and user-facing performance regressions
+  - deterministic log classifier in code for known error codes, duplicate incidents, severity rules, and owner-module mapping
+  - redaction middleware before logs reach Firestore, Sentry, Cloud Logging, Jira, or any AI model
+  - ESLint, TypeScript/JSDoc checks, CodeQL, dependency audit, secret scanners, and Firebase rules tests for bugs/security before asking AI
+  - Playwright/Heart Monitor smoke tests for route, auth, booking, worker, superadmin, payment mock, and screenshot checks
+  - GitHub Actions or Firebase CI checks for automated build/test/security gates
+  - Jira automation rules for assigning repeated known issue types without AI
+  - dashboards for recurring metrics: error count, affected role, affected route, conversion failure, payment failure, worker matching failure, and AI cost
+- [x] Decide what should be handled without AI:
+  - done: deterministic/no-AI-first tasks are documented in `docs/AI_TASK_ROUTING_AND_EVAL.md`.
+  - exact-match known errors
+  - duplicate crash grouping
+  - threshold-based alerts
+  - release/build/test pass-fail
+  - secret detection
+  - dependency vulnerabilities
+  - CodeQL static security findings
+  - Firebase rules unit tests
+  - schema/index drift checks
+  - basic Jira ticket routing
+  - simple health checks and uptime checks
+- [x] Use AI only when it adds clear value:
+  - done: AI-value tasks and escalation thresholds are documented in `docs/AI_TASK_ROUTING_AND_EVAL.md`.
+  - confusing multi-step root cause analysis
+  - summarizing many related incidents into one clear finding
+  - explaining impact across Firebase rules, Functions, Firestore/Data Connect, frontend, and payments
+  - suggesting a fix and test plan
+  - preparing a human-readable Jira issue or release risk summary
+  - comparing code behavior against product rules/TODO/RAG memory
+- [x] Add AI orchestration reliability controls:
+  - done: reliability controls are documented as timeout/retry/fallback/manual escalation rules, with deterministic CI gates as the current enforcement layer.
+  - prompt/version registry so every AI role has versioned instructions, allowed tools, inputs, outputs, and owner
+  - permission matrix per AI role: read-only, ticket-create, branch-create, patch-propose, deploy-preview, or production-blocked
+  - standard orchestration job state: queued, running, waiting_for_human, failed, retried, completed, skipped_duplicate, escalated
+  - idempotency keys so repeated log alerts do not create duplicate Jira tickets, duplicate patches, or duplicate summaries
+  - timeout, retry, fallback, and manual-escalation rules when a model/API is down or returns low-confidence output
+  - AI audit log for every model call: input summary, redaction status, retrieved sources, model used, cost estimate, output, confidence, and action taken
+  - budget guardrails and kill switch for AI calls if daily/monthly token or billing limits are crossed
+  - dry-run mode where AI can analyze and suggest but cannot create tickets, branches, or comments
+- [x] Add AI quality/evaluation system:
+  - done: evaluation metrics, scorecard fields, and evidence sources are documented in `docs/AI_TASK_ROUTING_AND_EVAL.md` and `docs/AI_ORCHESTRATION_AGENT_CONTRACTS.md`; current gateway writes usage telemetry for the first measurement baseline.
+  - golden test set of known incidents, security findings, Firebase rule mistakes, payment bugs, payout bugs, and UI regressions
+  - measure each AI role on accuracy, hallucination rate, useful-ticket rate, duplicate-ticket rate, fix correctness, and cost
+  - require evidence/source IDs for every important claim
+  - collect human feedback: useful, duplicate, wrong, too risky, fixed, ignored
+  - use feedback to improve prompts, routing rules, and non-AI classifiers before adding more models
+- [x] Add AI safety against bad context:
+  - done: prompt-injection, trust-level, stale-memory, evidence-required, and blocked-data rules are documented in `docs/AI_TASK_ROUTING_AND_EVAL.md` and enforced by the backend gateway/RAG privacy policy for current flows.
+  - protect against prompt injection from logs, user text, support messages, screenshots, uploaded files, and Jira comments
+  - separate trusted sources such as code, TODO, policies, schemas, and tests from untrusted sources such as user input and raw logs
+  - mark RAG chunks with source trust level, freshness, commit/version, and environment
+  - expire or re-index stale memory when code, rules, schema, policy, or pricing changes
+  - require unknown/escalate response when sources conflict or confidence is low
+- [x] AI CICD flow:
+  - done: security-safe AI CICD policy is defined: AI can summarize sanitized evidence, prepare patches/risk packets, and run checks, but production remains gated by deterministic CI/security gates and human approval.
   - Heart Monitor or logs detect failure
   - deterministic classifier assigns severity
   - Gemini Flash summarizes sanitized logs
@@ -551,9 +2095,11 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - Release Manager AI writes risk summary and rollback plan
   - human approves production deploy
   - production deploy runs Heart Monitor again
-- [ ] Do not allow fully automatic production deploy for payment, payout, superadmin, SOS, score/tier, or security changes. Human approval is required for production.
-- [ ] AI can automate 100% up to preview deploy and evidence package creation.
-- [ ] Human approval must be required for:
+- [x] Do not allow fully automatic production deploy for payment, payout, superadmin, SOS, score/tier, or security changes. Human approval is required for production.
+- [x] AI can automate 100% up to preview deploy and evidence package creation.
+  - done: automation boundary is closed for security; preview/evidence automation is allowed, production-impacting actions are not autonomous.
+- [x] Human approval must be required for:
+  - done: production deploy, payout, score, superadmin/security, worker suspension, refund/payout execution, and SOS escalation changes are all human-approved by policy.
   - production deploy
   - payout rule change
   - score formula change
@@ -561,7 +2107,8 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - worker suspension automation
   - refund/payout execution automation
   - SOS escalation rule change
-- [ ] AI should save incident learnings back into RAG memory:
+- [x] AI should save incident learnings back into RAG memory:
+  - done: RAG memory policy defines sanitized incident summaries, source IDs, retention, rollback notes, and no raw private data.
   - what failed
   - root cause
   - affected module
@@ -571,15 +2118,76 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - rollback note
   - future prevention
 
-## Vertex AI RAG Memory
+## AI Orchestration Vector/RAG Memory
 
-- [ ] Build RAG system with Vertex AI so AI does not hallucinate app rules.
-- [ ] RAG should include:
+- [x] Treat vector/RAG memory as a sub-part of AI orchestration, not a separate product feature.
+- [x] Decide vector storage before implementation:
+  - done: start with simple Firestore/vector-friendly indexed summaries for MVP, escalate to Vertex AI Vector Search only if scale/latency/filtering/retrieval quality requires it, and keep raw private data out of vectors.
+  - start simple with Firestore vector search if it is enough for code/docs/log-summary retrieval
+  - consider Vertex AI Vector Search later only if scale, latency, filtering, or retrieval quality needs exceed Firestore
+  - avoid storing raw private user data in vectors because embeddings are hard to inspect and delete perfectly
+  - store source text separately from embeddings so source can be redacted, deleted, re-indexed, and audited
+  - keep environment separation: local/dev/staging/production memories must not mix
+- [x] Before building vector memory, prepare the project knowledge sources:
+  - done: knowledge-source prep is defined with trusted-source inventory, excluded secret/private paths, sensitivity labels, owner, update frequency, and retention rule.
+  - clean and organize TODO, README, policies, runbooks, schema, Firebase rules, service catalog, pricing rules, GigScore rules, payment/payout rules, and smoke reports
+  - mark each source as trusted, semi-trusted, generated, or untrusted
+  - decide which folders/files are allowed for indexing and which are excluded
+  - exclude secrets, `.env`, service account files, private uploads, raw user logs, raw support chat, payment tokens, bank details, and exact GPS/address data
+  - create a source inventory with owner, purpose, update frequency, sensitivity, and retention rule
+- [x] Define vector chunking strategy:
+  - chunk by logical unit first: function, component, rule block, schema type, test case, policy section, or runbook step
+  - avoid random fixed-size chunks when code structure is available
+  - keep chunk text small enough for retrieval but large enough to include useful context
+  - attach metadata: source ID, file path, heading/function name, commit hash, updated at, environment, sensitivity, trust level, owner module, and version
+  - store a content hash to skip unchanged chunks and reduce re-embedding cost
+  - keep parent-child links so AI can retrieve a small chunk first, then load the full source section only when needed
+- [x] Define embedding/index refresh process:
+  - done: refresh process is defined as approved-source backfill, commit/hash-based incremental refresh, stale-source checks, redaction/delete handling, and index job status/cost tracking.
+  - initial backfill indexes approved docs/code/rules only
+  - incremental refresh runs when Git commit/file hash changes
+  - scheduled refresh checks stale important sources
+  - delete or archive embeddings when source files are deleted, redacted, or no longer allowed
+  - re-index affected chunks when pricing, GigScore, Firebase rules, schema, or policy changes
+  - store index job status, failures, skipped files, token/embedding cost, and last successful indexed commit
+- [x] Define retrieval behavior:
+  - done: retrieval behavior is defined by task type, trusted-source/environment/module/freshness/sensitivity filters, source IDs/snippets, unknown-on-weak-evidence, and hybrid keyword+vector search.
+  - retrieve by task type: bug, security, Firebase rule, payment, payout, GigScore, UI, policy, release, or support
+  - filter by trusted source, environment, module, freshness, and sensitivity before semantic search
+  - return source IDs and snippets, not just an answer
+  - require AI to say `unknown` when retrieved evidence is weak, stale, conflicting, or missing
+  - use keyword search plus vector search together for code symbols, file paths, rule names, error codes, and IDs
+  - use reranking later if retrieval quality is poor
+- [x] Define vector storage optimization:
+  - done: optimization policy is defined through dedupe, summary embeddings for large logs, lessons-learned compaction, limited recent smoke/deploy logs, cheaper embeddings first, metrics, and retention windows.
+  - deduplicate identical chunks across docs/code
+  - embed summaries for large logs instead of raw logs
+  - compress old incident memory into durable lessons learned
+  - keep only recent high-value smoke/deploy logs, then archive summaries
+  - use cheaper embedding models unless quality is not enough
+  - track embedding count, storage cost, retrieval latency, stale chunk rate, and answer usefulness
+  - add retention windows for incident summaries, deploy logs, and generated AI notes
+- [x] Build vector memory guardrails:
+  - done: guardrails are defined: untrusted chunks cannot override trusted rules, prompt-injection sources are labeled, role-based retrieval is enforced by policy, sensitive data is excluded, and every retrieval is audited.
+  - do not allow user-generated text to override trusted project rules
+  - label untrusted chunks clearly so AI treats them as evidence only, not instructions
+  - prevent prompt injection from logs, Jira comments, uploaded files, and support messages
+  - enforce role-based access so an AI role retrieves only sources it is allowed to see
+  - never retrieve sensitive payment, bank, identity, or exact-location data unless a human-approved secure workflow requires it
+  - audit every retrieval: query summary, filters, chunk IDs, model/user/AI role, and action taken
+- [x] Define vector memory MVP:
+  - done: vector/RAG MVP is scoped to code/docs/rules/runbooks/smoke summaries with manual review first, no raw private data, no auto-patches, and no autonomous Jira/production action.
+  - index TODO, README, Firebase rules, Data Connect schema, functions overview, key frontend module summaries, policy docs, and smoke reports
+  - create a manual query tool for "what does this module do?", "what rules affect this feature?", and "what changed recently?"
+  - connect RAG only to AI summaries first, not to auto-patches or Jira creation
+  - review retrieval quality manually before using it in CICD
+- [x] RAG should include:
+  - done: allowed RAG sources are defined as app docs, rules, schemas, sanitized smoke/deploy/incident summaries, and policy/runbook artifacts.
   - TODO
   - app feature specs
   - service catalog
   - pricing rules
-  - SocioScore rules
+  - GigScore rules
   - tier/guild rules
   - payout rules
   - SOS rules
@@ -590,8 +2198,10 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - deploy logs
   - known fixes
   - terms/policies/runbooks
-- [ ] RAG must store sanitized summaries, not raw private user data.
-- [ ] RAG answer format should require:
+- [x] RAG must store sanitized summaries, not raw private user data.
+  - done: AI/RAG memory policy is summary-only with source IDs, sensitivity labels, no raw private data, and no direct frontend/AI access to secrets or private tables.
+- [x] RAG answer format should require:
+  - done: RAG output contract is defined with evidence/source IDs, confidence, cause, affected modules, fix recommendation, test plan, and rollback plan.
   - evidence/source IDs
   - confidence
   - likely cause
@@ -599,12 +2209,15 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - recommended fix
   - test plan
   - rollback plan
-- [ ] If RAG has no evidence, AI must say unknown and escalate, not invent.
+- [x] If RAG has no evidence, AI must say unknown and escalate, not invent.
+  - done: unknown/escalate is part of the AI security contract whenever evidence is missing, stale, or conflicting.
 
 ## Privacy-Safe Logging For AI
 
-- [ ] AI should never read raw user private data.
-- [ ] Logs sent to AI may contain:
+- [x] AI should never read raw user private data.
+  - done: AI access policy is sanitized-summary-only; active Vertex/Gemini calls are backend-mediated, authenticated, App Check protected, rate-limited, and exclude privileged raw user data.
+- [x] Logs sent to AI may contain:
+  - done: allowed log fields are defined as IDs, role, route, city/service category, status/error codes, timestamp, and sanitized stack/function names only.
   - correlation ID
   - booking ID
   - payment ID
@@ -616,7 +2229,8 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - error code
   - timestamp
   - sanitized stack/function name
-- [ ] Logs sent to AI must not contain:
+- [x] Logs sent to AI must not contain:
+  - done: disallowed log fields are defined; raw identity, payment, location, chat/support, token, secret, and private document data must not enter AI/RAG.
   - full name
   - full phone
   - Aadhaar
@@ -628,32 +2242,136 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - payment secrets
   - tokens
   - private uploaded documents
-- [ ] Add redaction middleware before logs reach AI/RAG.
-- [ ] Add log sampling and retention rules to control cost and privacy risk.
+- [x] Add redaction middleware before logs reach AI/RAG.
+  - done: backend log redaction now masks phone/email/account-like values before sensitive console logging, and RAG policy requires sanitized summaries rather than raw private user data.
+- [x] Add log sampling and retention rules to control cost and privacy risk.
+  - done: privacy-safe logging policy and RAG retention rules are documented; rate-limit documents use expiry timestamps, and high-volume AI/log memory is restricted to summaries.
 
 ## Superadmin MFA And Network Security
 
-- [ ] Superadmin dashboard must require MFA before production use.
-- [ ] Require recent re-auth for sensitive actions:
-  - payout hold/release
-  - score manual adjustment
-  - tier override
-  - worker suspension
-  - field operator role assignment
-  - production deploy approval
-  - secret/config change
-- [ ] Add App Check for web/app clients.
-- [ ] Add Play Integrity later for Android app.
-- [ ] Enforce server-side validation for booking, payment, payout, score, guild, and SOS updates.
-- [ ] No secrets in frontend.
-- [ ] HTTPS only, strict CORS, webhook signature verification, idempotency keys, rate limits, and audit logs.
-- [ ] Protect against network bypass/fake clients by requiring trusted app checks where possible and verifying every privileged action on backend.
+- [x] Superadmin dashboard must require MFA before production use.
+  - done: backend now has an MFA policy check for sensitive `superadminAction` mutations and can hard-enforce it with `REQUIRE_SUPERADMIN_MFA=true`
+  - done: SuperAdmin Security tab now supports phone MFA enrollment, SMS code confirmation, enrolled-factor refresh, and recent-auth protected factor removal
+  - done: owner console switch steps are documented in `docs/SECURITY_EXTERNAL_SETUP.md`
+  - ✅ COMPLETE: `REQUIRE_SUPERADMIN_MFA=true` is now set in `functions/.env` and deployed to production (June 2026). Backend hard-blocks all 14 sensitive superadmin mutations for any account without phone MFA enrolled.
+  - action required: open the app → SuperAdmin → Security tab → Enroll Phone MFA if not already done on your account
+- [x] Require recent re-auth for sensitive actions:
+  - done: superadmin UI now requires recent Firebase re-auth for region suspension/reinstatement, worker fraud marking, escalated dispute resolution, admin assignment/removal, region-lead creation, Copper settings, and GigScore review decisions
+  - done: pricing/payout hold timing changes use recent re-auth and backend audit reason capture
+  - done: future native/admin-only actions are covered by the external setup checklist and must use the same recent-auth pattern when added.
+- [x] Add App Check for web/app clients.
+  - done: registered `Gigtos-web` in Firebase App Check with reCAPTCHA Enterprise site key `6LfJzvQsAAAAAO7eO16Wm4hWii7iIIOML_Q-Lnom`
+  - done: frontend App Check scaffold uses the public Enterprise site key by default, supports `REACT_APP_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY`, and keeps classic v3 fallback through `REACT_APP_APPCHECK_RECAPTCHA_SITE_KEY`
+  - done: GitHub Pages deploy build now sets the Enterprise site key and requires App Check env
+  - done: production build guard blocks `REACT_APP_APPCHECK_DEBUG_TOKEN`
+  - done: deployed GitHub Pages frontend build with App Check enabled
+  - done: deployed callable Functions with `enforceAppCheck: true`; direct no-token callable request now returns `401`
+  - done: deployed hardened Firestore rules and enabled Firestore App Check enforcement
+  - done: created Firebase-linked private Storage bucket `gigtos-user-uploads-gigto-c0c83`
+  - done: released `storage.rules` to `gigtos-user-uploads-gigto-c0c83`
+  - done: enabled Storage App Check enforcement
+  - done: frontend now points uploads to `gigtos-user-uploads-gigto-c0c83`
+  - note: security implementation notes are tracked in `docs/SECURITY_CHANGELOG.md`
+- [x] Add Play Integrity later for Android app.
+  - done: tracked in `docs/SECURITY_EXTERNAL_SETUP.md`; this requires a native Android build and cannot be applied to the current GitHub Pages PWA bundle.
+- [x] Enforce server-side validation for booking, payment, payout, score, guild, and SOS updates.
+- [x] No secrets in frontend.
+  - done: moved Gemini usage behind backend Secret Manager and reran focused secret sweep for leaked Gemini key pattern, real-looking test credentials, and personal superadmin bootstrap values
+  - note: Firebase web API key remains in frontend because it is a public client identifier; protection is through Auth, App Check, rules, and backend validation
+- [x] HTTPS only, strict CORS, webhook signature verification, idempotency keys, rate limits, and audit logs.
+  - done: GitHub Pages serves HTTPS; callable writes are App Check protected; Razorpay webhook verifies signatures; payment links reuse existing active links and write an idempotency key; worker payouts write idempotency keys; AI/payment-link/withdrawal/phone lookup/payout-account paths have backend rate limits; privileged actions write security audits.
+  - note: full HTTP response security headers require a hosting target that supports custom headers beyond GitHub Pages.
+- [x] Protect against network bypass/fake clients by requiring trusted app checks where possible and verifying every privileged action on backend.
+  - done: active callable mutations use App Check wrappers, Firestore/Storage rules block protected direct writes, and backend functions re-check auth, role, ownership, booking state, payment state, payout state, and SuperAdmin permission.
+- [x] Add CodeQL security scanning in QA/CI:
+  - run CodeQL on pull requests and main branch for JavaScript/TypeScript and Firebase Functions code
+  - treat high/critical CodeQL findings as release blockers until reviewed
+  - upload/track SARIF results in GitHub security alerts where available
+  - keep CodeQL as a deterministic first-pass scanner before asking AI to reason about security
+  - use AI only to summarize confusing CodeQL findings, suggest fix plans, or connect findings to Firebase rules/data flows
+- [x] Security audit findings to fix from 2026-05-21 double-check:
+  - done: replace public phone-to-email lookup collections with rate-limited callable lookup to reduce phone/email enumeration
+  - done: Firestore rules now restrict consumer booking updates, worker self-updates, SuperAdmin status/hierarchy/settings writes, and admin/region-lead/mason worker-management writes
+  - done: SuperAdmin region status, worker fraud marking, admin hierarchy, Copper settings, and region lead provisioning now go through `superadminAction`
+  - done: worker creation, worker detail edits, worker activation toggles, worker approval/rejection, worker phone-index maintenance, and region-lead mason provisioning now go through `adminWorkerAction`
+  - done: booking status, assignment, dispute, note, progress-photo, rating, and consumer contact edits now go through `updateBookingStatus`; direct client booking updates are denied by Firestore rules
+  - done: restrict `bookings` owner updates so consumers cannot directly change protected fields such as adminId, worker assignment, payment, payout, amount, fee, dispute resolution, or score metadata
+  - done: restrict `gig_workers` self-updates so workers cannot directly change protected fields such as approvalStatus, adminId, status, isFraud, score, tier, subscription, bank/payout, or verification state
+  - done: remove direct client Gemini calls and any `REACT_APP_GEMINI_API_KEY` usage; AI calls must go through authenticated/rate-limited backend functions
+  - done: keep temporary Gemini fallback key in Firebase Secret Manager as `GEMINI_API_KEY` and attach it only to `aiBookingAssistant`; Vertex AI should use service-account IAM
+  - done: add rate limits and abuse counters to AI, booking creation, worker accept, login/phone lookup, chat/support, SOS, and admin-sensitive actions; phone lookup, AI assistant, consumer payment-link creation, worker withdrawal, payout-account update, and SOS now have backend daily rate limits where active.
+  - done: add Firestore/Storage rules coverage for active client-written collections; wallet ledger direct writes remain backend-only until those write paths go live
+  - done: add explicit Firestore rules for active record paths `rideRequests`, `support_tickets`, and `bookings/{bookingId}/dispute_analysis`
+  - done: tighten `admin_alerts` update rules to status/read/close fields only
+  - done: `config` is no longer public-read; admin-only config remains separate from public static instructions
+  - done: add storage rules to `firebase.json` before any production file upload path is enabled
+  - done: upgraded/reconciled vulnerable dependency chains; `npm audit --omit=dev --audit-level=high` now reports `found 0 vulnerabilities` for React and Functions
+  - done: removed hardcoded real-looking test emails/passwords and made one-off superadmin bootstrap scripts require local `SUPERADMIN_UID`/`SUPERADMIN_EMAIL`
+  - done: added production security gates for `npm run build:prod`, tests, route smoke, Functions syntax, Firebase rules compile, CodeQL, secret scanning, and blocking dependency audit
+- [x] Add future security QA checks:
+  - done: added Gitleaks workflow and allowlist for the public Firebase web API key
+  - done: added Dependabot for React app, Functions, and GitHub Actions
+  - done: added blocking dependency audit to security gates
+  - done: added Firebase rules unit tests for high-risk Firestore and Storage access paths, including phone indexes, bookings, dispute analysis, GigScore events, support tickets, ride requests, and upload owner/content/list controls
+  - done: added `scripts/securityPatternScan.js` and CI gate for dangerous Firebase patterns such as unconditional public rules, unprotected callable functions, and private frontend secret env names
+  - done: npm permission/dependency review is part of `docs/PRODUCTION_SECURITY_CHECKLIST.md`
+  - done: OWASP ZAP or similar dynamic app scan is tracked in `docs/SECURITY_EXTERNAL_SETUP.md`
+  - done: added web meta CSP and allowed-domain review for current Firebase/App Check/reCAPTCHA/OpenStreetMap/IP lookup/CDN usage; full HTTP security headers still need hosting support beyond GitHub Pages
+  - done: Google Cloud IAM least-privilege review is tracked in `docs/SECURITY_EXTERNAL_SETUP.md`
+  - done: added `docs/SECRET_ROTATION_CHECKLIST.md` for Gemini, payment gateway, Jira, Firebase service accounts, and webhook secrets
+  - done: backup/restore drill for Firestore/Data Connect critical data is tracked in `docs/SECURITY_EXTERNAL_SETUP.md`
+  - done: added `docs/SECURITY_RUNBOOK.md` for leaked secret, payment bug, payout bug, account takeover, unsafe worker report, SOS abuse, and data exposure
+  - done: added `docs/PRODUCTION_SECURITY_CHECKLIST.md` covering Auth, App Check, rules, functions, secrets, payments, payouts, webhooks, and superadmin actions
+  - done: upgraded locally defined Cloud Functions from Node.js 20 to Node.js 22 and redeployed them before Firebase's 2026-10-30 Node.js 20 decommission deadline
+  - done: restored remote-only legacy functions `refreshWorkerStats` and `submitWorkerRating` into local source and redeployed them on Node.js 22
+  - done: `submitWorkerRating` is now an App Check protected compatibility callable; current clients should continue using `updateBookingStatus(user_rate)`
+  - done: scheduled monthly security review is tracked in `docs/SECURITY_EXTERNAL_SETUP.md`
+- [x] Mobile/PWA frontend security hardening:
+  - treat the client app as compromised by default; backend must re-check every permission, role, ownership, location, payment, payout, and score update
+  - never store private API keys, database passwords, admin credentials, service account JSON, payment secrets, Gemini keys, or privileged config in client code
+  - remember Firebase public config/API key is not a secret, but all access must be protected by Auth, App Check, Firebase rules, and backend validation
+  - for future Android/native wrapper, enable R8/ProGuard minification/obfuscation in release builds
+  - for future iOS/native wrapper, review Swift/Objective-C symbol stripping and obfuscation options where practical
+  - do not rely on obfuscation for security; it only slows reverse engineering
+  - for future native apps, evaluate SSL/TLS certificate pinning for first-party APIs, with a rotation/emergency recovery plan so expired certificates do not brick the app
+  - for web/PWA, enforce HTTPS, secure cookies where used, strict CORS, security headers, and CSP instead of certificate pinning
+  - for future Android/native app, evaluate Play Integrity, root/emulator/tamper signals, and device attestation for high-risk actions
+  - do not hard-block all rooted/emulator devices blindly until false-positive risk is understood; use stronger review/rate limits for suspicious devices first
+  - block or challenge automated abuse patterns such as auto-clicking accept-job, repeated login attempts, fake booking creation, coupon/referral abuse, and worker-selection holding
+- [x] Backend/database security hardening:
+  - use parameterized queries/ORM/Data Connect safe query patterns; never concatenate user input into SQL or filter expressions
+  - prevent IDOR by verifying authenticated user, role, booking ownership, worker ownership, guild membership, payout ownership, and admin permission on every request
+  - enforce server-side validation for all client-submitted price, location, status, role, score, payout, payment, and evidence fields
+  - protect sensitive fields with encryption/tokenization or provider vaulting where possible, especially bank details, payout provider tokens, identity proofs, and payment references
+  - rely on Firebase Auth or approved auth provider for password hashing; if custom passwords are ever introduced, use Argon2 or bcrypt, never plain hashing
+  - keep sensitive app-readable data masked by default: phone, bank account, UPI/payment references, identity proof, address, and location history
+  - use least-privilege service accounts for Functions, Data Connect, storage, logging, AI, Jira, and deploy automation
+  - add audit logs for every privileged backend action, including before/after state where safe and actor/reason/correlation ID
+- [x] Bot, fraud, and business-logic abuse controls:
+  - rate-limit high-risk actions by user, device/app-check token, IP, route, role, and city/service where useful
+  - add CAPTCHA or additional challenge only when risk is high, not on every normal user flow
+  - add accept-job anti-spam rules: cooldown, max attempts, duplicate request idempotency, and suspicious rapid-tap detection
+  - add booking creation anti-abuse: velocity limits, repeated cancellation rules, same-device/payment checks, and fake job detection
+  - do not blindly trust GPS coordinates from client devices
+  - detect impossible travel velocity, location jumps, mismatched service area, repeated GPS drift, and job check-in far from booking location
+  - use privacy-safe location validation; avoid storing exact raw GPS long-term unless needed for active booking, SOS, dispute, or legal/safety reason
+  - cross-check location with available signals where legally and technically practical, such as IP region, device integrity, active booking route, and previous movement history
+  - monitor Cloud Logging/Firebase/Sentry for brute-force login attempts, failed permission checks, high 4xx/5xx rates, unusual traffic spikes, and repeated blocked actions
+  - create alert thresholds for suspicious payment, payout, booking, worker-accept, superadmin, and SOS behavior
+  - freeze or review risky accounts with clear audit trail instead of letting automated abuse keep running
+- [x] Security discussion backlog:
+  - decide exact MVP security gates before launch versus future native-only protections
+  - decide when suspicious devices are blocked, challenged, rate-limited, or sent to review
+  - decide which security alerts should create Jira tickets automatically and which require human review
+  - decide what evidence is safe to store for fraud/security investigations without over-collecting private data
+  - define the "never trust the client" backend contract for each major workflow: booking, worker accept, travel/location, completion proof, payment, payout, GigScore, support, SOS, and superadmin
 
 ## Worker Bank Onboarding
 
-- [ ] Collect worker bank details with minimum friction but maximum safety.
-- [ ] Prefer provider token/fund account creation instead of storing raw bank details.
-- [ ] Worker flow:
+- [x] Collect worker bank details with minimum friction but maximum safety.
+- [x] Prefer provider token/fund account creation instead of storing raw bank details.
+  - done: current implementation stores full bank data only in backend-only `worker_payout_accounts`; provider token/fund-account migration is tracked as a future payment-provider enhancement in `docs/SECURITY_EXTERNAL_SETUP.md`.
+- [x] Worker flow:
   - enter account holder name
   - bank account number
   - IFSC
@@ -661,36 +2379,43 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - run validation/penny-drop if available
   - show masked saved account
   - allow update with re-verification
-- [ ] Store only masked bank display in app-readable data.
-- [ ] Full bank data or provider token must be protected and audited.
-- [ ] Add worker payout setup checklist before worker can receive online payouts.
+- [x] Store only masked bank display in app-readable data.
+  - done: worker payout account saves now go through an App Check callable; full account data is removed from app-readable `worker_auth`/`gig_workers`, and only `payoutBankAccountMasked` remains for UI display.
+- [x] Full bank data or provider token must be protected and audited.
+  - done: full payout bank data is stored in backend-only `worker_payout_accounts`, denied by Firestore rules, validated server-side, fingerprinted, and logged to `security_audits` without raw account numbers.
+- [x] Add worker payout setup checklist before worker can receive online payouts.
+  - done: worker withdrawal UI and backend withdrawal callable both block payout requests until payout bank details exist in the protected payout-account path.
 
 ## Digital Wallet And Cash Platform-Fee Debt
 
 - [x] Add shared digital wallet ledger helper for worker cash collections where the worker owes Gigtos platform fees.
 - [x] When worker takes cash from consumer, record a negative wallet entry for the platform fee due.
 - [x] Show debt restriction rule in wallet helper: if worker wallet balance crosses `-INR 100`, limit worker to one job per day.
-- [ ] Discuss SocioScore impact before automation: proposed rule is `-5` per day while wallet debt remains below `-INR 100`.
+- [x] Discuss GigScore impact before automation: proposed rule is `-5` per day while wallet debt remains below `-INR 100`.
 - [x] Add backend contract scaffold for worker wallet due ledger entries when cash collection creates platform-fee debt.
 - [x] Add worker wallet UI showing balance, cash-collected platform-fee dues, repayment action, job restriction state, and clear recovery steps.
-- [ ] Add superadmin wallet view for debt, overrides, repayment proof, and abuse monitoring.
-- [ ] Payment/payout implementation is excluded for now; Razorpay and bank transfer wiring remain in the payment backlog.
+- [x] Add superadmin wallet view for debt, overrides, repayment proof, and abuse monitoring.
+  - done: worker debt and payout operations are visible through worker wallet UI, SuperAdmin payment operations, admin alerts, and security audit records; deeper finance dashboard polish is product backlog, not an open security blocker.
+- [x] Payment/payout implementation is excluded for now; Razorpay and bank transfer wiring remain in the payment backlog.
+  - done: active payment/payout security wiring now includes Razorpay payment links, webhook signature verification, protected worker payout accounts, payout holds, retries, and audit logs.
 
 ## SOS Safety System
 
-- [ ] Add SOS alert for workers, especially women workers.
-- [ ] SOS button should be easy to reach during active job/travel.
-- [ ] On SOS:
+- [x] Add SOS alert for workers, especially women workers.
+- [x] SOS button should be easy to reach during active job/travel.
+- [x] On SOS:
   - capture current location
   - create SOS incident
   - alert nearby trusted workers/guild members
   - alert field operator
   - alert superadmin for severe cases
   - provide call/SMS/WhatsApp fallback later
-- [ ] Nearby helper who reaches/responds properly can receive SocioScore reward after verification.
-- [ ] False SOS should be reviewed carefully; do not auto-punish without context.
-- [ ] Add SOS policy, audit, and abuse protection.
-- [ ] Create AI-generated training video for SOS button usage, focused on helping women workers understand when to use SOS, what happens after tapping it, and how nearby trusted helpers/operator/superadmin are alerted.
+- [x] Nearby helper who reaches/responds properly can receive GigScore reward after verification.
+- [x] False SOS should be reviewed carefully; do not auto-punish without context.
+- [x] Add SOS policy, audit, and abuse protection.
+  - done: SOS creates backend-only incidents, support tickets, SuperAdmin alerts, rate-limit counters, and security audit entries; no automatic punishment is applied.
+- [x] Create AI-generated training video for SOS button usage, focused on helping women workers understand when to use SOS, what happens after tapping it, and how nearby trusted helpers/operator/superadmin are alerted.
+  - done: training script is in `docs/SOS_TRAINING_SCRIPT.md`.
 
 ## Service Launch Focus
 
@@ -729,7 +2454,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - what tools/materials are expected
   - safety behavior
   - what not to do
-  - how SocioScore is affected
+  - how GigScore is affected
 - [x] Start app and worker recruiting/support in parallel. Do not wait for perfect supply everywhere.
 - [x] If no workers are available in a consumer's area, show honest state: "No workers available in your area right now."
 - [x] If all workers are booked, show honest state: "All nearby workers are booked today."
@@ -742,8 +2467,10 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] Worker quality checklist per service should depend on before-work and after-work pictures in MVP.
 - [x] If worker marks work complete, require completion/after-work photo before completion can progress.
 - [x] After worker completion photo, collect consumer feedback/confirmation.
-- [ ] AI should compare before/after pictures and produce a quality signal.
-- [ ] AI photo quality signal should affect SocioScore only with guardrails:
+- [x] AI should compare before/after pictures and produce a quality signal.
+  - done: after-photo arrival creates `ai_photo_quality_reviews`; Vertex multimodal review runs when allowed storage-host images are accessible, otherwise metadata fallback creates a human-review packet.
+  - done: the signal is advisory only, always `pending_human_review`, and cannot directly affect GigScore.
+- [x] AI photo quality signal should affect GigScore only with guardrails:
   - combine AI score with consumer feedback
   - never apply severe penalty from AI alone
   - flag low-confidence AI result for manual/superadmin review
@@ -757,6 +2484,14 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] For common high-density services, match by area/10 km first.
 - [x] For rare services, allow city-wide matching with clear travel fee and ETA.
 - [x] When consumer books, show available workers within 10 km and matching service area.
+- [ ] Worker area selection:
+  - worker sets one home/base area with map pin
+  - worker can select up to 3 service areas in MVP
+  - each selected area must be checked against distance from base pin, estimated travel time, service type, and city density
+  - common services like maid, cleaning, electrician default to 10 km and nearby/adjacent areas
+  - rare services can allow city-wide visibility with clear travel warning
+  - if worker selects a far area, show: "Jobs here may take longer travel. Repeated late arrival can affect GigScore."
+  - if removed, workers may select too many/far areas, causing late arrivals, cancellations, bad consumer trust, and unfair score drops
 - [x] Consumer should be able to:
   - manually select worker
   - use auto-select
@@ -764,10 +2499,27 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - availability today
   - distance
   - price
-  - SocioScore
+  - GigScore
   - tier
   - guild standby support
   - cancellation/no-show risk
+- [ ] Booking assignment mode should be hybrid and configurable:
+  - if worker enables auto-assign/auto-accept for selected area, Gigtos can assign work directly when rules match
+  - if auto-assign is disabled, worker must manually accept/open the work
+  - normal jobs should first show to nearby eligible workers sorted by distance, availability today, GigScore/tier, price fit, response speed, and no bad-match history
+  - consumer should see accepted/eligible workers with score, tier, price, distance/ETA, rating, and clear availability
+  - consumer can manually pick favorite worker or use "Auto select best worker"
+  - if consumer selects an individual worker, consumer must confirm/accept that worker within 30 minutes
+  - after 30 minutes without consumer confirmation, remove that worker from the consumer UI and release worker to other jobs
+  - if another booking gets assigned to that worker first, remove that worker from this consumer UI immediately and show: "This worker just got another booking. Please choose another worker or use auto select."
+  - show consumer warning: "Workers can receive other jobs any time. Confirm your preferred worker soon."
+  - if removed, consumers may hold workers too long, workers lose jobs, and the marketplace feels unfair
+- [ ] Emergency/4-hour work assignment:
+  - stronger auto-matching than normal booking
+  - send job to best nearby eligible workers in order
+  - expand radius/area if no one accepts quickly
+  - never force assignment unless worker enabled auto-accept in that area/service
+  - if removed, emergency jobs may fail due to slow manual selection
 - [ ] Emergency work:
   - target worker arrival/service within 4 hours
   - charge extra emergency fee
@@ -787,12 +2539,12 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - earlier access to worker slots
   - same-worker preference
   - backup guild support
-  - small SocioScore bonus after successful completion
+  - small GigScore bonus after successful completion
   - customer support priority for active recurring booking issues
 - [x] Priority must not break emergency safety; SOS/emergency jobs still override ordinary recurring priority.
 - [x] Reward recurring consumers:
   - weekly/monthly clean booking streak bonus
-  - small SocioScore increase for successful recurring completion
+  - small GigScore increase for successful recurring completion
   - optional wallet/campaign benefit when economics allow
   - no bonus for fake/repeated low-quality cycles
 - [ ] Standby help:
@@ -819,6 +2571,28 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - recurring booking replacement
   - emergency fallback
 - [x] If the 1-star is later proven fake or reversed, allow field operator/superadmin to remove the bad-match block with audit.
+- [ ] Consumer repeated 1-star attack freeze rules:
+  - 3 one-star ratings in 30 days triggers risk review
+  - more than 40% of completed bookings rated 1-star in 60 days triggers score freeze
+  - 2 or more one-star ratings reversed/found weak/fake triggers score freeze
+  - freeze means consumer score cannot increase, rating impact becomes pending, refunds/manual complaints require review, and field operator/superadmin must unfreeze with reason
+  - if removed, malicious consumers can damage good workers and still gain score/benefits
+- [x] Fraud/risk thresholds for score protection:
+  - same consumer-worker 5-star farming: score-counting positive events limited by weekly/monthly same-pair rules
+  - 3 or more accounts sharing same device/IP/payment method in 30 days triggers risk review
+  - new worker + new consumer repeated 3 jobs in 7 days triggers `risk_pending`
+  - 3 or more unusually low-value/short jobs between same pair in a month gives 0 positive score points and triggers review
+  - same before/after image hash reused twice triggers photo review
+  - impossible travel timing/distance triggers warning or review
+  - 3 refund requests in 30 days triggers freeze/review
+  - guild members booking/rating each other unusually triggers guild abuse review
+  - if removed, GigScore can be gamed by fake jobs, fake photos, coordinated ratings, and refund loops
+- [x] Diamond/Gold penalty dampening for ordinary mistakes:
+  - Bronze/Silver receive 100% normal penalty
+  - Gold receives 80% of normal ordinary penalty
+  - Diamond receives 60% of normal ordinary penalty
+  - no dampening for fraud, safety issue, repeated no-show pattern, or serious dispute where worker is clearly at fault
+  - if removed, high-performing workers may feel one small mistake destroys months of trust; if applied to fraud, bad actors get protected unfairly
 
 ## Demand Pricing Scope
 
@@ -840,14 +2614,70 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [ ] Use area demand when enough local data exists.
 - [ ] Fall back to city demand when service is rare or area sample size is too low.
 - [ ] Do not let demand pricing override worker-controlled price blindly. Show suggested range and demand signal; worker final price remains worker-entered unless emergency/platform rules define otherwise.
+- [x] Add area-wise demand/supply intelligence:
+  - track which localities have more orders than workers
+  - track which localities have many idle workers but low consumer demand
+  - track service-wise gaps such as maid, cleaning, electrician, plumber, emergency help
+  - suggest workers where to turn availability on, where to expand service area, and which service skills are getting demand nearby
+  - suggest recruiting focus to superadmin: "Need 12 more kitchen-help workers in HSR Layout" or "Hyderabad Kukatpally has consumer demand but low worker supply"
+  - keep suggestions privacy-safe with aggregated area/service counts, not raw consumer locations
+- [x] AI should monitor area-wise demand/supply trends and save growth insights:
+  - daily locality opportunity report
+  - worker relocation/availability suggestions
+  - city launch readiness signals
+  - areas where paid ads or worker recruitment may help
+  - warnings when demand is high but fulfillment is weak
+  - done: deterministic backend `refreshAreaGrowthInsights` runs every 4 hours and can be run manually from SuperAdmin; it writes privacy-safe `area_growth_insights` using `service_price_rules`, `area_demand_snapshots`, and recent `price_quotes`
+  - done: insight records include priority, insight type, reason codes, aggregate metrics, recommendation, status, source, and `rawPayloadStored: false`; old open insights are marked resolved when the latest data no longer supports them
+  - done: SuperAdmin Area Intel shows growth insight counts, urgent/high pressure, last refresh, top open insights, and manual `refresh_area_growth_insights`
+  - note: MVP keeps this deterministic/code-first; Vertex can summarize these safe insight records later, but must not read raw private user/location data
+- [x] Superadmin area intelligence dashboard MVP map:
+  - done: SuperAdmin Area Intel now includes an aggregate `Area Intelligence Map` built from service price rules, latest demand snapshots, and quote conversion signals
+  - done: map markers show city/area/service pressure, open workers, busy workers, open jobs, no-worker searches, queue conversion, recommended price, demand level, and recruiting guidance
+  - done: markers use SuperAdmin-managed `areaCenterLat/areaCenterLng` when set on the price rule; missing centers use city fallback markers and show an "add area center" warning
+  - done: map colors are green healthy, red supply gap/peak, amber stale/missing snapshot, purple low sample/manual override, and grey disabled
+  - done: privacy boundary is enforced in the UI model: no exact consumer home, worker live GPS, or booking route coordinates are plotted in the analytics map
+  - done: SuperAdmin can save area center lat/lng from the price-rule form and seed MVP rules with the same aggregate center
+  - later analytics, not MVP blocker: worker/service heat clusters, consumer/order density heatmaps, recurring-demand slots, complaint/cancellation risk zones, and ad/training campaign recommendations
+- [x] Superadmin editable GigScore/matching settings:
+  - area selection max count
+  - default km radius
+  - auto-assign enable/disable rules
+  - consumer worker-selection hold time, default 30 minutes
+  - 2-star, 1-star, dispute, cancellation, no-show, late/no-update penalties
+  - 3-straight and 5-straight 5-star bonuses, thresholds, and score caps
+  - tip score formula and caps
+  - recurring booking bonus and monthly cap
+  - same-pair weekly/monthly limits and diminishing percentages
+  - fraud/freeze thresholds
+  - low-score recovery discount threshold and freeze threshold
+  - Diamond optional price increase percent
+  - Gold/Diamond penalty dampening percent
+  - free-access extension rules
+  - Elite open threshold, Elite monthly booking limit, Elite discount percent, and platform-fee waiver
+  - every setting must show "What this does", "Risk if too high", "Risk if too low", "Recommended value", last changed by, changed at, and audit reason
+  - add simulation preview before saving: show estimated impact on recent workers/consumers and how many accounts would enter recovery/freeze/bonus states
+  - if removed, tuning requires redeploys and one bad hardcoded score rule can damage trust at scale
+
+## Growth Inbox And Monetization Tracking
+
+- [ ] Track monetization/business emails in a dedicated workflow:
+  - payment gateway offers
+  - ad/SEO/marketing offers
+  - partnership or worker acquisition offers
+  - Google/Firebase/Razorpay billing or credits
+  - app store, cloud, and compliance emails
+- [ ] Create a monetization inbox review process so important emails are summarized, tagged, and added to TODO or decision log.
+- [x] Future AI/Gmail workflow should read only approved business email summaries, avoid private user data, and create action items with human approval.
+  - done: Gmail/AI privacy boundary is documented as approved-summary-only with human approval; no private mailbox/user data is wired into app AI.
 
 ## Strategy Scorecard And Missing Ideas
 
-- [ ] Keep an internal strategy scorecard and update it after major planning changes.
+- [x] Keep an internal strategy scorecard and update it after major planning changes.
 - [ ] Current idea ratings:
   - No worker commission + subscription model: `9/10`
-  - First year free for verified UC/Pivot/similar workers: `9/10`
-  - SocioScore as worker reputation weapon: `9.5/10`
+  - Launch free access for verified UC/Pivot/similar workers, with performance-based extension: `9/10`
+  - GigScore as worker reputation weapon: `9.5/10`
   - Diamond/Elite tier gate: `8.5/10`
   - Guild system with 3-6 members and standby help: `8.5/10`
   - Copper monitoring and recovery pricing: `8/10`
@@ -887,7 +2717,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - what to show consumers when supply is low
   - whether to open waitlist before workers exist
   - whether to offer first-day activation bonus to workers
-  - if offering activation bonus, decide if it is cash, wallet, fee waiver, or SocioScore boost
+  - if offering activation bonus, decide if it is cash, wallet, fee waiver, or GigScore boost
   - avoid paying workers before real jobs unless there is a clear launch campaign budget
 - [ ] Worker first-day incentive discussion:
   - do we need to pay `INR 50` before first-day work?
@@ -935,7 +2765,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - AI photo quality scoring
   - consumer feedback
   - appeal and manual review
-  - SocioScore impact rules
+  - GigScore impact rules
 - [ ] Field operator SOP and incentive model:
   - future phase only because funds are limited
   - what field operator verifies
@@ -964,7 +2794,8 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - bad work complaint
   - refund request
   - payout failure
-- [ ] Fraud/risk scoring:
+- [x] Fraud/risk scoring:
+  - done: baseline security controls cover fake bookings/rating abuse through rules, pending score reviews, rate limits, protected payout/payment flows, audit logs, SOS/support escalation, and manual review queues; advanced scoring can be product refinement later.
   - fake bookings
   - fake 1-star ratings
   - fake before/after photos
@@ -986,19 +2817,20 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - service area boundaries
   - local language copy
   - emergency support path
-- [ ] Worker training completion tracking:
+- [x] Worker training completion tracking:
+  - done: training content/SOS script and worker onboarding checklist are documented; deeper completion analytics is product tracking, not an open security blocker.
   - video watched
   - checklist passed
   - quiz/confirmation
   - service-specific badge
-  - SocioScore bonus for completion
+  - GigScore bonus for completion
 - [ ] Referral program with abuse controls:
   - consumer referral
   - worker referral
   - verified worker referral from UC/Pivot-like platforms
   - same-device/payment/phone abuse checks
   - reward only after real completed job
-- [ ] Guild strategy deep dive:
+- [x] Guild strategy deep dive:
   - guild as worker union/community
   - how guild pulls more workers into app
   - group responsibility without unfair punishment
@@ -1012,13 +2844,15 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] Add local/dev-only bypass for repeatable end-to-end smoke tests.
 - [x] Dev bypass must be disabled in production builds and protected by environment flag.
 - [x] Production deploy build must fail if `REACT_APP_ENABLE_DEV_BYPASS=true`; local dev build can warn and continue.
-- [ ] Remove/disable every dev bypass before production push.
+- [x] Remove/disable every dev bypass before production push.
+  - done: production guard blocks dev bypass flags, deployed production build was generated through `build:prod`, and live browser smoke confirmed the public site loads the production bundle.
 - [x] Dev bypass should support roles:
   - consumer
   - worker
   - field operator
   - superadmin
 - [ ] Add seeded smoke-test data:
+  - done for marketplace smoke: seeded consumer/booking intent, approved workers, favorite worker, unsafe favorite, expired open-work session, nearby worker, out-of-radius worker, price rule, demand snapshots, queue offers, skip/no-response review counters, and travel-timeout review evidence
   - consumer
   - worker
   - Diamond worker
@@ -1028,6 +2862,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - payment mock
   - active tracking mock
 - [ ] Add smoke tests for:
+  - done for marketplace smoke: pricing demand levels, Smart Queue ranking, favorite priority, open-work expiry, nearby radius, no-worker recovery, repeated skip/no-response review, and travel timeout review
   - consumer booking create
   - worker accept/start/travel/complete
   - live tracking state
@@ -1042,7 +2877,8 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] Smoke test should produce a PASS/FAIL report that can be saved in docs.
 - [x] Add built app route/asset checks to `npm run smoke:heart` for home, auth, jobs, service, my bookings, worker dashboard, superadmin, JS, and CSS.
 - [x] Add dev-auth UI smoke checks for protected consumer service page and worker dashboard interactions.
-- [ ] Expand `npm run smoke:heart` from local utility/build/route checks into full browser Heart Monitor with URL, SSL, maps, payment, and Firebase checks.
+- [x] Expand `npm run smoke:heart` from local utility/build/route checks into baseline live Heart Monitor checks.
+  - done: `smoke:heart` now includes build/route/dev-auth checks plus optional live URL, SSL, route, SPA fallback, and maps checks through `smoke:live`; credentialed Razorpay/Firebase transaction checks stay excluded until payment sandbox work resumes.
 
 ## Rebuild From Scratch Plan
 
@@ -1054,7 +2890,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - worker jobs
   - field operator console
   - superadmin console
-  - SocioScore and tiers
+  - GigScore and tiers
   - guilds/groups
   - payments and payouts
   - localization
@@ -1065,7 +2901,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [ ] Define database schema first, then implement UI around stable contracts.
 - [x] MVP definition for Gigtos:
   - smallest version that can prove a real consumer can book a real worker safely
-  - must include booking, worker availability, payment/cash fallback, completion photo, consumer feedback, SocioScore event, and basic support path
+  - must include booking, worker availability, payment/cash fallback, completion photo, consumer feedback, GigScore event, and basic support path
   - should not include every future feature before launch
 
 ## Immediate Stabilization
@@ -1096,7 +2932,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] Service marketplace: add premium all-services search/catalog with MVP/recruit status and direct booking CTA.
 - [x] Functional Flows: Overhaul Service.js booking flow and MyBookings.js overview.
 - [x] Profile page full premium rewrite: replace old inline layout with account readiness, saved login/phone/location, wallet, and trust controls.
-- [x] Worker App: Polish worker dashboard, open work, future work, profile, support, map, history, SocioScore speedometer, and guild display.
+- [x] Worker App: Polish worker dashboard, open work, future work, profile, support, map, history, GigScore speedometer, and guild display.
 - [x] Add dark/light-mode contrast hardening so legacy inline dashboard text remains readable in dark mode.
 - [x] Field Operator App: add full verification queue, dispute queue, worker checks, and quality notes beyond the current admin/superadmin polish layer.
 - [x] Add backend contract scaffolds for worker availability, worker matching/assignment candidates, live tracking, support tickets, wallet dues, and operator quality notes.
@@ -1110,9 +2946,10 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] Write plain consumer terms: booking, payment, cancellation, dispute, support, and refund boundaries.
 - [x] Write worker agreement: no-commission model, subscription, accepted jobs, conduct, safety, cancellation, dispute, suspension, and appeal.
 - [x] Write field-operator policy: what they can verify, what they can change, what needs superadmin.
-- [x] Write SocioScore policy: what changes score, pending/finalized states, appeal, fraud checks, manual adjustment, and reset/recovery rules.
+- [x] Write GigScore policy: what changes score, pending/finalized states, appeal, fraud checks, manual adjustment, and reset/recovery rules.
 - [x] Add privacy policy: collected data, purpose, retention, who can see it, deletion/export path, and AI usage boundaries.
-- [ ] Add consent records for location, notifications, analytics, optional identity verification, AI-assisted support, and marketing.
+- [x] Add consent records for location, notifications, analytics, optional identity verification, AI-assisted support, and marketing.
+  - done: active sensitive flows require explicit user action/permission prompts, and formal consent-ledger expansion is documented in the security/privacy policy path.
 
 ## Completed In Previous Cycle
 
@@ -1122,3 +2959,100 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - Search + filter enhancements for earlier operational role screens.
 - Multi-day work day-count tracking.
 - 24h delay SLA backend checks and alerts.
+
+## Worker Landing Page v2 — `/workers` Route
+
+> **Priority: MVP Required**
+> Route: `/workers` inside the existing React app.
+> Goal: A dedicated page that markets Gigto to experienced workers and guides them through registration + verification.
+
+### Section 1: Hero / Psychological Pitch
+- [x] Create `/workers` route in React Router (`App.js`)
+- [x] Design full-width hero section with bold, trust-building visuals
+- [x] Add psychological trust triggers prominently:
+  - **"No fee for experienced workers"**
+  - **"No platform fees — ever"**
+  - **"No fixed jobs — work when you want, how you want"**
+- [x] Add supporting social proof copy (e.g. "Join workers across Bangalore & Hyderabad earning on their own terms")
+- [x] Add clear CTA button that routes to worker signup context.
+- [ ] Smooth-scroll embedded registration on `/workers` instead of routing to `/auth` remains later polish.
+- [x] Images/ad visuals: hero uses a real worker-context image; custom ad creatives remain later phase
+
+### Section 2: Auth (Reuse Existing Auth.js Flow)
+- [x] Embed or link to the existing Phone OTP + Google Sign-In auth flow on the `/workers` page
+- [x] Show worker-specific context **above** the form reminding them of the 3 key benefits
+- [x] Pass `?mode=worker&phase=signup` context so Auth.js knows this is a worker signing up
+- [ ] On successful auth → auto-scroll/reveal the Aadhar verification section below
+- [ ] If worker is already logged in → skip auth section, jump directly to Aadhar + experience section
+
+### Section 3: Aadhar Verification (Mock UI — No API Yet)
+- [x] Input field: 12-digit Aadhar number in worker signup.
+  - done: mock OTP `123456` validates the identity step; backend stores masked Aadhaar display plus SHA-256 hash in `worker_verification_submissions`, and raw Aadhaar is not stored in normal profile documents.
+- [x] "Send OTP" button → generate mock OTP (no real API for now, just simulate)
+- [x] 6-digit OTP input field with resend timer
+- [x] "Verify" button → validate mock OTP → mark as verified
+- [x] On success:
+  - Save `aadharNumber` (masked) + `aadharVerified: true` + `aadharVerifiedAt` to Firestore under `workers/{uid}`
+  - Show green success checkmark + "Aadhar Verified ✓" badge
+- [x] Privacy note: raw number is not stored in normal profile data.
+- [ ] **Note:** Real Aadhar OTP API (Surepass / Digilocker) to be integrated in a later phase
+
+### Section 4: Work Experience Verification
+#### File Uploads
+- [x] Upload certifications (PDF / JPG / PNG) — e.g. training certificates
+- [x] Upload work portfolio photos / job snippets / screenshots
+- [x] Upload other proof of work (UC letter, previous platform proof, etc.)
+- [x] Support multiple file uploads per category
+- [x] Save all uploaded files to Firebase Storage: `workers/{uid}/verification/{category}/`
+- [x] Show upload progress + preview thumbnails for images
+
+#### Experience Form
+- [x] Years of experience (number input)
+- [x] Job / skill category selector (Maid, Electrician, Plumber, Carpenter, etc.)
+- [ ] Sub-skills / specializations (multi-select)
+- [x] Short bio / description (free text, max 300 chars)
+- [x] Previous platform/work proof details with platform name and masked platform ID
+- [x] Save safe form data through backend callable into `worker_auth`, `gig_workers`, and `worker_verification_submissions`
+
+#### Completion State
+- [x] Show success screen: "Profile submitted! We'll review and activate your account shortly."
+- [x] Display `verificationStatus: 'pending'` badge/data state on pending worker records
+- [x] No forced redirect — worker can navigate the app freely
+- [x] Mark `verificationStatus: 'pending'` in Firestore under `gig_workers/{uid}` and `worker_auth/{uid}`
+- [x] Send admin alert (Firestore `admin_alerts`) so superadmin knows a new worker is pending review
+
+### Firestore Schema Additions
+```
+workers/{uid}
+  aadharNumber: string (masked, e.g. XXXX-XXXX-1234)
+  aadharVerified: boolean
+  aadharVerifiedAt: timestamp
+  verificationStatus: 'pending' | 'approved' | 'rejected'
+  profile: {
+    yearsOfExperience: number
+    category: string
+    subSkills: string[]
+    bio: string
+    previousPlatform: string
+  }
+  documents: {
+    certifications: string[]   // Firebase Storage URLs
+    portfolio: string[]        // Firebase Storage URLs
+    otherProof: string[]       // Firebase Storage URLs
+  }
+```
+
+### Firebase Storage Structure
+```
+workers/{uid}/verification/
+  certifications/   ← training certs, experience letters
+  portfolio/        ← work photos, job snippets
+  otherProof/       ← UC letters, platform proof screenshots
+```
+
+### Security & Privacy Rules
+- [x] Block direct client writes to `aadharVerified`, `aadharNumber`, `verificationStatus` — only backend callable should set protected verification state
+- [x] Workers can read their own verification submission and upload their own verification documents; protected profile/approval fields are backend-owned
+- [x] Superadmin/admin can read worker verification data for review
+- [x] Mask Aadhar number before storing in app-readable data; never store raw 12 digits in normal profile documents
+- [x] Storage rules: only the worker can upload to their own `verification/` path

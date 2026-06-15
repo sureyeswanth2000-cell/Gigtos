@@ -36,7 +36,7 @@
 - App should show extra charge clearly before confirmation.
 - If worker becomes sick/unavailable, ask guild first, then nearby available worker.
 
-## SocioScore Guardrails
+## GigScore Guardrails
 
 - One AI photo signal never decides a harsh penalty alone.
 - 1-star rating needs reason and, where possible, proof.

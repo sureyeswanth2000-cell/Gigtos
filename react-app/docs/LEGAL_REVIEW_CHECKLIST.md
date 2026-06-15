@@ -27,7 +27,7 @@ Use this before public scale and before any aggressive worker acquisition campai
 - Logs must avoid full phone, raw payment tokens, full identity document numbers, and private notes.
 - Define deletion/export request process.
 
-## SocioScore And AI
+## GigScore And AI
 
 - Score impact must be explainable and appealable.
 - AI photo scoring must be advisory until guarded by review logic.

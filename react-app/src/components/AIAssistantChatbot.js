@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { auth, db } from '../firebase';
+import { auth, db, functionsInstance } from '../firebase';
 import { getCurrentRouteSearch } from '../utils/devBypass';
 import { doc, getDoc, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, setDoc, updateDoc, increment } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import styled, { keyframes, createGlobalStyle } from 'styled-components';
 
 const fadeIn = keyframes`
@@ -273,7 +274,31 @@ function AIAssistantChatbot() {
 
   async function sendToGemini(userInput, imageFile = null) {
     setLoading(true);
-    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+
+    try {
+      const callable = httpsCallable(functionsInstance, 'aiBookingAssistant');
+      const response = await callable({
+        message: userInput || (imageFile ? "I've uploaded a photo of the work needed." : ""),
+        selectedService: '',
+      });
+      const backendText = response.data?.reply || "I'm here to help, but I'm having trouble responding right now.";
+      const aiText = imageFile
+        ? `${backendText}\n\nPhoto analysis is not enabled in this secure assistant yet. Please describe the work needed in text.`
+        : backendText;
+      setMessages(msgs => [...msgs, { text: aiText, user: false }]);
+      setHistory(prev => [
+        ...prev,
+        { role: "user", parts: [{ text: userInput || "Image Uploaded" }] },
+        { role: "model", parts: [{ text: aiText }] }
+      ]);
+      setLoading(false);
+      return;
+    } catch (e) {
+      console.error(e);
+      setMessages(msgs => [...msgs, { text: "Connection error. Please try again.", user: false }]);
+      setLoading(false);
+      return;
+    }
 
     try {
       let imagePart = null;
@@ -301,7 +326,7 @@ function AIAssistantChatbot() {
       ];
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        '/disabled-client-ai-call',
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

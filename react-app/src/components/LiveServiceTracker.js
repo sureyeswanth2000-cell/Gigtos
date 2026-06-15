@@ -1,6 +1,5 @@
 /**
- * LiveServiceTracker — Shows live worker tracking status to a consumer for a given booking.
- * Logic: Reads from `worker_location_sessions` Firestore collection based on bookingId.
+ * Shows live worker tracking status to a consumer for a booking.
  */
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
@@ -8,17 +7,22 @@ import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/f
 import './LiveServiceTracker.css';
 
 const STATUS_CONFIG = {
-  tracking: { label: 'Worker is on the way', color: 'var(--primary-purple)', icon: '🚶', pulse: true },
-  at_location: { label: 'Worker has arrived', color: 'var(--success)', icon: '✅', pulse: false },
-  left_location: { label: 'Worker has left', color: 'var(--warning)', icon: '👋', pulse: false },
-  closed: { label: 'Location sharing ended', color: 'var(--text-muted)', icon: '📍', pulse: false },
-  stopped: { label: 'Tracking finished', color: 'var(--text-muted)', icon: '⏹️', pulse: false },
+  tracking: { label: 'Worker is on the way', color: 'var(--primary-purple)', icon: '>', pulse: true },
+  at_location: { label: 'Worker has arrived', color: 'var(--success)', icon: 'OK', pulse: false },
+  left_location: { label: 'Worker has left', color: 'var(--warning)', icon: '<', pulse: false },
+  closed: { label: 'Location sharing ended', color: 'var(--text-muted)', icon: '-', pulse: false },
+  stopped: { label: 'Tracking finished', color: 'var(--text-muted)', icon: 'X', pulse: false },
 };
 
 function formatTime(ts) {
   if (!ts) return null;
   const date = ts.toDate ? ts.toDate() : new Date(ts);
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function getMapCoordinate(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 export default function LiveServiceTracker({ bookingId, compact = false }) {
@@ -28,7 +32,7 @@ export default function LiveServiceTracker({ bookingId, compact = false }) {
   useEffect(() => {
     if (!bookingId) {
       setLoading(false);
-      return;
+      return undefined;
     }
 
     const q = query(
@@ -55,6 +59,9 @@ export default function LiveServiceTracker({ bookingId, compact = false }) {
 
   const status = session.locationStatus || 'tracking';
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.tracking;
+  const lastLat = getMapCoordinate(session.lastLat);
+  const lastLng = getMapCoordinate(session.lastLng);
+  const hasLiveCoordinates = lastLat !== null && lastLng !== null;
 
   if (compact) {
     return (
@@ -97,18 +104,18 @@ export default function LiveServiceTracker({ bookingId, compact = false }) {
       </div>
 
       {status === 'tracking' && (
-        session.lastLat && session.lastLng ? (
+        hasLiveCoordinates ? (
           <a
-            href={`https://www.google.com/maps?q=${session.lastLat},${session.lastLng}`}
+            href={`https://www.google.com/maps?q=${lastLat},${lastLng}`}
             target="_blank"
             rel="noreferrer"
             className="map-link"
           >
-            📍 View Live Location ↗
+            View Live Location -&gt;
           </a>
         ) : (
           <div className="map-link-unavailable" style={{ color: 'var(--text-muted)', marginTop: 8 }}>
-            📍 Live location not available yet.
+            Live location not available yet.
           </div>
         )
       )}

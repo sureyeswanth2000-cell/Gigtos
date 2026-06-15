@@ -1,4 +1,5 @@
 import React from 'react';
+import { captureFrontendException } from '../utils/sentryMonitoring';
 
 /**
  * ErrorBoundary — catches unhandled React rendering errors and shows a fallback UI
@@ -15,6 +16,10 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
+    captureFrontendException(error, {
+      source: 'react_error_boundary',
+      componentStack: errorInfo?.componentStack || '',
+    });
     if (process.env.NODE_ENV === 'development') {
       // eslint-disable-next-line no-console
       console.error('ErrorBoundary caught:', error, errorInfo);

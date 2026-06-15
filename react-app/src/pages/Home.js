@@ -11,6 +11,7 @@ import { getSpecialJob } from '../config/specialJobs';
 import { ALL_JOBS } from '../utils/jobListBuilder';
 import { getHeroCTAText } from '../utils/abTest';
 import { getServiceAvailability } from '../utils/availability';
+import { getFinalizedScoreView, getConsumerTierPolicy } from '../utils/gigScore';
 import './Home.css';
 
 const GEO_RADIUS_KM = 10;
@@ -30,6 +31,18 @@ function shouldShowHomeService(job, availabilityMap) {
   if (!availabilityMap) return !job.isUpcoming || isCoreHelp;
   const level = getAvailabilityLevel(availabilityMap, job);
   return level === 'area' || level === 'city' || isCoreHelp;
+}
+
+function buildGenericAvailabilityMap() {
+  const fallback = {};
+  ALL_JOBS.forEach((job) => {
+    fallback[job.id] = 'city';
+    const specialJob = getSpecialJob(job.id);
+    (specialJob?.subtypes || []).forEach((subtype) => {
+      fallback[subtype.id] = 'city';
+    });
+  });
+  return fallback;
 }
 
 export default function Home() {
@@ -56,7 +69,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!location || !location.city) return;
+    if (!location || !location.city) {
+      setAvailableJobIds(buildGenericAvailabilityMap());
+      return;
+    }
 
     setAvailableJobIds(null);
     
@@ -70,9 +86,7 @@ export default function Home() {
       })
       .catch(() => {
         // Fallback: assume everything is available if check fails
-        const fallback = {};
-        ALL_JOBS.forEach(j => fallback[j.id] = 'city');
-        setAvailableJobIds(fallback);
+        setAvailableJobIds(buildGenericAvailabilityMap());
       });
   }, [location]);
 
@@ -160,6 +174,17 @@ export default function Home() {
     );
   });
   const visibleHomeServices = visibleServices.filter((job) => shouldShowHomeService(job, availableJobIds));
+  const consumerScoreView = userData ? getFinalizedScoreView({
+    score: userData.gigScore ?? userData.socioScore ?? 0,
+    role: 'consumer',
+    events: userData.gigScoreEvents || [],
+  }) : null;
+  const consumerTierPolicy = consumerScoreView ? getConsumerTierPolicy({
+    score: consumerScoreView.currentFinalizedScore,
+    isElite: userData?.isEliteConsumer,
+    monthlyEliteBookingsUsed: userData?.monthlyEliteBookingsUsed || 0,
+    realConsumerCount: userData?.platformRealConsumerCount || 0,
+  }) : null;
 
   return (
     <div className="home-page">
@@ -189,6 +214,23 @@ export default function Home() {
               <span key={pillar} className="trust-pill">{pillar}</span>
             ))}
           </div>
+          {consumerScoreView && (
+            <div className="consumer-gigscore-card" aria-label="Consumer GigScore summary">
+              <div>
+                <span>Your GigScore</span>
+                <strong>{consumerScoreView.currentFinalizedScore}</strong>
+              </div>
+              <div>
+                <span>Tier</span>
+                <strong>{consumerScoreView.tierDisplay.publicName}</strong>
+              </div>
+              <p>
+                {consumerTierPolicy?.discountEligibility
+                  ? `${consumerTierPolicy.discountEligibility}% eligible benefit this month.`
+                  : 'Clean bookings, on-time payment, and fair feedback grow benefits.'}
+              </p>
+            </div>
+          )}
         </div>
         <div className="hero-media" aria-hidden="true">
           <img

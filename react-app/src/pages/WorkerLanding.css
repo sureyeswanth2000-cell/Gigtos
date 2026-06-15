@@ -1,0 +1,232 @@
+.worker-landing-page {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 36px 28px 88px;
+}
+
+.worker-landing-hero {
+  position: relative;
+  min-height: min(680px, calc(100vh - 150px));
+  overflow: hidden;
+  border-radius: 8px;
+  background: #111827;
+  display: flex;
+  align-items: flex-end;
+}
+
+.worker-landing-hero img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: brightness(0.64);
+}
+
+.worker-landing-hero__content {
+  position: relative;
+  z-index: 1;
+  max-width: 840px;
+  padding: clamp(32px, 7vw, 82px);
+  color: white;
+}
+
+.worker-landing-hero__content > span,
+.worker-landing-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: #52dbc2;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.worker-landing-hero h1 {
+  margin: 0 0 18px;
+  font-size: clamp(40px, 6vw, 82px);
+  line-height: 0.95;
+  letter-spacing: 0;
+}
+
+.worker-landing-hero p,
+.worker-landing-flow p,
+.worker-landing-proof p,
+.worker-landing-promises p {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.worker-landing-hero p {
+  max-width: 740px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
+}
+
+.worker-landing-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+}
+
+.worker-landing-actions a,
+.worker-landing-proof a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  border-radius: 8px;
+  padding: 12px 18px;
+  background: var(--primary-purple);
+  color: white;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.worker-landing-actions a.secondary {
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+}
+
+.worker-landing-promises,
+.worker-landing-service-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px;
+}
+
+.worker-landing-promises {
+  margin-top: 28px;
+}
+
+.worker-landing-promises article,
+.worker-landing-service-grid article {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-card);
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+}
+
+.worker-landing-promises svg,
+.worker-landing-proof svg {
+  color: var(--verified-teal);
+}
+
+.worker-landing-promises h2,
+.worker-landing-flow h2,
+.worker-landing-services h2,
+.worker-landing-proof h2 {
+  margin: 10px 0 8px;
+  font-family: inherit;
+  letter-spacing: 0;
+}
+
+.worker-landing-promises h2 {
+  font-size: 18px;
+}
+
+.worker-landing-promises p,
+.worker-landing-flow p,
+.worker-landing-proof p,
+.worker-landing-service-grid span,
+.worker-landing-service-grid small {
+  color: var(--text-muted);
+}
+
+.worker-landing-flow,
+.worker-landing-proof {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 34px;
+  align-items: start;
+  margin-top: 56px;
+  padding-top: 42px;
+  border-top: 1px solid var(--border-light);
+}
+
+.worker-landing-flow ol {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.worker-landing-flow li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-soft);
+  padding: 14px;
+  color: var(--text-main);
+  font-weight: 750;
+}
+
+.worker-landing-flow li svg {
+  flex: 0 0 auto;
+  color: var(--success);
+}
+
+.worker-landing-services {
+  margin-top: 56px;
+}
+
+.worker-landing-section-head {
+  margin-bottom: 20px;
+}
+
+.worker-landing-service-grid article {
+  display: grid;
+  gap: 8px;
+}
+
+.worker-landing-service-grid strong {
+  color: var(--text-main);
+  font-size: 18px;
+}
+
+.worker-landing-proof {
+  align-items: center;
+}
+
+.worker-landing-proof > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.worker-landing-proof a {
+  justify-self: start;
+}
+
+@media (max-width: 768px) {
+  .worker-landing-page {
+    padding: 22px 16px 72px;
+  }
+
+  .worker-landing-hero {
+    min-height: 620px;
+  }
+
+  .worker-landing-hero__content {
+    padding: 28px;
+  }
+
+  .worker-landing-actions a,
+  .worker-landing-proof a {
+    width: 100%;
+  }
+
+  .worker-landing-flow,
+  .worker-landing-proof {
+    grid-template-columns: 1fr;
+  }
+}

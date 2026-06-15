@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Gigtos">
+  <rect width="512" height="512" rx="112" fill="#ffffff"/>
+  <rect x="32" y="32" width="448" height="448" rx="96" fill="#7c3aed"/>
+  <path fill="#ffffff" d="M256 92c-76 0-138 62-138 138v88c0 56 45 102 101 102h92c46 0 83-37 83-83v-93H266v58h66v35c0 12-9 21-21 21h-92c-22 0-40-18-40-40v-88c0-42 35-77 77-77 32 0 61 20 72 50l58-22c-21-53-72-89-130-89Z"/>
+  <path fill="#d1fae5" d="M149 395h214v40H149z"/>
+</svg>

@@ -12,10 +12,12 @@ const routes = [
   '/',
   '/auth',
   '/services',
+  '/workers',
   '/jobs',
   '/service',
   '/my-bookings',
   '/profile',
+  '/privacy',
   '/worker/dashboard',
   '/worker/open-work',
   '/worker/future-work',
@@ -26,6 +28,12 @@ const routes = [
   '/operator',
   '/admin/bookings',
   '/admin/super',
+];
+
+const requiredCspHosts = [
+  'https://*.sentry.io',
+  'https://*.ingest.sentry.io',
+  'https://*.ingest.de.sentry.io',
 ];
 
 const contentTypes = {
@@ -90,6 +98,21 @@ function extractAssetPaths(html) {
   return matches.map((match) => match[1]);
 }
 
+function checkCspAllowsSentryIngest(html) {
+  const cspMatch = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/i);
+  const csp = cspMatch?.[1] || '';
+  const connectSrc = csp
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('connect-src')) || '';
+  const missing = requiredCspHosts.filter((host) => !connectSrc.includes(host));
+  return {
+    name: 'CSP allows Sentry ingest',
+    passed: missing.length === 0,
+    detail: missing.length ? `missing=${missing.join(',')}` : 'connect-src includes Sentry ingest hosts',
+  };
+}
+
 async function run() {
   const server = createServer();
   await new Promise((resolve, reject) => {
@@ -114,12 +137,21 @@ async function run() {
     }
 
     const home = await get(`${origin}${basePath}`);
+    checks.push(checkCspAllowsSentryIngest(home.body));
     const assets = extractAssetPaths(home.body);
     for (const assetPath of assets) {
       const assetUrl = assetPath.startsWith('http') ? assetPath : `${origin}${assetPath}`;
       const result = await get(assetUrl);
       checks.push({
         name: `Asset ${assetPath}`,
+        passed: result.status === 200,
+        detail: `${result.status} ${result.contentType}`,
+      });
+    }
+    for (const staticPath of ['/manifest.json', '/icon.svg']) {
+      const result = await get(`${origin}${staticPath}`);
+      checks.push({
+        name: `Static ${staticPath}`,
         passed: result.status === 200,
         detail: `${result.status} ${result.contentType}`,
       });

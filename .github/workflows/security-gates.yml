@@ -1,0 +1,128 @@
+name: Security Gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  react-checks:
+    name: React build and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: react-app/package-lock.json
+      - name: Install React app dependencies
+        working-directory: react-app
+        run: npm ci
+      - name: Build production app
+        working-directory: react-app
+        env:
+          REACT_APP_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY: 6LfJzvQsAAAAAO7eO16Wm4hWii7iIIOML_Q-Lnom
+          REACT_APP_FIREBASE_STORAGE_BUCKET: gigtos-user-uploads-gigto-c0c83
+          REACT_APP_REQUIRE_APPCHECK: "true"
+        run: npm run build:prod
+      - name: Run React tests
+        working-directory: react-app
+        env:
+          CI: true
+        run: npm test -- --watchAll=false
+      - name: Run route smoke
+        working-directory: react-app
+        run: npm run smoke:routes
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Run Firebase rules unit tests
+        working-directory: react-app
+        run: npm run test:rules
+
+  functions-checks:
+    name: Functions syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+      - name: Check Functions syntax
+        working-directory: functions
+        run: node --check index.js
+
+  security-patterns:
+    name: Security pattern scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Block dangerous Firebase and frontend patterns
+        run: node scripts/securityPatternScan.js
+
+  firebase-rules:
+    name: Firebase rules compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Compile Firestore and Storage rules
+        run: npx firebase-tools emulators:exec --project gigto-c0c83 --only firestore,storage "node -e \"console.log('rules loaded')\""
+
+  dependency-audit:
+    name: Dependency audit report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            react-app/package-lock.json
+            functions/package-lock.json
+      - name: Install React app dependencies
+        working-directory: react-app
+        run: npm ci
+      - name: React production dependency audit
+        working-directory: react-app
+        run: npm audit --omit=dev --audit-level=high
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+      - name: Functions production dependency audit
+        working-directory: functions
+        run: npm audit --omit=dev --audit-level=high

@@ -1,7 +1,9 @@
 export const DEFAULT_SUBSCRIPTION_PLAN = {
-  monthlyFee: 1000,
+  monthlyFee: 1500,
   launchFreeDays: 30,
-  verifiedExternalPlatformFreeDays: 365,
+  verifiedExternalPlatformFreeDays: 30,
+  highPerformanceAutoExtendDays: 60,
+  highPerformanceScore: 600,
 };
 
 export const WORKER_FREEDOM_PROMISE =
@@ -20,7 +22,7 @@ export function getLaunchAccessPlan({
     noExclusivity: true,
     workerKeepsJobEarnings: true,
     promise: hasVerifiedExternalPlatform
-      ? 'First year free with verified previous-platform proof.'
+      ? 'First month free with verified previous-platform proof. Reach 600 GigScore in month one to unlock 2 extra free months.'
       : 'First 30 days free during launch; Gigtos founder manages early platform costs.',
   };
 }
@@ -58,25 +60,58 @@ export function getSubscriptionStatus({
   return { status: 'subscription_due', accessAllowed: false, daysRemaining: 0 };
 }
 
+export function getGigScoreFreeAccessProgress({
+  joinedAt = new Date(),
+  now = new Date(),
+  gigScore,
+  socioScore,
+  alreadyExtended = false,
+  plan = DEFAULT_SUBSCRIPTION_PLAN,
+} = {}) {
+  const start = new Date(joinedAt);
+  const current = new Date(now);
+  const daysSinceJoin = Number.isNaN(start.getTime()) ? 999 : Math.floor((current - start) / 86400000);
+  const score = Number(gigScore ?? socioScore ?? 450);
+  const pointsNeeded = Math.max(0, plan.highPerformanceScore - score);
+  const eligibleWindowOpen = daysSinceJoin >= 0 && daysSinceJoin <= 31;
+
+  return {
+    targetScore: plan.highPerformanceScore,
+    extensionDays: plan.highPerformanceAutoExtendDays,
+    score,
+    pointsNeeded,
+    eligibleWindowOpen,
+    alreadyExtended,
+    unlocked: alreadyExtended || (eligibleWindowOpen && pointsNeeded === 0),
+    message: alreadyExtended
+      ? 'Your GigScore free-access extension is active.'
+      : eligibleWindowOpen
+        ? `Reach ${plan.highPerformanceScore} GigScore this month to unlock ${plan.highPerformanceAutoExtendDays} extra free days.`
+        : 'GigScore free-access window has ended; superadmin can still extend from review.',
+  };
+}
+
 export function evaluateSubscriptionRefund({
   leadsReceived = 0,
   completedJobs = 0,
   verifiedOneStarCount = 0,
   qualityIssueCount = 0,
-  socioScore = 500,
+  gigScore,
+  socioScore,
   monthlyFee = DEFAULT_SUBSCRIPTION_PLAN.monthlyFee,
 }) {
+  const effectiveGigScore = Number(gigScore ?? socioScore ?? 500);
   const disqualified =
     Number(verifiedOneStarCount) >= 3 ||
     Number(qualityIssueCount) >= 3 ||
-    Number(socioScore) < 450;
+    effectiveGigScore < 400;
 
   if (disqualified) {
     return {
       eligible: false,
       refundAmount: 0,
       reasonCode: 'quality_or_score_disqualified',
-      reasonText: 'Refund not eligible because verified quality risk or low SocioScore protects consumers.',
+      reasonText: 'Refund not eligible because verified quality risk or low GigScore protects consumers.',
       requiresSuperadminOverride: true,
     };
   }

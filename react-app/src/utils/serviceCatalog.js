@@ -1,3 +1,8 @@
+// LEGACY OVERLAP NOTE:
+// These static price bands/catalog defaults are useful for current UI fallback only.
+// MVP Pricing v1 should read backend SuperAdmin-managed `service_price_rules` and
+// demand snapshots for final consumer price, worker receivable, and explanation.
+
 export const SERVICE_CATALOG = [
   {
     id: 'home-helper',

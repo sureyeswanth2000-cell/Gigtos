@@ -140,49 +140,44 @@ export default function Header() {
           </div>
         )}
       </form>
-
-      {/* Navigation & Theme */}
       <div className="header-actions">
         <ThemeToggle />
 
         {user ? (
           <>
-            {/* Desktop Quick Nav */}
+            {/* Desktop Quick Nav — worker-specific vs consumer */}
             <nav className="desktop-nav">
-              <Link to="/services" className="nav-link">Find Services</Link>
-              <Link to="/#how-it-works" className="nav-link">How it Works</Link>
-              <Link to="/profile" className="nav-link">Verify Identity</Link>
-              {!isWorker && (
-                <Link to="/jobs" className="nav-link">Browse Jobs</Link>
-              )}
-
-              {/* Role Badges */}
-              {isSuperAdmin ? (
-                <Link to="/admin/super" className="role-pill super-admin">
-                  🛡️ SuperAdmin
-                </Link>
-              ) : adminRole === 'field_operator' ? (
-                <Link to="/operator" className="role-pill admin-role">
-                  Field Operator
-                </Link>
-              ) : isRegionLead ? (
-                <Link to="/admin/region-lead" className="role-pill region-lead">
-                  📍 Region Lead
-                </Link>
-              ) : isMason ? (
-                <Link to="/mason/dashboard" className="role-pill mason-role">
-                  🧱 Mason
-                </Link>
-              ) : isAdmin ? (
-                <Link to="/admin" className="role-pill admin-role">
-                  👨‍💼 Admin
-                </Link>
-              ) : isWorker ? (
-                <Link to="/worker/dashboard" className="role-pill worker-role">
-                  👷 Worker
-                </Link>
+              {isWorker ? (
+                <>
+                  <Link to="/worker/dashboard" className="nav-link">Dashboard</Link>
+                  <Link to="/worker/open-work" className="nav-link">Open Jobs</Link>
+                  <Link to="/worker/future-work" className="nav-link">Upcoming</Link>
+                  <Link to="/worker/history" className="nav-link">History</Link>
+                  <Link to="/worker/profile" className="nav-link">My Profile</Link>
+                  <Link to="/worker/support" className="nav-link">Support</Link>
+                  <Link to="/worker/dashboard" className="role-pill worker-role">👷 Worker</Link>
+                </>
               ) : (
-                <Link to="/my-bookings" className="nav-link">My Bookings</Link>
+                <>
+                  <Link to="/services" className="nav-link">Find Services</Link>
+                  <Link to="/workers" className="nav-link">Join Workers</Link>
+                  <Link to="/#how-it-works" className="nav-link">How it Works</Link>
+                  <Link to="/profile" className="nav-link">Verify Identity</Link>
+                  <Link to="/jobs" className="nav-link">Browse Jobs</Link>
+                  {isSuperAdmin ? (
+                    <Link to="/admin/super" className="role-pill super-admin">🛡️ SuperAdmin</Link>
+                  ) : adminRole === 'field_operator' ? (
+                    <Link to="/operator" className="role-pill admin-role">Field Operator</Link>
+                  ) : isRegionLead ? (
+                    <Link to="/admin/region-lead" className="role-pill region-lead">📍 Region Lead</Link>
+                  ) : isMason ? (
+                    <Link to="/mason/dashboard" className="role-pill mason-role">🧱 Mason</Link>
+                  ) : isAdmin ? (
+                    <Link to="/admin" className="role-pill admin-role">👨‍💼 Admin</Link>
+                  ) : (
+                    <Link to="/my-bookings" className="nav-link">My Bookings</Link>
+                  )}
+                </>
               )}
             </nav>
 
@@ -203,55 +198,44 @@ export default function Header() {
                   </div>
 
                   <div className="mobile-only-links">
-                    <Link to="/" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">
-                      🏠 Home
-                    </Link>
-                    <Link to="/services" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">
-                      Services
-                    </Link>
-                    {!isWorker && (
-                      <Link to="/jobs" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">
-                        💼 Browse Jobs
-                      </Link>
-                    )}
-                    {(isAdmin || isSuperAdmin || isRegionLead) ? (
+                    <Link to="/" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">🏠 Home</Link>
+                    {isWorker ? (
                       <>
-                        <Link to="/my-bookings" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">
-                          📅 My Bookings
-                        </Link>
-                        <Link to={isSuperAdmin ? "/admin/super" : adminRole === 'field_operator' ? "/operator" : isRegionLead ? "/admin/region-lead" : isMason ? "/mason/dashboard" : "/admin"} onClick={() => setMenuOpen(false)} className="menu-item mobile-item highlighted">
-                          Dashboard
-                        </Link>
+                        <Link to="/worker/open-work" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">📋 Open Jobs</Link>
+                        <Link to="/worker/future-work" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">📅 Upcoming</Link>
+                        <Link to="/worker/history" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">🕐 History</Link>
+                        <Link to="/worker/map" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">🗺️ Map</Link>
+                        <Link to="/worker/support" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">💬 Support</Link>
+                        <Link to="/worker/dashboard" onClick={() => setMenuOpen(false)} className="menu-item mobile-item highlighted">👷 Worker Dashboard</Link>
                       </>
                     ) : (
                       <>
-                        {isWorker ? (
-                          <Link to="/worker/dashboard" onClick={() => setMenuOpen(false)} className="menu-item mobile-item highlighted">
-                            👷 Worker Dash
-                          </Link>
+                        <Link to="/services" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">Services</Link>
+                        <Link to="/workers" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">Join Workers</Link>
+                        <Link to="/jobs" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">💼 Browse Jobs</Link>
+                        {(isAdmin || isSuperAdmin || isRegionLead) ? (
+                          <>
+                            <Link to="/my-bookings" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">📅 My Bookings</Link>
+                            <Link to={isSuperAdmin ? '/admin/super' : adminRole === 'field_operator' ? '/operator' : isRegionLead ? '/admin/region-lead' : isMason ? '/mason/dashboard' : '/admin'} onClick={() => setMenuOpen(false)} className="menu-item mobile-item highlighted">Dashboard</Link>
+                          </>
                         ) : (
-                          <Link to="/my-bookings" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">
-                            📅 My Bookings
-                          </Link>
+                          <Link to="/my-bookings" onClick={() => setMenuOpen(false)} className="menu-item mobile-item">📅 My Bookings</Link>
                         )}
                       </>
                     )}
                   </div>
 
-                  <Link to="/profile" onClick={() => setMenuOpen(false)} className="menu-item">
-                    ✏️ Edit Profile
-                  </Link>
-                  <div onClick={handleLogout} className="menu-item logout">
-                    🚪 Logout
-                  </div>
+                  <Link to="/profile" onClick={() => setMenuOpen(false)} className="menu-item">✏️ Edit Profile</Link>
+                  <div onClick={handleLogout} className="menu-item logout">🚪 Logout</div>
                 </div>
               )}
             </div>
           </>
         ) : (
-          <button className="login-btn" onClick={() => navigate('/auth')}>
-            Sign In
-          </button>
+          <>
+            <Link to="/workers" className="public-worker-link">Join Workers</Link>
+            <button className="login-btn" onClick={() => navigate('/auth')}>Sign In</button>
+          </>
         )}
       </div>
 
@@ -525,6 +509,18 @@ export default function Header() {
           transform: translateY(-1px);
         }
 
+        .public-worker-link {
+          color: var(--text-main);
+          font-size: 14px;
+          font-weight: 800;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+
+        .public-worker-link:hover {
+          color: var(--primary-purple);
+        }
+
         .mobile-only-links {
           display: none;
         }
@@ -547,6 +543,9 @@ export default function Header() {
           .header-actions {
             gap: 10px;
             justify-content: flex-end;
+          }
+          .public-worker-link {
+            display: none;
           }
         }
       `}</style>

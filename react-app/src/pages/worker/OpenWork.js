@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { auth, db } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { auth, functionsInstance } from '../../firebase';
 import JobCard from '../../components/worker/JobCard';
 import CompleteJobModal from '../../components/worker/CompleteJobModal';
 import QuoteModal from '../../components/worker/QuoteModal';
@@ -21,14 +21,20 @@ export default function OpenWork() {
   const toastTimeoutRef = useRef(null);
   const [completeJob, setCompleteJob] = useState(null);
 
+  const showToast = (msg, type = '') => {
+    setToast({ msg, type });
+    clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
+  };
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) { setLoading(false); return; }
       try {
-        const snap = await getDocs(query(collection(db, 'bookings'), where('status', '==', 'open')));
-        const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setJobs(fetched);
-      } catch {
+        const result = await httpsCallable(functionsInstance, 'listOpenWork')({});
+        setJobs(result.data?.jobs || []);
+      } catch (err) {
+        showToast(err.message || 'Could not load open jobs.', 'error');
         setJobs([]);
       } finally {
         setLoading(false);
@@ -37,25 +43,23 @@ export default function OpenWork() {
     return () => unsub();
   }, []);
 
-  const showToast = (msg, type = '') => {
-    setToast({ msg, type });
-    clearTimeout(toastTimeoutRef.current);
-    toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
-  };
+  useEffect(() => () => clearTimeout(toastTimeoutRef.current), []);
 
-  useEffect(() => {
-    return () => clearTimeout(toastTimeoutRef.current);
-  }, []);
-
-  const handleSendQuote = async () => {
-    await new Promise(r => setTimeout(r, 500));
-    showToast("✅ Quote sent! You'll be notified if accepted.", 'success');
+  const handleSubmitQuote = async ({ price, message, jobId }) => {
+    await httpsCallable(functionsInstance, 'submitQuote')({
+      bookingId: jobId,
+      price: Number(price),
+      finalPrice: Number(price),
+      message: message || '',
+    });
+    setJobs(prev => prev.filter(job => job.id !== jobId));
+    showToast("Quote sent. You'll be notified if accepted.", 'success');
   };
 
   const filtered = jobs
     .filter(j => activeCategory === 'All' || (j.category || j.gigType || j.serviceType) === activeCategory)
     .sort((a, b) => {
-      if (sortBy === 'recent') return new Date(b.createdAt) - new Date(a.createdAt);
+      if (sortBy === 'recent') return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
       return 0;
     });
 
@@ -63,11 +67,10 @@ export default function OpenWork() {
     <div className="worker-page">
       <div className="worker-container">
         <div className="worker-page-topbar">
-          <Link to="/worker/dashboard" className="worker-back-link" aria-label="Back to worker dashboard">←</Link>
+          <Link to="/worker/dashboard" className="worker-back-link" aria-label="Back to worker dashboard">Back</Link>
           <h2 className="worker-page-title">Open Work</h2>
         </div>
 
-        {/* Category Filters */}
         <div className="filter-row">
           {CATEGORIES.map(cat => (
             <button
@@ -80,10 +83,9 @@ export default function OpenWork() {
           ))}
         </div>
 
-        {/* Sort */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
           <span style={{ fontSize: 13, color: '#6B7280', paddingTop: 6 }}>Sort:</span>
-          {[{v:'recent',l:'Recent'}].map(s => (
+          {[{ v: 'recent', l: 'Recent' }].map(s => (
             <button
               key={s.v}
               className={`filter-chip ${sortBy === s.v ? 'active' : ''}`}
@@ -95,10 +97,10 @@ export default function OpenWork() {
         </div>
 
         {loading ? (
-          [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 140, borderRadius: 14, marginBottom: 12 }} />)
+          [1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 140, borderRadius: 14, marginBottom: 12 }} />)
         ) : filtered.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">📭</div>
+            <div className="empty-icon">No jobs</div>
             <h3>No open jobs</h3>
             <p>No jobs available in your area right now. Please check again shortly.</p>
           </div>
@@ -115,12 +117,11 @@ export default function OpenWork() {
         )}
       </div>
 
-
       {selectedJob && (
         <QuoteModal
           job={selectedJob}
           onClose={() => setSelectedJob(null)}
-          onSubmit={handleSendQuote}
+          onSubmit={handleSubmitQuote}
         />
       )}
 
@@ -130,7 +131,7 @@ export default function OpenWork() {
           onClose={() => setCompleteJob(null)}
           onCompleted={() => {
             setCompleteJob(null);
-            showToast('Job marked as complete!', 'success');
+            showToast('Job marked as complete.', 'success');
           }}
         />
       )}

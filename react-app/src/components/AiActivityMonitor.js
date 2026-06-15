@@ -4,6 +4,7 @@ import { auth, db } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useLocation as useGigLocation } from '../context/LocationContext';
 import { matchNearbyWorkers, getWorkerDisplayInfo } from '../utils/instantBooking';
+import { usePricingSettings } from '../utils/usePricingSettings';
 import './AiActivityMonitor.css';
 
 const NEARBY_RADIUS_KM = 10;
@@ -41,6 +42,7 @@ export default function AiActivityMonitor({ onBookWorker }) {
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const { location } = useGigLocation() || {};
+  const pricingSettings = usePricingSettings();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -132,7 +134,7 @@ export default function AiActivityMonitor({ onBookWorker }) {
 
         {!loading &&
           workers.map((worker) => {
-            const info = getWorkerDisplayInfo(worker);
+            const info = getWorkerDisplayInfo(worker, pricingSettings);
             if (!info) return null;
             const serviceMark = getServiceMark(info.serviceType);
 
@@ -160,7 +162,7 @@ export default function AiActivityMonitor({ onBookWorker }) {
                       </span>
                     )}
                     <span className="nearby-worker-price">
-                      INR {info.fixedRate.toLocaleString('en-IN')}/day
+                      INR {info.finalPrice.toLocaleString('en-IN')} total
                     </span>
                   </div>
                 </div>

@@ -5,16 +5,22 @@ export default function QuoteModal({ job, onClose, onSubmit }) {
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async () => {
-    if (!price) return alert('Please enter your price');
+    setError('');
+    const numericPrice = Number(price);
+    if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+      setError('Please enter a valid price.');
+      return;
+    }
     setSubmitting(true);
     try {
-      await onSubmit({ price, message, jobId: job.id });
+      await onSubmit({ price: numericPrice, message, jobId: job.id });
       setSuccess(true);
       setTimeout(() => { setSuccess(false); onClose(); }, 2500);
     } catch (e) {
-      alert('Failed to send quote: ' + e.message);
+      setError(e.message || 'Failed to send quote.');
     } finally {
       setSubmitting(false);
     }
@@ -93,6 +99,21 @@ export default function QuoteModal({ job, onClose, onSubmit }) {
                 }}
               />
             </div>
+
+            {error && (
+              <div style={{
+                background: '#FEF2F2',
+                border: '1px solid #FCA5A5',
+                color: '#B91C1C',
+                borderRadius: 10,
+                padding: 10,
+                fontSize: 13,
+                fontWeight: 700,
+                marginBottom: 14,
+              }}>
+                {error}
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn-secondary" style={{ flex: 1 }} onClick={onClose}>

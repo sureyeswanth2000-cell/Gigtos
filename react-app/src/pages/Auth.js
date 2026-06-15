@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   createUserWithEmailAndPassword,
@@ -13,22 +13,27 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  FileText,
   Lock,
   Mail,
   MapPin,
   Phone,
   ShieldCheck,
   Sparkles,
+  Upload,
   User,
   Wrench,
 } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
+import { auth, db, functionsInstance, storage } from '../firebase';
 import { detectCurrentLocation } from '../context/LocationContext';
 import { SPECIAL_JOBS } from '../config/specialJobs';
 import { useToast } from '../context/ToastContext';
 import { getAdminRedirectPath, isRegionSuspended } from '../utils/authRouting';
 import { getWorkerOnboardingChecklist, getWorkerOnboardingPromise } from '../utils/workerOnboarding';
+import { captureFrontendException, addSentryBreadcrumb } from '../utils/sentryMonitoring';
 import './Auth.css';
 
 const SIGNUP_JOB_TYPES = [
@@ -58,12 +63,62 @@ const formatJobType = (type) => (
     .join(' ')
 );
 
+const MAX_WORKER_VERIFICATION_FILES = 8;
+
+const getSelectedFiles = (fileList, max = MAX_WORKER_VERIFICATION_FILES) => (
+  Array.from(fileList || []).slice(0, max)
+);
+
+const getSafeFileName = (file) => (
+  (file?.name || 'verification-file').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-120)
+);
+
+const getUploadProgressKey = (category, index, file) => `${category}_${index}_${getSafeFileName(file)}`;
+
+const getFilePreviewKind = (file) => {
+  if (file?.type?.startsWith('image/')) return 'image';
+  if (file?.type === 'application/pdf') return 'pdf';
+  return 'file';
+};
+
+const formatFileSize = (size = 0) => {
+  if (!size) return '0 KB';
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+function getFriendlyAuthError(err, fallback = 'Sign-in failed. Please try again.') {
+  const code = err?.code || '';
+  if (code === 'auth/operation-not-allowed') {
+    return 'This sign-in method is not enabled in Firebase yet. Use email/password for now, or enable the provider in Firebase Auth.';
+  }
+  if (code === 'auth/popup-blocked') {
+    return 'Popup was blocked. Allow popups for Gigtos or use email/password.';
+  }
+  if (code === 'auth/popup-closed-by-user') {
+    return 'Google sign-in was closed before completion.';
+  }
+  if (code === 'auth/unauthorized-domain') {
+    return 'This domain is not added in Firebase Auth authorized domains yet.';
+  }
+  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
+    return 'Invalid phone/email or password.';
+  }
+  if (code === 'auth/email-already-in-use') {
+    return 'This email already has an account. Please sign in instead.';
+  }
+  if (code === 'auth/weak-password') {
+    return 'Password is too weak. Use at least 6 characters.';
+  }
+  return err?.message || fallback;
+}
+
 function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { addToast } = useToast();
 
-  const [phase, setPhase] = useState('login');
+  const [phase, setPhase] = useState(searchParams.get('phase') === 'signup' ? 'signup' : 'login');
   const [userType, setUserType] = useState(searchParams.get('mode') || 'user');
 
   const [identifier, setIdentifier] = useState('');
@@ -75,6 +130,25 @@ function Auth() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [workerGigTypes, setWorkerGigTypes] = useState([]);
   const [workerArea, setWorkerArea] = useState('');
+  const [workerExperienceYears, setWorkerExperienceYears] = useState('');
+  const [workerStartingPrice, setWorkerStartingPrice] = useState('');
+  const [workerBio, setWorkerBio] = useState('');
+  const [workerSubSkills, setWorkerSubSkills] = useState('');
+  const [workerCertifications, setWorkerCertifications] = useState('');
+  const [workerBankSetupChoice, setWorkerBankSetupChoice] = useState('later');
+  const [workerTotalEarnings, setWorkerTotalEarnings] = useState('');
+  const [previousPlatformName, setPreviousPlatformName] = useState('');
+  const [previousPlatformId, setPreviousPlatformId] = useState('');
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [aadhaarOtpSent, setAadhaarOtpSent] = useState(false);
+  const [aadhaarOtp, setAadhaarOtp] = useState('');
+  const [aadhaarOtpVerified, setAadhaarOtpVerified] = useState(false);
+  const [workerLanguagePreference, setWorkerLanguagePreference] = useState('en');
+  const [profilePhotoFiles, setProfilePhotoFiles] = useState([]);
+  const [previousProofFiles, setPreviousProofFiles] = useState([]);
+  const [certificateFiles, setCertificateFiles] = useState([]);
+  const [workerUploadProgress, setWorkerUploadProgress] = useState({});
+  const [workerSubmitted, setWorkerSubmitted] = useState(false);
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -86,11 +160,81 @@ function Auth() {
     phone,
     serviceTypes: workerGigTypes,
     serviceArea: workerArea,
+    hasExternalPlatformProof: Boolean(previousPlatformName || previousProofFiles.length),
+    hasProfilePhoto: Boolean(profilePhotoFiles.length),
+    hasStartingPrice: Boolean(workerStartingPrice),
     acceptedLaunchTerms: true,
+    bankSetupChoice: workerBankSetupChoice,
   });
   const workerSignupPromise = getWorkerOnboardingPromise();
   const workerPreviewStepIds = ['auth', 'services', 'area', 'proof', 'promise', 'first_action'];
   const workerPreviewSteps = workerSignupChecklist.steps.filter((step) => workerPreviewStepIds.includes(step.id));
+  const workerProofPreviews = useMemo(() => (
+    [
+      ...profilePhotoFiles.map((file) => ({ category: 'profile_photo', label: 'Profile photo', file })),
+      ...previousProofFiles.map((file) => ({ category: 'previous_platform', label: 'Previous proof', file })),
+      ...certificateFiles.map((file) => ({ category: 'certificate', label: 'Certificate', file })),
+    ]
+      .slice(0, MAX_WORKER_VERIFICATION_FILES)
+      .map((item, index) => ({
+        ...item,
+        index,
+        kind: getFilePreviewKind(item.file),
+        safeName: getSafeFileName(item.file),
+        previewUrl: getFilePreviewKind(item.file) === 'image' ? URL.createObjectURL(item.file) : '',
+        progressKey: getUploadProgressKey(item.category, index, item.file),
+      }))
+  ), [profilePhotoFiles, previousProofFiles, certificateFiles]);
+
+  useEffect(() => () => {
+    workerProofPreviews.forEach((item) => {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    });
+  }, [workerProofPreviews]);
+
+  const handleAadhaarChange = (value) => {
+    setAadhaarNumber(value.replace(/\D/g, '').slice(0, 12));
+    setAadhaarOtpSent(false);
+    setAadhaarOtp('');
+    setAadhaarOtpVerified(false);
+  };
+
+  const uploadWorkerVerificationFiles = async (uid) => {
+    const files = [
+      ...profilePhotoFiles.map((file) => ({ category: 'profile_photo', file })),
+      ...previousProofFiles.map((file) => ({ category: 'previous_platform', file })),
+      ...certificateFiles.map((file) => ({ category: 'certificate', file })),
+    ].filter(item => item.file).slice(0, MAX_WORKER_VERIFICATION_FILES);
+
+    const uploaded = [];
+    setWorkerUploadProgress({});
+    for (const [index, item] of files.entries()) {
+      const safeName = getSafeFileName(item.file);
+      const progressKey = getUploadProgressKey(item.category, index, item.file);
+      const storagePath = `workers/${uid}/verification/${item.category}/${Date.now()}_${index}_${safeName}`;
+      const fileRef = ref(storage, storagePath);
+      await new Promise((resolve, reject) => {
+        const uploadTask = uploadBytesResumable(fileRef, item.file, { contentType: item.file.type || 'application/octet-stream' });
+        uploadTask.on('state_changed', (snapshot) => {
+          const percent = snapshot.totalBytes
+            ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
+            : 0;
+          setWorkerUploadProgress((current) => ({ ...current, [progressKey]: percent }));
+        }, reject, resolve);
+      });
+      setWorkerUploadProgress((current) => ({ ...current, [progressKey]: 100 }));
+      const downloadUrl = await getDownloadURL(fileRef);
+      uploaded.push({
+        category: item.category,
+        storagePath,
+        downloadUrl,
+        fileName: safeName,
+        contentType: item.file.type || '',
+        size: item.file.size || 0,
+      });
+    }
+    return uploaded;
+  };
 
   const finishConsumerLogin = async (firebaseUser) => {
     const userRef = doc(db, 'users', firebaseUser.uid);
@@ -107,15 +251,34 @@ function Auth() {
     navigate(firebaseUser.phoneNumber ? '/' : '/complete-profile-phone');
   };
 
+  const createConsumerFromLogin = async (emailToUse) => {
+    const userCred = await createUserWithEmailAndPassword(auth, emailToUse, password);
+    await setDoc(doc(db, 'users', userCred.user.uid), {
+      email: emailToUse,
+      authProvider: 'email_password',
+      createdViaLogin: true,
+      needsProfileCompletion: true,
+      createdAt: new Date(),
+    }, { merge: true });
+    return userCred;
+  };
+
   const handleGoogleLogin = async () => {
     setError('');
     setLoading(true);
+    addSentryBreadcrumb('Google login started', { userType });
     try {
       const provider = new GoogleAuthProvider();
       const userCred = await signInWithPopup(auth, provider);
+      addSentryBreadcrumb('Google login success', { uid: userCred.user?.uid ? '[set]' : '[missing]' });
       await finishConsumerLogin(userCred.user);
     } catch (err) {
-      setError(err.message || 'Google sign-in failed');
+      // Expected user actions (popup closed, cancelled) are filtered by sentryMonitoring noise rules
+      const expectedCodes = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/popup-blocked', 'auth/user-cancelled'];
+      if (!expectedCodes.includes(err?.code)) {
+        captureFrontendException(err, { source: 'google_login', code: err?.code });
+      }
+      setError(getFriendlyAuthError(err, 'Google sign-in failed.'));
     } finally {
       setLoading(false);
     }
@@ -130,6 +293,7 @@ function Auth() {
 
     setError('');
     setLoading(true);
+    addSentryBreadcrumb('Unified login started', { userType, isPhone: !identifier.includes('@') });
 
     try {
       let emailToUse = identifier;
@@ -138,19 +302,29 @@ function Auth() {
 
       if (isPhone) {
         const cleanPhone = cleaned.slice(-10);
-        const workerPhoneDoc = await getDoc(doc(db, 'workers_by_phone', cleanPhone));
-        const userPhoneDoc = await getDoc(doc(db, 'users_by_phone', cleanPhone));
-
-        if (workerPhoneDoc.exists()) {
-          emailToUse = workerPhoneDoc.data().email;
-        } else if (userPhoneDoc.exists()) {
-          emailToUse = userPhoneDoc.data().email;
-        } else {
-          throw new Error('Phone number not found. If new, please sign up.');
-        }
+        const lookupAuthEmailByPhone = httpsCallable(functionsInstance, 'lookupAuthEmailByPhone');
+        const lookupResult = await lookupAuthEmailByPhone({ phone: cleanPhone });
+        emailToUse = lookupResult.data?.email;
+        if (!emailToUse) throw new Error('Phone number not found. If new, please sign up.');
       }
 
-      const userCred = await signInWithEmailAndPassword(auth, emailToUse, password);
+      let userCred;
+      try {
+        userCred = await signInWithEmailAndPassword(auth, emailToUse, password);
+      } catch (loginErr) {
+        const canCreateConsumerFromLogin =
+          userType === 'user' &&
+          identifier.includes('@') &&
+          ['auth/user-not-found', 'auth/invalid-credential'].includes(loginErr?.code);
+        if (!canCreateConsumerFromLogin) throw loginErr;
+        try {
+          userCred = await createConsumerFromLogin(emailToUse);
+        } catch (createErr) {
+          if (createErr?.code === 'auth/email-already-in-use') throw loginErr;
+          throw createErr;
+        }
+        addToast('Account created. Please add your phone number to continue.', 'success');
+      }
       const { uid } = userCred.user;
 
       const adminDoc = await getDoc(doc(db, 'admins', uid));
@@ -177,7 +351,12 @@ function Auth() {
 
       navigate('/');
     } catch (err) {
-      setError(err.message.includes('auth/invalid-credential') ? 'Invalid credentials' : err.message);
+      // Only capture genuinely unexpected errors — bad credentials / not-found are user errors
+      const expectedCodes = ['auth/wrong-password', 'auth/invalid-credential', 'auth/user-not-found', 'auth/too-many-requests'];
+      if (!expectedCodes.includes(err?.code)) {
+        captureFrontendException(err, { source: 'unified_login', code: err?.code });
+      }
+      setError(getFriendlyAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -193,6 +372,14 @@ function Auth() {
       setError('Please fill in all professional details');
       return;
     }
+    if (userType === 'worker' && (!workerExperienceYears || !workerStartingPrice || !profilePhotoFiles.length || !previousProofFiles.length)) {
+      setError('Add experience, starting price, profile photo, and previous work proof.');
+      return;
+    }
+    if (userType === 'worker' && (aadhaarNumber.length !== 12 || !aadhaarOtpVerified)) {
+      setError('Complete mock Aadhaar OTP verification before submitting.');
+      return;
+    }
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -200,6 +387,7 @@ function Auth() {
 
     setError('');
     setLoading(true);
+    addSentryBreadcrumb('Signup started', { userType });
 
     try {
       const userCred = await createUserWithEmailAndPassword(auth, email, password);
@@ -207,31 +395,46 @@ function Auth() {
 
       if (userType === 'worker') {
         const loc = await detectCurrentLocation().catch(() => ({}));
-        const workerData = {
-          uid,
+        const documents = await uploadWorkerVerificationFiles(uid);
+        const submitWorkerVerification = httpsCallable(functionsInstance, 'submitWorkerVerification');
+        await submitWorkerVerification({
           name,
           email,
           phone,
+          serviceIds: workerGigTypes,
           gigTypes: workerGigTypes,
-          locationArea: workerArea,
-          approvalStatus: 'pending',
-          status: 'inactive',
-          createdAt: new Date(),
-          ...(loc && { locationLat: loc.lat, locationLng: loc.lng, locationCity: loc.city }),
-        };
+          areaName: workerArea,
+          city: loc?.city || '',
+          experienceYears: workerExperienceYears,
+          startingPrice: workerStartingPrice,
+          bio: workerBio,
+          subSkills: workerSubSkills,
+          certifications: workerCertifications,
+          bankSetupChoice: workerBankSetupChoice,
+          totalEarnings: workerTotalEarnings,
+          languagePreference: workerLanguagePreference,
+          previousPlatformName,
+          previousPlatformId,
+          aadhaarNumber,
+          aadhaarOtpVerified,
+          documents,
+        });
 
-        await setDoc(doc(db, 'worker_auth', uid), workerData);
-        await setDoc(doc(db, 'gig_workers', uid), workerData);
-        await setDoc(doc(db, 'workers_by_phone', phone.replace(/[^\d]/g, '').slice(-10)), { email, uid });
-
-        addToast('Registration successful! Waiting for approval.', 'success');
-        navigate('/');
+        addSentryBreadcrumb('Worker signup complete', { area: workerArea, gigTypes: workerGigTypes.length });
+        addToast('Worker verification submitted. Waiting for approval.', 'success');
+        setWorkerSubmitted(true);
       } else {
         await setDoc(doc(db, 'users', uid), { email, createdAt: new Date() });
+        addSentryBreadcrumb('Consumer signup complete');
         navigate('/complete-profile-phone');
       }
     } catch (err) {
-      setError(err.message);
+      // Capture unexpected signup failures — email-in-use and weak-password are user errors
+      const expectedCodes = ['auth/email-already-in-use', 'auth/weak-password', 'auth/invalid-email'];
+      if (!expectedCodes.includes(err?.code)) {
+        captureFrontendException(err, { source: 'signup', userType, code: err?.code });
+      }
+      setError(getFriendlyAuthError(err, 'Account creation failed.'));
     } finally {
       setLoading(false);
     }
@@ -261,7 +464,7 @@ function Auth() {
             </div>
             <div>
               <Sparkles size={18} />
-              <strong>SocioScore ready</strong>
+              <strong>GigScore ready</strong>
               <span>Trust signals can grow without changing login.</span>
             </div>
           </div>
@@ -311,6 +514,27 @@ function Auth() {
             </div>
           )}
 
+          {workerSubmitted && (
+            <div className="auth-submitted-card" role="status">
+              <CheckCircle2 size={24} />
+              <h3>Profile submitted for review</h3>
+              <p>
+                SuperAdmin will check your identity, profile photo, service area, and work proof before activation.
+                You can browse Gigtos now, but jobs unlock only after approval.
+              </p>
+              <div className="auth-submitted-actions">
+                <button type="button" className="auth-small-btn" onClick={() => navigate('/workers')}>
+                  Worker guide
+                </button>
+                <button type="button" className="auth-small-btn" onClick={() => setPhase('login')}>
+                  Sign in later
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!workerSubmitted && (
+            <>
           {phase === 'login' && userType === 'user' && (
             <div className="auth-provider-stack">
               <button
@@ -421,6 +645,279 @@ function Auth() {
                         </select>
                       </div>
                     </label>
+
+                    <label className="auth-field">
+                      <span>Preferred App Language</span>
+                      <div className="auth-input-wrap">
+                        <FileText size={18} />
+                        <select
+                          value={workerLanguagePreference}
+                          onChange={(e) => setWorkerLanguagePreference(e.target.value)}
+                        >
+                          <option value="en">English (EN)</option>
+                          <option value="te">Telugu (తె)</option>
+                          <option value="hi">Hindi (हिं)</option>
+                          <option value="kn">Kannada (ಕ)</option>
+                          <option value="ta">Tamil (த)</option>
+                        </select>
+                      </div>
+                    </label>
+
+                    <div className="auth-worker-verification-grid">
+                      <label className="auth-field">
+                        <span>Experience years</span>
+                        <div className="auth-input-wrap">
+                          <BriefcaseBusiness size={18} />
+                          <input
+                            type="number"
+                            min="0"
+                            max="60"
+                            value={workerExperienceYears}
+                            onChange={(e) => setWorkerExperienceYears(e.target.value)}
+                            placeholder="Example: 3"
+                          />
+                        </div>
+                      </label>
+
+                      <label className="auth-field">
+                        <span>Starting price</span>
+                        <div className="auth-input-wrap">
+                          <Sparkles size={18} />
+                          <input
+                            type="number"
+                            min="1"
+                            value={workerStartingPrice}
+                            onChange={(e) => setWorkerStartingPrice(e.target.value)}
+                            placeholder="INR per job/hour"
+                          />
+                        </div>
+                      </label>
+                    </div>
+
+                    <label className="auth-field">
+                      <span>Short worker bio</span>
+                      <div className="auth-input-wrap auth-input-wrap--textarea">
+                        <FileText size={18} />
+                        <textarea
+                          value={workerBio}
+                          onChange={(e) => setWorkerBio(e.target.value.slice(0, 300))}
+                          placeholder="Service experience, languages, and preferred work type"
+                          rows={3}
+                        />
+                      </div>
+                    </label>
+
+                    <label className="auth-field">
+                      <span>Sub-skills / specializations</span>
+                      <div className="auth-input-wrap auth-input-wrap--textarea">
+                        <FileText size={18} />
+                        <textarea
+                          value={workerSubSkills}
+                          onChange={(e) => setWorkerSubSkills(e.target.value.slice(0, 400))}
+                          placeholder="Example: bathroom deep cleaning, utensils, kitchen oil stains"
+                          rows={2}
+                        />
+                      </div>
+                    </label>
+
+                    <div className="auth-worker-verification-grid">
+                      <label className="auth-field">
+                        <span>Certifications / training</span>
+                        <div className="auth-input-wrap">
+                          <FileText size={18} />
+                          <input
+                            type="text"
+                            value={workerCertifications}
+                            onChange={(e) => setWorkerCertifications(e.target.value.slice(0, 250))}
+                            placeholder="Optional training or certificates"
+                          />
+                        </div>
+                      </label>
+
+                      <label className="auth-field">
+                        <span>Past earnings handled</span>
+                        <div className="auth-input-wrap">
+                          <BriefcaseBusiness size={18} />
+                          <input
+                            type="number"
+                            min="0"
+                            value={workerTotalEarnings}
+                            onChange={(e) => setWorkerTotalEarnings(e.target.value)}
+                            placeholder="Optional INR total"
+                          />
+                        </div>
+                      </label>
+                    </div>
+
+                    <label className="auth-field">
+                      <span>Payout setup preference</span>
+                      <div className="auth-input-wrap">
+                        <FileText size={18} />
+                        <select
+                          value={workerBankSetupChoice}
+                          onChange={(e) => setWorkerBankSetupChoice(e.target.value)}
+                        >
+                          <option value="later">Add bank/UPI after approval</option>
+                          <option value="manual_review">Need help from support</option>
+                          <option value="cash_first">Cash/direct UPI jobs first</option>
+                        </select>
+                      </div>
+                    </label>
+
+                    <div className="auth-verification-box">
+                      <div className="auth-verification-box__head">
+                        <ShieldCheck size={17} />
+                        <strong>Identity check</strong>
+                        <span>Stored as masked only</span>
+                      </div>
+                      <label className="auth-field">
+                        <span>Aadhaar number</span>
+                        <div className="auth-input-wrap">
+                          <ShieldCheck size={18} />
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={aadhaarNumber}
+                            onChange={(e) => handleAadhaarChange(e.target.value)}
+                            placeholder="12 digits"
+                            autoComplete="off"
+                          />
+                        </div>
+                      </label>
+                      <div className="auth-aadhaar-actions">
+                        <button
+                          type="button"
+                          className="auth-small-btn"
+                          onClick={() => setAadhaarOtpSent(aadhaarNumber.length === 12)}
+                          disabled={aadhaarNumber.length !== 12}
+                        >
+                          Send mock OTP
+                        </button>
+                        <div className="auth-input-wrap">
+                          <Lock size={18} />
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={aadhaarOtp}
+                            onChange={(e) => setAadhaarOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            placeholder={aadhaarOtpSent ? 'Use 123456' : 'OTP'}
+                            disabled={!aadhaarOtpSent}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="auth-small-btn"
+                          onClick={() => setAadhaarOtpVerified(aadhaarOtp === '123456')}
+                          disabled={!aadhaarOtpSent || aadhaarOtp.length !== 6}
+                        >
+                          Verify
+                        </button>
+                      </div>
+                      {aadhaarOtpVerified && <span className="auth-verified-line">Aadhaar mock OTP verified. Raw number is not stored in normal profile data.</span>}
+                    </div>
+
+                    <div className="auth-verification-box">
+                      <div className="auth-verification-box__head">
+                        <Upload size={17} />
+                        <strong>Worker proof</strong>
+                        <span>Images/PDF accepted</span>
+                      </div>
+
+                      <label className="auth-field">
+                        <span>Profile photo</span>
+                        <input
+                          className="auth-file-input"
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={(e) => setProfilePhotoFiles(getSelectedFiles(e.target.files, 2))}
+                        />
+                      </label>
+
+                      <label className="auth-field">
+                        <span>Previous platform or work proof</span>
+                        <input
+                          className="auth-file-input"
+                          type="file"
+                          accept="image/*,application/pdf"
+                          multiple
+                          onChange={(e) => setPreviousProofFiles(getSelectedFiles(e.target.files, 5))}
+                        />
+                      </label>
+
+                      <div className="auth-worker-verification-grid">
+                        <label className="auth-field">
+                          <span>Previous platform</span>
+                          <div className="auth-input-wrap">
+                            <FileText size={18} />
+                            <input
+                              type="text"
+                              value={previousPlatformName}
+                              onChange={(e) => setPreviousPlatformName(e.target.value)}
+                              placeholder="Optional"
+                            />
+                          </div>
+                        </label>
+                        <label className="auth-field">
+                          <span>Platform ID last digits</span>
+                          <div className="auth-input-wrap">
+                            <FileText size={18} />
+                            <input
+                              type="text"
+                              value={previousPlatformId}
+                              onChange={(e) => setPreviousPlatformId(e.target.value.slice(0, 40))}
+                              placeholder="Optional"
+                            />
+                          </div>
+                        </label>
+                      </div>
+
+                      <label className="auth-field">
+                        <span>Certificate optional</span>
+                        <input
+                          className="auth-file-input"
+                          type="file"
+                          accept="image/*,application/pdf"
+                          multiple
+                          onChange={(e) => setCertificateFiles(getSelectedFiles(e.target.files, 5))}
+                        />
+                      </label>
+
+                      {workerProofPreviews.length > 0 && (
+                        <div className="auth-proof-preview" aria-label="Selected verification files">
+                          <div className="auth-proof-preview__head">
+                            <strong>Selected proofs</strong>
+                            <span>{workerProofPreviews.length}/{MAX_WORKER_VERIFICATION_FILES} files</span>
+                          </div>
+                          <div className="auth-proof-preview__grid">
+                            {workerProofPreviews.map((item) => {
+                              const progress = workerUploadProgress[item.progressKey];
+                              return (
+                                <div className="auth-proof-preview__item" key={`${item.progressKey}_${item.file.size}`}>
+                                  <div className="auth-proof-preview__thumb">
+                                    {item.kind === 'image' ? (
+                                      <img src={item.previewUrl} alt="" />
+                                    ) : (
+                                      <FileText size={20} />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <strong>{item.label}</strong>
+                                    <span>{item.safeName}</span>
+                                    <small>{item.kind.toUpperCase()} · {formatFileSize(item.file.size)}</small>
+                                    {typeof progress === 'number' && (
+                                      <div className="auth-proof-progress" aria-label={`${item.safeName} upload ${progress}%`}>
+                                        <span style={{ width: `${progress}%` }} />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
               </>
@@ -493,6 +990,8 @@ function Auth() {
               {!loading && <ArrowRight size={18} />}
             </button>
           </form>
+            </>
+          )}
 
           <div className="auth-switch">
             {phase === 'login' ? (

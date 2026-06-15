@@ -1,5 +1,12 @@
 const EARTH_RADIUS_KM = 6371;
 
+// LEGACY OVERLAP NOTE:
+// This utility is a local/frontend matcher for the older marketplace screens. The
+// MVP Smart Queue v1 must move final ranking to backend-owned logic with approved
+// workers, Open-to-Work sessions, same-area-first search, Google Maps ETA, radius
+// expansion up to 15 km, favorite boost, skip history, and audit evidence.
+// Keep this helper for existing tests/UI until the backend queue replaces it.
+
 export function distanceKm(a, b) {
   if (!a || !b || a.lat == null || a.lng == null || b.lat == null || b.lng == null) return Infinity;
   const toRad = (degrees) => (Number(degrees) * Math.PI) / 180;
@@ -43,7 +50,7 @@ export function rankAvailableWorkers({
       const price = Number(worker.price || worker.dayRate || 0);
       const tierBoost = worker.tier === 'Diamond' ? 80 : worker.tier === 'Gold' ? 50 : worker.tier === 'Silver' ? 25 : 0;
       const score = Math.round(
-        Number(worker.socioScore || 0) +
+        Number(worker.gigScore ?? worker.socioScore ?? 0) +
         tierBoost -
         Math.min(distance, 30) * 8 -
         Math.min(price / 100, 40)

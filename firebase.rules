@@ -26,11 +26,6 @@ service cloud.firestore {
       return isAdmin() && currentAdminData().role == "regionLead";
     }
 
-    function isWorkerOwnerRole() {
-      return isAdmin() &&
-        currentAdminData().role != "regionLead";
-    }
-
     // New: Check if the current admin is the parent of another admin (to support hierarchy)
     function isParentOf(targetAdminId) {
       let adminData = get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
@@ -41,18 +36,160 @@ service cloud.firestore {
       );
     }
 
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    function isBookingParticipant(bookingId) {
+      let booking = get(/databases/$(database)/documents/bookings/$(bookingId)).data;
+      return isLoggedIn() && (
+        booking.userId == request.auth.uid ||
+        booking.adminId == request.auth.uid ||
+        booking.assignedWorkerId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    function isAllowedBookingCreate() {
+      return request.resource.data.keys().hasOnly([
+          "userId",
+          "name",
+          "customerName",
+          "phone",
+          "address",
+          "userLocationCity",
+          "city",
+          "areaId",
+          "serviceId",
+          "serviceType",
+          "status",
+          "bookingType",
+          "paymentProvider",
+          "paymentStatus",
+          "paymentFlow",
+          "paymentLinkId",
+          "paymentLinkUrl",
+          "paymentAmountPaise",
+          "statusUpdatedAt",
+          "fixedRate",
+          "acceptedQuote",
+          "assignedWorkerId",
+          "workerName",
+          "assignedWorker",
+          "scheduledDate",
+          "timeSlot",
+          "estimatedDays",
+          "issueDetails",
+          "aiSmartMatch",
+          "matchingScope",
+          "suggestedPriceBand",
+          "priceQuoteId",
+          "quoteId",
+          "quoteStatus",
+          "completedWorkDays",
+          "remainingWorkDays",
+          "isMultiDay",
+          "isScheduled",
+          "issueTitle",
+          "jobDetails",
+          "finalTotal",
+          "totalAmount",
+          "platformFee",
+          "paymentGatewayFee",
+          "paymentGatewayFeePercent",
+          "requestedPhotos",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && (request.resource.data.customerName != null || request.resource.data.name != null)
+        && request.resource.data.phone != null
+        && request.resource.data.serviceType != null
+        && request.resource.data.status in ["pending", "scheduled", "payment_pending"]
+        && request.resource.data.createdAt != null;
+    }
+
+    function isWorkerSafeProfileChange() {
+      return changedOnly([
+        "name",
+        "phone",
+        "photoURL",
+        "displayName",
+        "area",
+        "city",
+        "state",
+        "postalCode",
+        "locationArea",
+        "locationCity",
+        "locationLat",
+        "locationLng",
+        "gigTypes",
+        "serviceTypes",
+        "subSkills",
+        "languages",
+        "preferredLanguage",
+        "bio",
+        "price",
+        "basePrice",
+        "hourlyRate",
+        "workerBasePrices",
+        "certifications",
+        "updatedAt",
+        "lastSeenAt"
+      ]);
+    }
+
     /* ============================
        USERS COLLECTION
     ============================ */
     match /users/{userId} {
       // Users can only manage their own profile; superadmins can read all
       allow read: if isLoggedIn() && (request.auth.uid == userId || isSuperAdmin());
-      allow write: if isLoggedIn() && request.auth.uid == userId;
+      allow create: if isLoggedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly([
+          "email",
+          "name",
+          "phone",
+          "locationCity",
+          "locationArea",
+          "state",
+          "postalCode",
+          "locationLat",
+          "locationLng",
+          "photoURL",
+          "displayName",
+          "refundBankAccount",
+          "refundBankAccountUpdatedAt",
+          "createdAt",
+          "updatedAt"
+        ]);
+      allow update: if isLoggedIn()
+        && request.auth.uid == userId
+        && changedOnly([
+          "email",
+          "name",
+          "phone",
+          "locationCity",
+          "locationArea",
+          "state",
+          "postalCode",
+          "locationLat",
+          "locationLng",
+          "photoURL",
+          "displayName",
+          "notificationPreferences",
+          "refundBankAccount",
+          "refundBankAccountUpdatedAt",
+          "updatedAt",
+          "lastSeenAt"
+        ]);
+      allow delete: if false;
     }
 
     match /users_by_phone/{phoneNumber} {
-      // Public read for login verification; strict write for specific phone owner
-      allow read: if true;
+      // Phone login lookup must go through rate-limited callable function.
+      allow read: if isAdmin();
       allow create, update: if request.auth != null
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.phone == phoneNumber;
@@ -60,18 +197,29 @@ service cloud.firestore {
     }
 
     match /workers_by_phone/{phoneNumber} {
-      // Public read allows phone->email lookup for worker login.
-      allow read: if true;
+      // Phone login lookup must go through rate-limited callable function.
+      allow read: if isAdmin();
 
-      // Admin hierarchy can maintain worker phone index.
-      // Worker can only update their own mapping after activation.
-      allow create, update: if isAdmin() || (
+      // Worker sign-up can create its own login mapping. Admin maintenance goes through callables.
+      allow create, update: if (
         request.auth != null
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.phone == phoneNumber
       );
 
       allow delete: if false;
+    }
+
+    match /auth_lookup_rate_limits/{limitId} {
+      allow read, write: if false;
+    }
+
+    match /security_rate_limits/{limitId} {
+      allow read, write: if false;
+    }
+
+    match /worker_payout_accounts/{workerUid} {
+      allow read, write: if false;
     }
 
     match /worker_auth/{workerUid} {
@@ -81,8 +229,15 @@ service cloud.firestore {
       );
 
       // Worker creates/updates own auth profile; admins can maintain it too.
-      allow create, update: if isLoggedIn() && (
-        request.auth.uid == workerUid || isAdmin()
+      allow create: if isLoggedIn() && (
+        (request.auth.uid == workerUid
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.approvalStatus == "pending"
+          && request.resource.data.status == "inactive")
+        || isAdmin()
+      );
+      allow update: if isLoggedIn() && (
+        (request.auth.uid == workerUid && isWorkerSafeProfileChange()) || isAdmin()
       );
 
       allow delete: if isSuperAdmin();
@@ -94,13 +249,7 @@ service cloud.firestore {
     match /bookings/{bookingId} {
 
       // CREATE: user creates their own booking with a pending status
-      allow create: if request.auth != null
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.phone != null
-        && request.resource.data.customerName != null
-        && request.resource.data.serviceType != null
-        && (request.resource.data.status == "pending" || request.resource.data.status == "scheduled")
-        && request.resource.data.createdAt != null;
+      allow create: if isLoggedIn() && isAllowedBookingCreate();
 
       // READ: accessible by owner, the assigning admin, or their parent admins
       allow read: if request.auth != null && (
@@ -110,23 +259,8 @@ service cloud.firestore {
         || (resource.data.adminId != null && isParentOf(resource.data.adminId))
         || isSuperAdmin()
       );
-
-      // UPDATE — Spark mode support:
-      // Allow owner/admin client-side transitions because callable functions may be unavailable on free tier.
-      allow update: if request.auth != null && (
-        (
-          resource.data.userId == request.auth.uid &&
-          request.resource.data.userId == request.auth.uid
-        )
-        ||
-        (
-          isAdmin() && (
-            resource.data.adminId == request.auth.uid
-            || resource.data.status in ['pending', 'scheduled', 'quoted']
-            || isSuperAdmin()
-          )
-        )
-      );
+      // UPDATE:`r`n      // Booking state/contact/payment/assignment changes go through App Check protected callables.
+      allow update: if false;
 
       // Client-side deletions are strictly prohibited
       allow delete: if false;
@@ -174,6 +308,41 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /bookings/{bookingId}/dispute_analysis/{analysisId} {
+      // Generated analysis is backend-owned; booking participants/admins can read it.
+      allow read: if isBookingParticipant(bookingId);
+      allow create, update, delete: if false;
+    }
+
+    /* ============================
+       GIGSCORE EVENTS
+    ============================ */
+    match /gigscore_events/{eventId} {
+      // Score events are created only by Cloud Functions/Admin SDK.
+      allow create, update, delete: if false;
+
+      // Users can read their own yesterday/today score reasons; admins can review risk.
+      allow read: if isLoggedIn() && (
+        resource.data.actorId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    match /gigscore_pair_windows/{windowId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /gigscore_score_windows/{windowId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /smart_queue_reliability_windows/{windowId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     /* ============================
        ADMINS COLLECTION
     ============================ */
@@ -187,24 +356,24 @@ service cloud.firestore {
         || isSuperAdmin()
         || resource.data.role == "regionLead"  // ✅ Allow all admins to see region leads for assignment
       );
-      // Hierarchical provisioning:
-      // - Superadmin can create any admin
-      // - RegionLead can create child admins (mason role) under themselves
-      // - TEMPORARY: Allow authenticated user to create their own admin doc (for initial superadmin setup)
-      allow create: if isSuperAdmin() || (
+      // Hierarchical provisioning goes through App Check protected callables.
+      // Initial superadmin bootstrap must happen through Admin SDK/CLI scripts, not client rules.
+      allow create: if false;
+      allow delete: if false;
+      // Admin self-updates are limited to harmless profile fields. Superadmin hierarchy/status changes use callables.
+      allow update: if (
         isAdmin()
-        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "regionLead"
-        && request.resource.data.role == "mason"
-        && request.resource.data.parentAdminId == request.auth.uid
-      ) || (
-        isLoggedIn() 
         && request.auth.uid == adminId
-        && !exists(/databases/$(database)/documents/admins/$(adminId))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name",
+          "phone",
+          "photoURL",
+          "displayName",
+          "notificationPreferences",
+          "lastSeenAt",
+          "updatedAt"
+        ])
       );
-      allow delete: if isSuperAdmin();
-      // Admins can update their own profile, superadmin can update any admin
-      // This allows superadmin to set regionStatus, probationStatus etc.
-      allow update: if isAdmin() && (request.auth.uid == adminId || isSuperAdmin());
     }
 
     /* ============================
@@ -222,29 +391,27 @@ service cloud.firestore {
         (resource.data.adminId != null && isParentOf(resource.data.adminId)) ||
         isSuperAdmin()
       );
-      // Admin/Mason create workers; region leads only monitor.
       // Workers can self-register in pending state and must be approved by region lead.
+      // Admin/Mason worker creation and approvals go through App Check protected callables.
       allow create: if (
-        isWorkerOwnerRole() && request.resource.data.adminId == request.auth.uid
-      ) || (
         isLoggedIn()
         && workerId == request.auth.uid
         && request.resource.data.adminId in [null, ""]
         && request.resource.data.approvalStatus == "pending"
         && request.resource.data.status == "inactive"
       );
-      // Allow admin owner or parent to update; superadmin can set fraud flags
+      // Worker-safe profile changes are allowed. Admin operational updates use callables.
       allow update: if isLoggedIn() && (
-        workerId == request.auth.uid ||
-        resource.data.adminId == request.auth.uid ||
-        (isRegionLead()
-          && resource.data.approvalStatus == "pending"
-          && resource.data.adminId in [null, ""]
-          && resource.data.area == currentAdminData().areaName) ||
-        isParentOf(resource.data.adminId) ||
-        isSuperAdmin()
+        workerId == request.auth.uid && isWorkerSafeProfileChange()
       );
-      allow delete: if isSuperAdmin();
+      allow delete: if false;
+    }
+
+    match /worker_verification_submissions/{workerId} {
+      allow read: if isLoggedIn() && (
+        workerId == request.auth.uid || isAdmin()
+      );
+      allow create, update, delete: if false;
     }
 
     /* ============================
@@ -270,18 +437,505 @@ service cloud.firestore {
         resource.data.adminId == request.auth.uid || isSuperAdmin()
       );
 
-      // Admin can mark own alert as read/closed; writes from backend are unrestricted by rules via Admin SDK.
-      allow update: if isLoggedIn() && resource.data.adminId == request.auth.uid;
+      // Admin can only mark own alert read/closed; backend writes bypass rules via Admin SDK.
+      allow update: if isLoggedIn()
+        && resource.data.adminId == request.auth.uid
+        && request.resource.data.adminId == request.auth.uid
+        && changedOnly([
+          "status",
+          "readAt",
+          "closedAt",
+          "updatedAt"
+        ]);
 
       // No direct client-side create/delete for alert integrity.
       allow create, delete: if false;
+    }
+
+    match /worker_availability/{workerId} {
+      allow read: if isLoggedIn();
+      allow create, update: if isLoggedIn()
+        && workerId == request.auth.uid
+        && request.resource.data.workerId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "workerId",
+          "workerName",
+          "serviceType",
+          "serviceTypes",
+          "fixedRate",
+          "finalPrice",
+          "platformFee",
+          "paymentCharge",
+          "pricing",
+          "rating",
+          "area",
+          "city",
+          "lat",
+          "lng",
+          "isAvailable",
+          "isReadyToday",
+          "emergencyEnabled",
+          "availableSince",
+          "updatedAt"
+        ]);
+      allow delete: if isLoggedIn() && (workerId == request.auth.uid || isSuperAdmin());
+    }
+
+    /* ============================
+       MVP PRICING, DEMAND, AND QUEUE CONTRACTS
+    ============================ */
+    match /service_price_rules/{ruleId} {
+      // Raw pricing controls are admin-visible only. Consumers/workers receive safe quote responses from callables.
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /area_demand_snapshots/{snapshotId} {
+      // Demand internals are backend-owned; SuperAdmin/ops can inspect for pricing health.
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /area_growth_insights/{insightId} {
+      // Founder growth insights are backend-written aggregate summaries only.
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /worker_open_sessions/{sessionId} {
+      // Workers can see their own active session; final create/update/expiry goes through callables.
+      allow read: if isLoggedIn() && (
+        resource.data.workerId == request.auth.uid || isAdmin()
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /price_quotes/{quoteId} {
+      // Locked quotes are backend-written. Consumers/workers see only their own quote; admins can audit.
+      allow read: if isLoggedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.workerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /smart_queue_offers/{offerId} {
+      // Queue offers are backend-owned. Do not expose all ranking internals to consumers.
+      allow read: if isLoggedIn() && (
+        resource.data.workerId == request.auth.uid || isAdmin()
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /worker_push_tokens/{tokenId} {
+      // Push tokens are sensitive device identifiers. Workers register through App Check protected callable functions.
+      allow read: if isLoggedIn() && (resource.data.workerId == request.auth.uid || isAdmin());
+      allow create, update, delete: if false;
+    }
+
+    match /consumer_ai_memories/{userId} {
+      // Consumer AI memory is backend-written summary-only data. Future privacy UI should use callables.
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+
+      match /items/{memoryId} {
+        allow read: if isAdmin();
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /consumer_ai_audits/{auditId} {
+      // AI audit logs contain redacted prompts and policy evidence; keep them backend-owned.
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /consumer_ai_home_profiles/{userId} {
+      // Premium concierge memory stores safe preference fields only and is backend-written.
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /consumer_ai_privacy_settings/{userId} {
+      // Users manage these through manageConsumerAiMemory so validation/audit stays server-side.
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /consumer_ai_conversion_events/{eventId} {
+      // Backend callable writes sanitized funnel events; admins can inspect aggregate conversion evidence.
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /consumer_ai_conversion_daily/{eventId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_photo_quality_reviews/{reviewId} {
+      // AI photo signals are evidence only. Human/admin review is required before any GigScore or payout action.
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /booking_assignment_states/{bookingId} {
+      // Consumers can see their own matching state; workers see only the active/assigned state involving them.
+      allow read: if isLoggedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.currentWorkerId == request.auth.uid ||
+        resource.data.assignedWorkerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /demand_refresh_queue/{refreshId} {
+      // Pub/Sub dedupe/load-control queue is backend-only; admins can inspect through secured tools later.
+      allow read, create, update, delete: if false;
+    }
+
+    match /consumer_queue_recovery_requests/{requestId} {
+      // Created by callable when a consumer chooses Notify Me, Book Later, or radius-expansion recovery.
+      allow read: if isLoggedIn() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /worker_live_locations/{workerId} {
+      allow read: if isLoggedIn() && (workerId == request.auth.uid || isAdmin());
+      allow create, update: if isLoggedIn()
+        && workerId == request.auth.uid
+        && request.resource.data.workerId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "workerId",
+          "lat",
+          "lng",
+          "isActive",
+          "bookingId",
+          "locationStatus",
+          "retentionClass",
+          "expiresAt",
+          "accuracyM",
+          "speedMps",
+          "heading",
+          "timestampMs",
+          "lastLocationAt",
+          "activeSince",
+          "updatedAt"
+        ]);
+      allow delete: if isLoggedIn() && workerId == request.auth.uid;
+    }
+
+    match /booking_live_tracking/{bookingId} {
+      allow read: if isBookingParticipant(bookingId);
+      allow create: if isLoggedIn()
+        && get(/databases/$(database)/documents/bookings/$(bookingId)).data.assignedWorkerId == request.auth.uid
+        && request.resource.data.bookingId == bookingId
+        && request.resource.data.workerId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "bookingId",
+          "workerId",
+          "lat",
+          "lng",
+          "accuracyM",
+          "speedMps",
+          "heading",
+          "distanceRemainingKm",
+          "etaMinutes",
+          "etaSource",
+          "routeStatus",
+          "locationStatus",
+          "isActive",
+          "retentionClass",
+          "exactLocationExpiresAt",
+          "timestampMs",
+          "startedAt",
+          "lastLocationAt",
+          "reachedAt",
+          "leftAt",
+          "stoppedAt",
+          "updatedAt"
+        ]);
+      allow update: if isLoggedIn()
+        && get(/databases/$(database)/documents/bookings/$(bookingId)).data.assignedWorkerId == request.auth.uid
+        && resource.data.workerId == request.auth.uid
+        && request.resource.data.bookingId == bookingId
+        && request.resource.data.workerId == request.auth.uid
+        && changedOnly([
+          "lat",
+          "lng",
+          "accuracyM",
+          "speedMps",
+          "heading",
+          "distanceRemainingKm",
+          "etaMinutes",
+          "etaSource",
+          "routeStatus",
+          "locationStatus",
+          "isActive",
+          "retentionClass",
+          "exactLocationExpiresAt",
+          "timestampMs",
+          "startedAt",
+          "lastLocationAt",
+          "reachedAt",
+          "leftAt",
+          "stoppedAt",
+          "updatedAt"
+        ]);
+      allow delete: if false;
+    }
+
+    match /travel_watchdog_events/{eventId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /worker_location_sessions/{sessionId} {
+      allow read: if isLoggedIn() && (resource.data.workerId == request.auth.uid || isAdmin());
+      allow create: if isLoggedIn()
+        && request.resource.data.workerId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "workerId",
+          "bookingId",
+          "reachTime",
+          "leftTime",
+          "durationMinutes",
+          "locationStatus",
+          "retentionClass",
+          "lastLocationAt",
+          "startedAt",
+          "updatedAt"
+        ]);
+      allow update: if isLoggedIn()
+        && resource.data.workerId == request.auth.uid
+        && changedOnly([
+          "reachTime",
+          "leftTime",
+          "durationMinutes",
+          "locationStatus",
+          "lastLocationAt",
+          "updatedAt"
+        ]);
+      allow delete: if false;
+    }
+
+    match /ai_price_estimates/{estimateId} {
+      allow read: if isLoggedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isLoggedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "userId",
+          "bookingId",
+          "userEmail",
+          "suggestedPrice",
+          "serviceType",
+          "timestamp",
+          "pageContext",
+          "status"
+        ]);
+      allow update, delete: if isAdmin();
+    }
+
+    match /users/{userId}/chats/{chatId} {
+      allow read, create, update: if isLoggedIn() && userId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    match /users/{userId}/chats/{chatId}/messages/{messageId} {
+      allow read, create: if isLoggedIn() && userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /users/{userId}/behavior/{behaviorId} {
+      allow read, create, update: if isLoggedIn() && userId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    match /platform_settings/{settingId} {
+      allow read: if isLoggedIn() && (settingId == "pricing_controls" || isSuperAdmin());
+      allow write: if false;
+    }
+
+    match /sentry_issue_summaries/{summaryId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_incident_summaries/{summaryId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_knowledge_sources/{sourceId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_knowledge_chunks/{chunkId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_model_usage_events/{eventId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_model_usage_daily/{usageId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_orchestration_evaluations/{evaluationId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_agent_runtime_cycles/{cycleId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_model_governance_reviews/{reviewId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_recurrence_signatures/{signatureId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_recurrence_checks/{checkId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ai_release_packets/{packetId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /ops_alert_deliveries/{deliveryId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /jira_issue_handoffs/{handoffId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /payment_operations/{operationId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /support_tickets/{ticketId} {
+      allow read: if isLoggedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.workerId == request.auth.uid ||
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isLoggedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "createdBy",
+          "userId",
+          "workerId",
+          "bookingId",
+          "role",
+          "category",
+          "subject",
+          "message",
+          "status",
+          "priority",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.status in ["open", "pending"];
+      allow update: if isAdmin()
+        && changedOnly([
+          "status",
+          "priority",
+          "assignedTo",
+          "resolution",
+          "updatedAt",
+          "closedAt"
+        ]);
+      allow delete: if false;
+    }
+
+    match /sos_incidents/{incidentId} {
+      allow read: if isLoggedIn() && (
+        resource.data.actorId == request.auth.uid ||
+        resource.data.workerId == request.auth.uid ||
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /rideRequests/{rideId} {
+      allow create: if isLoggedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.driverType in ["bike", "auto", "car"]
+        && request.resource.data.keys().hasOnly([
+          "userId",
+          "driverType",
+          "pickup",
+          "drop",
+          "status",
+          "createdAt",
+          "price",
+          "distanceKm",
+          "durationMin"
+        ]);
+
+      allow read: if isLoggedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        resource.data.status == "pending" ||
+        isAdmin()
+      );
+
+      allow update: if isLoggedIn() && (
+        (
+          resource.data.status == "pending"
+          && request.resource.data.driverId == request.auth.uid
+          && request.resource.data.status == "accepted"
+          && changedOnly([
+            "status",
+            "driverId",
+            "acceptedAt"
+          ])
+        )
+        || (
+          resource.data.userId == request.auth.uid
+          && request.resource.data.status == "cancelled"
+          && changedOnly([
+            "status",
+            "cancelledAt",
+            "updatedAt"
+          ])
+        )
+        || isAdmin()
+      );
+
+      allow delete: if false;
     }
 
     /* ============================
        CONFIG COLLECTION (AI Instructions)
     ============================ */
     match /config/{configId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow write: if isSuperAdmin();
     }
 

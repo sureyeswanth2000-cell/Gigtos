@@ -49,9 +49,10 @@ export function evaluateWalletRestrictions({ balance, rules = WALLET_RULES }) {
     balance: Number(balance),
     limited,
     maxJobsPerDay: limited ? rules.debtJobLimitPerDay : null,
+    gigScorePenaltyNeedsDiscussion: limited ? rules.dailyScorePenaltyNeedsDiscussion : 0,
     socioScorePenaltyNeedsDiscussion: limited ? rules.dailyScorePenaltyNeedsDiscussion : 0,
     message: limited
-      ? 'Wallet debt crossed INR 100. Limit worker to one job per day and discuss daily SocioScore effect before automation.'
+      ? 'Wallet debt crossed INR 100. Limit worker to one job per day and discuss daily GigScore effect before automation.'
       : 'Wallet is within platform-fee debt limit.',
   };
 }

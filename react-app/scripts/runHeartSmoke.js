@@ -44,9 +44,14 @@ function tail(value = '', maxLines = 18) {
 
 const steps = [
   runStep({
-    name: 'Booking smoke: consumer -> worker -> completion photo -> rating -> SocioScore event',
+    name: 'Booking smoke: consumer -> worker -> completion photo -> rating -> GigScore event',
     command: npmCommand(),
     args: npmArgs('run', 'smoke:booking'),
+  }),
+  runStep({
+    name: 'Marketplace smoke: MVP pricing + Smart Queue seeded scenarios',
+    command: npmCommand(),
+    args: npmArgs('run', 'smoke:marketplace'),
   }),
   runStep({
     name: 'Local dev bypass guard: bypass may run only outside production deploy',
@@ -68,6 +73,21 @@ const steps = [
     env: { REACT_APP_ENABLE_DEV_BYPASS: '' },
   }),
   runStep({
+    name: 'Playwright browser Heart Monitor: render key routes and capture screenshots',
+    command: npmCommand(),
+    args: npmArgs('run', 'smoke:browser-heart'),
+  }),
+  runStep({
+    name: 'AI/Ops external setup audit: Sentry, App Check, Jira, Vector Search, and runtime',
+    command: npmCommand(),
+    args: npmArgs('run', 'audit:ai-ops'),
+  }),
+  runStep({
+    name: 'Launch readiness audit: app blockers, VAPID, and manual QA',
+    command: npmCommand(),
+    args: npmArgs('run', 'audit:launch'),
+  }),
+  runStep({
     name: 'Built app route smoke: key URLs and static assets return OK',
     command: npmCommand(),
     args: npmArgs('run', 'smoke:routes'),
@@ -78,9 +98,14 @@ const steps = [
     args: npmArgs('run', 'smoke:dev-ui'),
   }),
   runStep({
-    name: 'Live/staging smoke scaffold: SSL, URL, route, and maps checks when GIGTOS_SMOKE_URL is set',
+    name: 'Launch E2E smoke: public surfaces, protected redirects, privacy, PWA',
     command: npmCommand(),
-    args: npmArgs('run', 'smoke:live'),
+    args: npmArgs('run', 'smoke:e2e'),
+  }),
+  runStep({
+    name: 'Live/staging smoke scaffold: SSL, URL, route, and maps checks when GIGTOS_SMOKE_URL is set',
+    command: nodeBin,
+    args: ['scripts/runLiveSmoke.js'],
   }),
 ];
 

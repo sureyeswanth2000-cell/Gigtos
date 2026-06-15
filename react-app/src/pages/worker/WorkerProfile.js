@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { auth, db } from '../../firebase';
+import { auth, db, functionsInstance } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import RatingDisplay from '../../components/worker/RatingDisplay';
 import WorkerBottomNav from '../../components/worker/WorkerBottomNav';
+import { useLanguage } from '../../context/LanguageContext';
+import { EMPTY_BANK_ACCOUNT, maskAccountNumber, normalizeBankAccount, validateBankAccount } from '../../utils/bankDetails';
 import '../../styles/worker-dashboard.css';
 
 const MOCK_REVIEWS = [
@@ -16,13 +19,22 @@ const MOCK_REVIEWS = [
 export default function WorkerProfile() {
   const [worker, setWorker] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [payoutBankAccount, setPayoutBankAccount] = useState(EMPTY_BANK_ACCOUNT);
+  const [bankSaving, setBankSaving] = useState(false);
+  const [bankMessage, setBankMessage] = useState('');
+  
+  const { language, setLanguage, supportedLanguages } = useLanguage();
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) { setLoading(false); return; }
       try {
         const snap = await getDoc(doc(db, 'worker_auth', u.uid));
-        if (snap.exists()) setWorker({ ...snap.data(), uid: u.uid });
+        if (snap.exists()) {
+          const data = snap.data();
+          setWorker({ ...data, uid: u.uid });
+          setPayoutBankAccount(data.payoutBankAccount || EMPTY_BANK_ACCOUNT);
+        }
       } catch {}
       finally { setLoading(false); }
     });
@@ -38,6 +50,34 @@ export default function WorkerProfile() {
   }));
 
   const initials = (worker?.name || 'W').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+  const savePayoutBankAccount = async () => {
+    setBankMessage('');
+    const account = normalizeBankAccount(payoutBankAccount);
+    const validationError = validateBankAccount(account);
+    if (validationError) {
+      setBankMessage(validationError);
+      return;
+    }
+    const uid = auth.currentUser?.uid || worker?.uid;
+    if (!uid) {
+      setBankMessage('Sign in again to save payout account.');
+      return;
+    }
+
+    setBankSaving(true);
+    try {
+      const result = await httpsCallable(functionsInstance, 'updateWorkerPayoutAccount')({ account });
+      const masked = result?.data?.masked || {};
+      setWorker(prev => ({ ...(prev || {}), payoutBankAccount: null, payoutBankAccountMasked: masked }));
+      setPayoutBankAccount({ ...EMPTY_BANK_ACCOUNT, accountHolderName: account.accountHolderName, bankName: account.bankName });
+      setBankMessage('Payout account saved.');
+    } catch (err) {
+      setBankMessage(err.message || 'Failed to save payout account.');
+    } finally {
+      setBankSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -123,6 +163,81 @@ export default function WorkerProfile() {
                 ))}
               </div>
 
+            </div>
+          )}
+        </div>
+
+        <div className="worker-card">
+          <h4 style={{ margin: '0 0 12px', color: '#1F1144' }}>🌐 App Language</h4>
+          <p style={{ margin: '0 0 12px', color: '#6B7280', fontSize: 13 }}>
+            Choose the language for your worker dashboard.
+          </p>
+          <select 
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 14 }}
+          >
+            {supportedLanguages.map(l => (
+              <option key={l.code} value={l.code}>{l.nativeLabel} ({l.label})</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="worker-card">
+          <h4 style={{ margin: '0 0 12px', color: '#1F1144' }}>Payout Bank Account</h4>
+          <p style={{ margin: '0 0 12px', color: '#6B7280', fontSize: 13 }}>
+            Gigtos uses this account to pay completed worker earnings after consumer payment confirmation.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+            <input
+              placeholder="Account holder name"
+              value={payoutBankAccount.accountHolderName}
+              onChange={e => setPayoutBankAccount({ ...payoutBankAccount, accountHolderName: e.target.value })}
+              style={{ padding: 10, borderRadius: 8, border: '1px solid #E5E7EB' }}
+            />
+            <input
+              placeholder="Bank name"
+              value={payoutBankAccount.bankName}
+              onChange={e => setPayoutBankAccount({ ...payoutBankAccount, bankName: e.target.value })}
+              style={{ padding: 10, borderRadius: 8, border: '1px solid #E5E7EB' }}
+            />
+            <input
+              placeholder="Account number"
+              inputMode="numeric"
+              value={payoutBankAccount.accountNumber}
+              onChange={e => setPayoutBankAccount({ ...payoutBankAccount, accountNumber: e.target.value })}
+              style={{ padding: 10, borderRadius: 8, border: '1px solid #E5E7EB' }}
+            />
+            <input
+              placeholder="IFSC"
+              value={payoutBankAccount.ifsc}
+              onChange={e => setPayoutBankAccount({ ...payoutBankAccount, ifsc: e.target.value.toUpperCase() })}
+              style={{ padding: 10, borderRadius: 8, border: '1px solid #E5E7EB' }}
+            />
+            <input
+              placeholder="UPI ID optional"
+              value={payoutBankAccount.upiId}
+              onChange={e => setPayoutBankAccount({ ...payoutBankAccount, upiId: e.target.value })}
+              style={{ padding: 10, borderRadius: 8, border: '1px solid #E5E7EB' }}
+            />
+          </div>
+          <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ color: '#6B7280', fontSize: 13 }}>
+              Saved account: {worker?.payoutBankAccountMasked?.accountNumberMasked || maskAccountNumber(worker?.payoutBankAccount?.accountNumber)}
+            </span>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={savePayoutBankAccount}
+              disabled={bankSaving}
+              style={{ padding: '10px 16px' }}
+            >
+              {bankSaving ? 'Saving...' : 'Save payout account'}
+            </button>
+          </div>
+          {bankMessage && (
+            <div style={{ marginTop: 10, color: bankMessage.includes('saved') ? '#059669' : '#b91c1c', fontWeight: 700, fontSize: 13 }}>
+              {bankMessage}
             </div>
           )}
         </div>

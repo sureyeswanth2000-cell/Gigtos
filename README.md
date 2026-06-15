@@ -66,7 +66,7 @@ Home services app (Plumbing, Electrical, and more) across all of India — with 
 - ✅ `onBookingCreated` — triggers email + SMS notification on new booking
 - ✅ `onBookingStatusChange` — triggers email + SMS on status change
 - ✅ `getServiceInsights` — returns live worker availability + quote trends for the home page
-- ✅ `aiBookingAssistant` — Gemini 1.5 Flash powered consumer booking assistant with safe fallback mode
+- ✅ `aiBookingAssistant` — Vertex AI powered consumer booking assistant with Gemini API-key and deterministic fallback modes
 - ✅ Twilio SMS integration (configured via env vars)
 - ✅ Nodemailer/Gmail email integration
 
@@ -77,25 +77,26 @@ npm install
 firebase deploy --only functions
 ```
 
-### Configure env vars:
+### Configure secrets and env vars:
 ```bash
-firebase functions:config:set gmail.user="you@gmail.com" gmail.pass="app-password"
-firebase functions:config:set twilio.sid="ACxxx" twilio.token="yyy" twilio.phone="+123456789"
-firebase functions:config:set gemini.key="YOUR_GEMINI_1_5_FLASH_API_KEY"
+firebase functions:secrets:set GEMINI_API_KEY
+# Set AI_MODEL_PROVIDER, VERTEX_AI_PROJECT_ID, VERTEX_AI_LOCATION, VERTEX_AI_MODEL,
+# GMAIL_USER, GMAIL_PASS, TWILIO_SID, TWILIO_TOKEN, and TWILIO_PHONE
+# through your approved Functions runtime environment.
 ```
 
-### Gemini AI assistant setup:
+### Vertex AI assistant setup:
 
 **Option A — Environment file (recommended for local development):**
 ```bash
 cd functions
 cp .env.example .env
-# Edit .env and add your Gemini API key (the .env file is gitignored)
+# Edit .env and set Vertex AI project/location/model (the .env file is gitignored)
 ```
 
-**Option B — Firebase Functions config (recommended for production):**
+**Option B - Firebase Secret Manager fallback only:**
 ```bash
-firebase functions:config:set gemini.key="YOUR_GEMINI_API_KEY"
+firebase functions:secrets:set GEMINI_API_KEY
 ```
 
 Then deploy:

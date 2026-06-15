@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "gigto-c0c83"
+  },
+  "targets": {
+    "gigto-c0c83": {
+      "storage": {
+        "gigtosUploads": [
+          "gigtos-user-uploads-gigto-c0c83"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

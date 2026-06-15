@@ -31,6 +31,7 @@ export function getDevBypassUser(role, env = process.env) {
       serviceTypes: ['Home Helper', 'Electrician'],
       gigType: 'Home Helper',
       approvalStatus: 'approved',
+      gigScore: 500,
       socioScore: 500,
       lat: 12.979,
       lng: 77.641,

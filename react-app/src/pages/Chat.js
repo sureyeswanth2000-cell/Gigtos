@@ -28,14 +28,20 @@ export default function Chat() {
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
   const endRef = useRef(null);
 
   useEffect(() => {
     const loadBooking = async () => {
       if (!bookingId) return;
-      const docSnap = await getDoc(doc(db, 'bookings', bookingId));
-      if (docSnap.exists()) {
-        setBooking({ id: docSnap.id, ...docSnap.data() });
+      try {
+        const docSnap = await getDoc(doc(db, 'bookings', bookingId));
+        if (docSnap.exists()) {
+          setBooking({ id: docSnap.id, ...docSnap.data() });
+        }
+      } catch (err) {
+        setError(err.message || 'You do not have access to this chat.');
+        setLoading(false);
       }
     };
     loadBooking();
@@ -52,6 +58,9 @@ export default function Chat() {
       setMessages(msgs);
       setLoading(false);
       setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }, (err) => {
+      setError(err.message || 'You do not have access to this chat.');
+      setLoading(false);
     });
 
     return () => unsub();
@@ -61,6 +70,10 @@ export default function Chat() {
     const message = (presetText || text).trim();
     if (!message || !bookingId) return;
     const user = auth.currentUser;
+    if (!user) {
+      setError('Please sign in to send messages.');
+      return;
+    }
     try {
       setSending(true);
       await addDoc(collection(db, 'bookings', bookingId, 'chat'), {
@@ -69,6 +82,8 @@ export default function Chat() {
         createdAt: serverTimestamp(),
       });
       setText('');
+    } catch (err) {
+      setError(err.message || 'Message could not be sent.');
     } finally {
       setSending(false);
     }
@@ -76,6 +91,10 @@ export default function Chat() {
 
   if (loading) {
     return <div className="chat-page-shell">Loading chat...</div>;
+  }
+
+  if (error) {
+    return <div className="chat-page-shell" role="alert">{error}</div>;
   }
 
   if (!booking) {

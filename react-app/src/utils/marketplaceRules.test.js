@@ -35,8 +35,8 @@ describe('worker matching and bad-match memory', () => {
       consumerLocation: { lat: 12.9716, lng: 77.5946 },
       badMatches: [badMatch],
       workers: [
-        { id: 'w1', services: ['Electrician'], location: { lat: 12.9716, lng: 77.5946 }, socioScore: 950, tier: 'Diamond', price: 500 },
-        { id: 'w2', services: ['Electrician'], location: { lat: 12.98, lng: 77.6 }, socioScore: 700, tier: 'Silver', price: 900 },
+        { id: 'w1', services: ['Electrician'], location: { lat: 12.9716, lng: 77.5946 }, gigScore: 950, tier: 'Diamond', price: 500 },
+        { id: 'w2', services: ['Electrician'], location: { lat: 12.98, lng: 77.6 }, gigScore: 700, tier: 'Silver', price: 900 },
       ],
     });
 
@@ -106,7 +106,7 @@ describe('worker verification and wallet debt', () => {
     expect(balance).toBe(-110);
     expect(restriction.limited).toBe(true);
     expect(restriction.maxJobsPerDay).toBe(1);
-    expect(restriction.socioScorePenaltyNeedsDiscussion).toBe(-5);
+    expect(restriction.gigScorePenaltyNeedsDiscussion).toBe(-5);
   });
 });
 

@@ -15,7 +15,7 @@ describe('worker onboarding funnel', () => {
       'photo',
       'pricing',
       'promise',
-      'socio_score',
+      'gig_score',
       'bank',
       'first_action',
     ]);
@@ -24,6 +24,7 @@ describe('worker onboarding funnel', () => {
   test('calculates checklist progress from worker profile signals', () => {
     const checklist = getWorkerOnboardingChecklist({
       language: 'en',
+      hasLogin: true,
       phone: '+919876543210',
       serviceTypes: ['maid'],
       serviceArea: 'HSR Layout',
@@ -36,6 +37,16 @@ describe('worker onboarding funnel', () => {
     expect(checklist.currentStep.id).toBe('proof');
   });
 
+  test('does not mark auth complete for unverified email-only data', () => {
+    const checklist = getWorkerOnboardingChecklist({
+      language: 'en',
+      email: 'worker@example.com',
+    });
+
+    expect(checklist.steps.find(step => step.id === 'auth').done).toBe(false);
+    expect(checklist.currentStep.id).toBe('auth');
+  });
+
   test('states no commission launch promise and previous-platform access', () => {
     const regular = getWorkerOnboardingPromise();
     expect(regular.noCommission).toBe(true);
@@ -44,8 +55,8 @@ describe('worker onboarding funnel', () => {
     expect(regular.summary).toContain('first 30 days free');
 
     const verified = getWorkerOnboardingPromise({ hasVerifiedExternalPlatform: true });
-    expect(verified.access.freeDays).toBe(365);
-    expect(verified.summary).toContain('one-year free access');
+    expect(verified.access.freeDays).toBe(30);
+    expect(verified.summary).toContain('600 GigScore');
     expect(verified.freedomPromise).toContain('No exclusivity');
   });
 });

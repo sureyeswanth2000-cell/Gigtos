@@ -20,20 +20,20 @@ import {
   TrendingUp, Wallet, Search
 } from 'lucide-react';
 import {
-  collection, query, where, onSnapshot,
-  doc, updateDoc, getDoc
+  collection, query, where, onSnapshot
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { acceptQuote as applyAcceptedQuote } from '../utils/bookingWorkflow';
-import LiveServiceTracker from '../components/LiveServiceTracker';
 import TrackingMap from '../components/TrackingMap';
 import UserDisputePhotoUpload from '../components/UserDisputePhotoUpload';
 import { useToast } from '../context/ToastContext';
+import { formatPayoutHoldDuration, normalizePayoutHoldMinutes } from '../config/pricingSettings';
+import { usePricingSettings } from '../utils/usePricingSettings';
 import './MyBookings.css';
 
 // UI CONFIG: Color mapping for visual differentiation of booking states
 const statusColors = {
   'pending': 'var(--warning)',           // Awaiting worker assignment
+  'matching': 'var(--primary-purple)',   // Smart Queue finding worker
   'assigned': 'var(--primary-purple)',     // Worker matched to job
   'in_progress': 'var(--primary-purple)',  // Work currently underway
   'awaiting_confirmation': 'var(--error)', // Worker done, waiting for user approval
@@ -47,6 +47,7 @@ const statusColors = {
 // UI CONFIG: Human-readable labels for the user interface
 const statusLabels = {
   'pending': 'Pending',
+  'matching': 'Finding Worker',
   'assigned': 'Assigned',
   'in_progress': 'In Progress',
   'awaiting_confirmation': 'Awaiting Confirmation',
@@ -65,13 +66,67 @@ const serviceIcons = {
   'Painter': '🎨',
 };
 
-const USE_FREE_PLAN_MODE = true;
+function fieldToDate(value) {
+  if (!value) return null;
+  if (value.toDate) return value.toDate();
+  if (value.seconds) return new Date(value.seconds * 1000);
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getConsumerPaymentHoldInfo(booking, payoutHoldMinutesValue, nowMs = Date.now()) {
+  if (booking?.status !== 'completed') return { visible: false };
+  const disputeStatus = (booking?.dispute?.status || '').toString().toLowerCase();
+  if (['open', 'pending', 'escalated'].includes(disputeStatus)) {
+    return {
+      visible: true,
+      state: 'dispute',
+      title: 'Payment held for dispute review',
+      message: 'Your payment remains protected while support reviews the dispute.',
+    };
+  }
+  if (['released', 'refunded'].includes((booking?.escrowStatus || '').toString().toLowerCase())) {
+    return { visible: false };
+  }
+
+  const payoutHoldMinutes = normalizePayoutHoldMinutes(booking?.workerPayoutHoldMinutes ?? payoutHoldMinutesValue);
+  const completedAt = fieldToDate(booking?.completedAt) || fieldToDate(booking?.statusUpdatedAt) || fieldToDate(booking?.updatedAt);
+  const configuredEligibleAt = fieldToDate(booking?.workerPayoutEligibleAt);
+  const holdUntil = configuredEligibleAt || (completedAt ? new Date(completedAt.getTime() + payoutHoldMinutes * 60 * 1000) : null);
+  if (!holdUntil) return { visible: false };
+
+  const remainingMs = holdUntil.getTime() - nowMs;
+  if (remainingMs <= 0) {
+    return {
+      visible: true,
+      state: 'ready',
+      title: 'Payment hold window closed',
+      message: 'No dispute is open. Worker payout can now move through payout checks.',
+      holdUntil,
+    };
+  }
+
+  const remainingMinutes = Math.max(1, Math.ceil(remainingMs / 60000));
+  const remainingLabel = remainingMinutes >= 60
+    ? `${Math.floor(remainingMinutes / 60)}h ${remainingMinutes % 60}m`
+    : `${remainingMinutes}m`;
+  return {
+    visible: true,
+    state: 'held',
+    title: 'Payment on hold',
+    message: `Payment stays protected for ${formatPayoutHoldDuration(payoutHoldMinutes)} after completion. Worker payout opens in ${remainingLabel} if no dispute is raised.`,
+    holdUntil,
+  };
+}
 
 export default function MyBookings() {
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const pricingSettings = usePricingSettings();
+  const [nowMs, setNowMs] = useState(Date.now());
   const [user, setUser] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [assignmentStates, setAssignmentStates] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [editingId, setEditingId] = useState(null);
@@ -86,12 +141,18 @@ export default function MyBookings() {
   const [readError, setReadError] = useState('');
   const [invoiceBookingId, setInvoiceBookingId] = useState(null);
   const [syncingPaymentId, setSyncingPaymentId] = useState(null);
+  const [recoveryActionId, setRecoveryActionId] = useState(null);
   const [userDisputePhotos, setUserDisputePhotos] = useState([]);
 
   /* ── Auth Listener ── */
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => setUser(u));
     return unsub;
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 60000);
+    return () => clearInterval(timer);
   }, []);
 
   /* ── Real-time Bookings Listener ── */
@@ -109,6 +170,22 @@ export default function MyBookings() {
     return unsub;
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'booking_assignment_states'), where('userId', '==', user.uid));
+    const unsub = onSnapshot(q, snap => {
+      const states = {};
+      snap.docs.forEach(d => {
+        const item = { id: d.id, ...d.data() };
+        states[item.bookingId || d.id] = item;
+      });
+      setAssignmentStates(states);
+    }, () => {
+      setAssignmentStates({});
+    });
+    return unsub;
+  }, [user]);
+
   /* ── Cashback Earnt Listener ── */
   useEffect(() => {
     if (!user) return;
@@ -119,94 +196,13 @@ export default function MyBookings() {
     return unsub;
   }, [user]);
 
-  /* ── Audit Helpers ── */
-  const runSparkFallback = async (method, data) => {
-    if (!user) throw new Error('Not authenticated');
-
-    if (method === 'acceptQuote') {
-      const { bookingId, adminId } = data;
-      const bookingRef = doc(db, 'bookings', bookingId);
-      const bookingSnap = await getDoc(bookingRef);
-      if (!bookingSnap.exists()) throw new Error('Booking not found');
-      const booking = bookingSnap.data();
-      const acceptedBooking = applyAcceptedQuote(booking, adminId);
-
-      await updateDoc(bookingRef, {
-        status: acceptedBooking.status,
-        adminId: acceptedBooking.adminId,
-        acceptedQuote: acceptedBooking.acceptedQuote,
-        statusUpdatedAt: new Date(),
-        updatedAt: new Date(),
-        userId: user.uid,
-      });
-      return;
-    }
-
-    if (method === 'updateBookingStatus') {
-      const { bookingId, action, extraArgs = {} } = data;
-      const bookingRef = doc(db, 'bookings', bookingId);
-      const bookingSnap = await getDoc(bookingRef);
-      if (!bookingSnap.exists()) throw new Error('Booking not found');
-      const booking = bookingSnap.data();
-
-      if (booking.userId !== user.uid) throw new Error('Not owner');
-
-      if (action === 'user_cancelled') {
-        await updateDoc(bookingRef, { status: 'cancelled', statusUpdatedAt: new Date(), updatedAt: new Date(), userId: user.uid });
-        return;
-      }
-
-      if (action === 'user_confirm_completion') {
-        await updateDoc(bookingRef, { status: 'completed', statusUpdatedAt: new Date(), updatedAt: new Date(), userId: user.uid });
-        return;
-      }
-
-      if (action === 'user_rate') {
-        await updateDoc(bookingRef, { rating: extraArgs.rating, updatedAt: new Date(), userId: user.uid });
-        return;
-      }
-
-      if (action === 'user_raise_dispute') {
-        await updateDoc(bookingRef, {
-          dispute: {
-            status: 'open',
-            reason: extraArgs.reason,
-            raisedBy: user.uid,
-            raisedAt: new Date(),
-            escalationStatus: false,
-          },
-          updatedAt: new Date(),
-          userId: user.uid,
-        });
-        return;
-      }
-    }
-
-    alert(`This action ('${method}') is not available on the current plan or is not yet implemented. Please contact support or try again later.`);
-    return;
-  };
-
   const callBackend = async (method, data) => {
-    if (USE_FREE_PLAN_MODE) {
-      try {
-        await runSparkFallback(method, data);
-      } catch (fallbackErr) {
-        addToast('Action failed: ' + fallbackErr.message, 'error');
-        throw fallbackErr;
-      }
-      return;
-    }
-
     try {
       const func = httpsCallable(functionsInstance, method);
       await func(data);
     } catch (e) {
-      try {
-        await runSparkFallback(method, data);
-      } catch (fallbackErr) {
-        addToast('Action failed: ' + (fallbackErr.message || e.message), 'error');
-        throw fallbackErr;
-      }
+      addToast('Action failed: ' + e.message, 'error');
+      throw e;
     }
   };
 
@@ -217,16 +213,18 @@ export default function MyBookings() {
   };
 
   const buildInvoiceData = (booking) => {
-    const acceptedQuote = Number(booking?.acceptedQuote?.finalPrice || booking?.acceptedQuote?.price || 0);
-    const baseAmount = acceptedQuote || Number(booking?.quoteAmount || 1200);
-    const platformFee = Math.round(baseAmount * 0.08);
-    const taxes = Math.round((baseAmount + platformFee) * 0.18);
+    const pricing = booking?.acceptedQuote?.pricing || {};
+    const baseAmount = Number(pricing.baseAmount || booking?.acceptedQuote?.price || booking?.fixedRate || booking?.quoteAmount || 1200);
+    const platformFee = Number(pricing.platformFee || booking?.platformFee || 0);
+    const gatewayFee = Number(pricing.paymentCharge || booking?.paymentGatewayFee || 0);
+    const taxes = Number(pricing.taxes || 0);
     const walletCredit = Number((cashbacks.find(c => c.bookingId === booking.id)?.cashbackAmount) || 0);
-    const total = Math.max(baseAmount + platformFee + taxes - walletCredit, 0);
+    const total = Math.max(Number(pricing.finalTotal || booking?.finalTotal || booking?.acceptedQuote?.finalPrice || (baseAmount + platformFee + gatewayFee + taxes)) - walletCredit, 0);
     return {
       invoiceNo: `INV-${booking.id.slice(0, 8).toUpperCase()}`,
       baseAmount,
       platformFee,
+      gatewayFee,
       taxes,
       walletCredit,
       total,
@@ -235,6 +233,9 @@ export default function MyBookings() {
   };
 
   const derivePaymentStatus = (booking) => {
+    const holdInfo = getConsumerPaymentHoldInfo(booking, pricingSettings.payoutHoldMinutes, nowMs);
+    if (holdInfo.state === 'dispute') return 'held_for_dispute';
+    if (holdInfo.state === 'held') return 'held';
     if (booking?.paymentStatus) return booking.paymentStatus;
     if (booking?.escrowStatus === 'refunded') return 'refunded';
     if (booking?.escrowStatus === 'released') return 'paid';
@@ -272,6 +273,8 @@ export default function MyBookings() {
       y += 6;
       pdf.text(`Platform Convenience Fee: Rs. ${invoice.platformFee}`, startX, y);
       y += 6;
+      pdf.text(`Payment Gateway Fee: Rs. ${invoice.gatewayFee}`, startX, y);
+      y += 6;
       pdf.text(`Taxes: Rs. ${invoice.taxes}`, startX, y);
       y += 6;
       pdf.text(`Wallet Credit Applied: -Rs. ${invoice.walletCredit}`, startX, y);
@@ -291,7 +294,10 @@ export default function MyBookings() {
     if (!window.confirm('Cancel this booking?')) return;
     try {
       await callBackend('updateBookingStatus', { bookingId: id, action: 'user_cancelled' });
-    } catch (e) {}
+      addToast('Booking cancelled.', 'success');
+    } catch (e) {
+      addToast(e?.message || 'Could not cancel booking. Please try again.', 'error');
+    }
   }
 
   async function confirmCompletion(id) {
@@ -299,17 +305,43 @@ export default function MyBookings() {
     try {
       await callBackend('updateBookingStatus', { bookingId: id, action: 'user_confirm_completion' });
       addToast('Service confirmed complete!', 'success');
-    } catch (e) {}
+    } catch (e) {
+      addToast(e?.message || 'Could not confirm completion. Please try again.', 'error');
+    }
+  }
+
+  async function verifyWorkerIdentity(booking, decision) {
+    const note = decision === 'wrong_worker'
+      ? window.prompt('What looks wrong? This opens a support review.', 'Worker face/profile does not match.')
+      : '';
+    if (decision === 'wrong_worker' && !note) return;
+    try {
+      await callBackend('updateBookingStatus', {
+        bookingId: booking.id,
+        action: 'user_verify_worker_identity',
+        extraArgs: { decision, note: note || '' },
+      });
+      addToast(
+        decision === 'wrong_worker'
+          ? 'Support review opened. Do not confirm completion until resolved.'
+          : 'Worker check saved.',
+        decision === 'wrong_worker' ? 'warning' : 'success'
+      );
+    } catch (e) {
+      addToast(e?.message || 'Could not save worker check. Please try again.', 'error');
+    }
   }
 
   async function saveEdit(id) {
     setUpdating(true);
     try {
-      await updateDoc(doc(db, 'bookings', id), {
-        address: editData.address,
-        phone: editData.phone,
-        userId: user.uid,
-        updatedAt: new Date(),
+      await callBackend('updateBookingStatus', {
+        bookingId: id,
+        action: 'user_update_contact',
+        extraArgs: {
+          address: editData.address,
+          phone: editData.phone,
+        },
       });
       setEditingId(null);
       setEditData({});
@@ -323,7 +355,7 @@ export default function MyBookings() {
   async function submitRating(id) {
     if (!selectedStar) { addToast('Please select a star rating', 'warning'); return; }
     try {
-      await callBackend('updateBookingStatus', { bookingId: id, action: 'user_rate', extraArgs: { rating: selectedStar } });
+      await callBackend('updateBookingStatus', { bookingId: id, action: 'user_rate', extraArgs: { rating: selectedStar, reviewText: reviewText.trim() } });
       setRatingId(null);
       setReviewText('');
       setSelectedStar(0);
@@ -332,7 +364,9 @@ export default function MyBookings() {
       } else {
         addToast('Thank you for your rating!', 'success');
       }
-    } catch (e) {}
+    } catch (e) {
+      addToast(e?.message || 'Could not submit rating. Please try again.', 'error');
+    }
   }
 
   async function submitDispute(id) {
@@ -348,7 +382,9 @@ export default function MyBookings() {
       setDisputeReason('');
       setUserDisputePhotos([]);
       addToast('Dispute submitted. Admin will review shortly.', 'success');
-    } catch (e) {}
+    } catch (e) {
+      addToast(e?.message || 'Could not submit dispute. Please try again.', 'error');
+    }
   }
 
   async function rebookService(booking) {
@@ -367,7 +403,9 @@ export default function MyBookings() {
     try {
       await callBackend('acceptQuote', { bookingId: id, adminId: quote.adminId });
       addToast('Quote accepted!', 'success');
-    } catch (e) {}
+    } catch (e) {
+      addToast(e?.message || 'Could not accept quote. Please try again.', 'error');
+    }
   }
 
   const filteredBookings = bookings.filter((b) => {
@@ -378,13 +416,75 @@ export default function MyBookings() {
       .some((v) => (v || '').toString().toLowerCase().includes(text));
   });
 
-  const active = filteredBookings.filter(b => ['pending', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status));
+  const active = filteredBookings.filter(b => ['pending', 'matching', 'scheduled', 'quoted', 'accepted', 'assigned', 'in_progress', 'awaiting_confirmation'].includes(b.status));
   const completed = filteredBookings.filter(b => b.status === 'completed');
   const cancelled = filteredBookings.filter(b => b.status === 'cancelled');
+
+  const recordNoWorkerRecoveryChoice = async (booking, action) => {
+    let scheduledDate = '';
+    let timeSlot = '';
+    if (action === 'book_later') {
+      scheduledDate = window.prompt('Which date should we try again? Use YYYY-MM-DD.', new Date(Date.now() + 86400000).toISOString().slice(0, 10)) || '';
+      if (!scheduledDate) return;
+      timeSlot = window.prompt('Preferred time slot?', 'Morning 9 AM - 12 PM') || '';
+      if (!timeSlot) return;
+    }
+    if (action === 'expand_radius' && !window.confirm('Search nearby areas up to 15 km? Same-area workers still stay first priority.')) return;
+    setRecoveryActionId(`${booking.id}_${action}`);
+    try {
+      const result = await httpsCallable(functionsInstance, 'recordNoWorkerRecoveryChoice')({
+        bookingId: booking.id,
+        action,
+        scheduledDate,
+        timeSlot,
+      });
+      addToast(result.data?.safeConsumerMessage || 'Recovery preference saved.', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not save recovery preference.', 'error');
+    } finally {
+      setRecoveryActionId(null);
+    }
+  };
+
+  const getQueueStateTitle = (status) => {
+    if (status === 'offered') return 'Offer sent to worker';
+    if (status === 'no_worker') return 'No worker available now';
+    if (status === 'quote_expired') return 'Price lock expired';
+    if (status === 'notify_me') return 'Notification request saved';
+    if (status === 'book_later') return 'Booked for later matching';
+    if (status === 'radius_requested') return 'Nearby-area search requested';
+    return 'Finding verified worker';
+  };
+
+  const getQueueStateMessage = (assignment) => {
+    const status = assignment?.status;
+    if (assignment?.safeConsumerMessage) return assignment.safeConsumerMessage;
+    if (status === 'no_worker') {
+      return 'All eligible same-area workers were checked. You can wait for an alert, book a later slot, or search nearby verified workers up to 15 km.';
+    }
+    if (status === 'quote_expired') {
+      return 'The locked price window ended before a worker accepted. Review the booking again to get a fresh backend price.';
+    }
+    if (status === 'notify_me') {
+      return 'We saved this demand signal and will alert you when an eligible worker opens nearby.';
+    }
+    if (status === 'book_later') {
+      return 'Your later matching request is saved. Smart Queue will use the scheduled time window.';
+    }
+    if (status === 'radius_requested') {
+      return 'Smart Queue is checking nearby verified workers while still preferring closer matches.';
+    }
+    if (status === 'offered') {
+      return 'A verified worker is reviewing the job offer. If there is no response, Smart Queue will continue.';
+    }
+    return 'Smart Queue is checking open verified workers for this area.';
+  };
 
   const BookingCard = ({ booking, isActive }) => {
     // Try to extract lat/lng from booking.address or booking fields
     let consumerLat = booking.lat, consumerLng = booking.lng;
+    const holdInfo = getConsumerPaymentHoldInfo(booking, pricingSettings.payoutHoldMinutes, nowMs);
+    const assignment = assignmentStates[booking.id];
     // If address is geocoded, parse from address string (optional: add geocoding logic)
     // For demo, only show map if lat/lng present
     return (
@@ -405,6 +505,63 @@ export default function MyBookings() {
       <div className="card-meta">
         <span className="meta-item">Updated: {fmt(booking.updatedAt)}</span>
       </div>
+
+      {holdInfo.visible && (
+        <div className={`payment-hold-panel ${holdInfo.state}`}>
+          <div>
+            <strong>{holdInfo.title}</strong>
+            <span>{holdInfo.message}</span>
+          </div>
+          {holdInfo.holdUntil && (
+            <small>Until {holdInfo.holdUntil.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</small>
+          )}
+        </div>
+      )}
+
+      {assignment && ['searching', 'offered', 'no_worker', 'quote_expired', 'notify_me', 'book_later', 'radius_requested'].includes(assignment.status) && (
+        <div className={`queue-state-panel ${assignment.status}`}>
+          <div>
+            <strong>{getQueueStateTitle(assignment.status)}</strong>
+            <span>{getQueueStateMessage(assignment)}</span>
+          </div>
+          {assignment.expiresAt && (
+            <small>Queue window until {fieldToDate(assignment.expiresAt)?.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</small>
+          )}
+          {assignment.status === 'no_worker' && (
+            <div className="queue-recovery-wrap">
+              <div className="queue-recovery-actions" aria-label="No worker recovery actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={Boolean(recoveryActionId)}
+                  onClick={() => recordNoWorkerRecoveryChoice(booking, 'notify_me')}
+                >
+                  Notify Me
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={Boolean(recoveryActionId)}
+                  onClick={() => recordNoWorkerRecoveryChoice(booking, 'book_later')}
+                >
+                  Book Later
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={Boolean(recoveryActionId)}
+                  onClick={() => recordNoWorkerRecoveryChoice(booking, 'expand_radius')}
+                >
+                  Search Nearby
+                </button>
+              </div>
+              <small className="queue-recovery-copy">
+                Notify keeps the same price intent, Book Later waits for a better slot, Search Nearby expands matching while keeping verified-worker rules.
+              </small>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Dispute alerts hidden as per new workflow */}
 
@@ -448,6 +605,51 @@ export default function MyBookings() {
                 <span className="info-name">{booking.assignedWorker}</span>
                 <span className="info-phone">{booking.workerPhone || 'Professional Worker'}</span>
               </div>
+            </div>
+          )}
+
+          {booking.arrivalSelfiePhoto && ['in_progress', 'awaiting_confirmation'].includes(booking.status) && (
+            <div className={`identity-check-panel ${booking.workerIdentityCheckStatus || 'waiting_consumer_check'}`}>
+              <div>
+                <strong>Check arriving worker</strong>
+                <span>Confirm the selfie matches the worker at your location.</span>
+              </div>
+              <a href={booking.arrivalSelfiePhoto} target="_blank" rel="noreferrer">
+                <img src={booking.arrivalSelfiePhoto} alt="Arrival worker selfie" />
+              </a>
+              {booking.workerIdentityCheckStatus === 'waiting_consumer_check' ? (
+                <div className="identity-actions">
+                  <button className="btn-primary" onClick={() => verifyWorkerIdentity(booking, 'correct')}>Correct worker</button>
+                  <button className="btn-danger" onClick={() => verifyWorkerIdentity(booking, 'wrong_worker')}>Wrong worker</button>
+                  <button className="btn-secondary" onClick={() => verifyWorkerIdentity(booking, 'skipped')}>Skip</button>
+                </div>
+              ) : (
+                <small>Status: {String(booking.workerIdentityCheckStatus).replace(/_/g, ' ')}</small>
+              )}
+            </div>
+          )}
+
+          {(booking.beforePhotos?.length > 0 || booking.afterPhotos?.length > 0) && (
+            <div className="evidence-grid">
+              <span className="grid-label">Proof Photos:</span>
+              {booking.beforePhotos?.length > 0 && (
+                <div className="photo-list">
+                  {booking.beforePhotos.map((url, i) => (
+                    <a key={`before-${i}`} href={url} target="_blank" rel="noreferrer">
+                      <img src={url} alt="Before work proof" />
+                    </a>
+                  ))}
+                </div>
+              )}
+              {booking.afterPhotos?.length > 0 && (
+                <div className="photo-list">
+                  {booking.afterPhotos.map((url, i) => (
+                    <a key={`after-${i}`} href={url} target="_blank" rel="noreferrer">
+                      <img src={url} alt="After work proof" />
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -542,6 +744,7 @@ export default function MyBookings() {
             <div className="invoice-details">
               <div className="line-item"><span>Labor & Materials:</span> <span>₹{invoice.baseAmount}</span></div>
               <div className="line-item"><span>Platform Fee:</span> <span>₹{invoice.platformFee}</span></div>
+              <div className="line-item"><span>Payment Gateway Fee:</span> <span>₹{invoice.gatewayFee}</span></div>
               <div className="line-item"><span>Taxes:</span> <span>₹{invoice.taxes}</span></div>
               <div className="line-item discount"><span>Wallet Credit:</span> <span>-₹{invoice.walletCredit}</span></div>
               <div className="total-row"><span>Grand Total:</span> <span>₹{invoice.total}</span></div>
@@ -602,6 +805,7 @@ export default function MyBookings() {
         >
           <option value="all">All Status</option>
           <option value="pending">Pending</option>
+          <option value="matching">Finding Worker</option>
           <option value="scheduled">Scheduled</option>
           <option value="quoted">Quoted</option>
           <option value="accepted">Accepted</option>

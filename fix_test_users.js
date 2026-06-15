@@ -62,11 +62,25 @@ async function fixUser(phone, email, password, name, role = 'user') {
 }
 
 async function run() {
-  // Fix the test user that failed
-  await fixUser('1234567895', '1234567895@gigtos.test', '101010', 'Test User');
-  
-  // Ensure the worker is also fully set up
-  await fixUser('1234567891', 'worker1@gigtos.test', '101010', 'Gig6', 'worker');
+  const testPassword = process.env.TEST_USER_PASSWORD;
+  if (!testPassword) {
+    throw new Error('Set TEST_USER_PASSWORD in your local emulator shell before running this script.');
+  }
+
+  await fixUser(
+    process.env.TEST_USER_PHONE || '1234567895',
+    process.env.TEST_USER_EMAIL || '1234567895@gigtos.test',
+    testPassword,
+    process.env.TEST_USER_NAME || 'Test User'
+  );
+
+  await fixUser(
+    process.env.TEST_WORKER_PHONE || '1234567891',
+    process.env.TEST_WORKER_EMAIL || 'worker1@gigtos.test',
+    testPassword,
+    process.env.TEST_WORKER_NAME || 'Gig6',
+    'worker'
+  );
 
   console.log('Done.');
   process.exit(0);

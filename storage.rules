@@ -1,0 +1,95 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    function isImageUnder10Mb() {
+      return request.resource != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    function isVerificationFileUnder15Mb() {
+      return request.resource != null
+        && request.resource.size < 15 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType == 'application/pdf'
+        );
+    }
+
+    function ownsPath(userId) {
+      return isLoggedIn() && userId == request.auth.uid;
+    }
+
+    match /users/{userId}/profile/{fileName} {
+      allow get: if isLoggedIn();
+      allow list: if false;
+      allow create: if ownsPath(userId) && isImageUnder10Mb();
+      allow update, delete: if false;
+    }
+
+    match /bookings/requested/{userId}/{fileName} {
+      allow get: if ownsPath(userId);
+      allow list: if false;
+      allow create: if ownsPath(userId) && isImageUnder10Mb();
+      allow update, delete: if false;
+    }
+
+    match /bookings/{bookingId}/adminPhotos/{userId}/{fileName} {
+      allow get: if isLoggedIn();
+      allow list: if false;
+      allow create: if ownsPath(userId) && isImageUnder10Mb();
+      allow update, delete: if false;
+    }
+
+    match /bookings/{bookingId}/beforePhotos/{userId}/{fileName} {
+      allow get: if isLoggedIn();
+      allow list: if false;
+      allow create: if ownsPath(userId) && isImageUnder10Mb();
+      allow update, delete: if false;
+    }
+
+    match /bookings/{bookingId}/arrivalSelfies/{userId}/{fileName} {
+      allow get: if isLoggedIn();
+      allow list: if false;
+      allow create: if ownsPath(userId) && isImageUnder10Mb();
+      allow update, delete: if false;
+    }
+
+    match /bookings/{bookingId}/afterPhotos/{userId}/{fileName} {
+      allow get: if isLoggedIn();
+      allow list: if false;
+      allow create: if ownsPath(userId) && isImageUnder10Mb();
+      allow update, delete: if false;
+    }
+
+    match /bookings/{bookingId}/userDisputePhotos/{userId}/{fileName} {
+      allow get: if isLoggedIn();
+      allow list: if false;
+      allow create: if ownsPath(userId) && isImageUnder10Mb();
+      allow update, delete: if false;
+    }
+
+    match /workerLicenses/{userId}/{fileName} {
+      allow get: if ownsPath(userId);
+      allow list: if false;
+      allow create: if ownsPath(userId) && isImageUnder10Mb();
+      allow update, delete: if false;
+    }
+
+    match /workers/{userId}/verification/{category}/{fileName} {
+      allow get: if ownsPath(userId);
+      allow list: if false;
+      allow create: if ownsPath(userId) && isVerificationFileUnder15Mb();
+      allow update, delete: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

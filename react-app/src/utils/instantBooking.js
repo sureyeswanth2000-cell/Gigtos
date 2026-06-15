@@ -1,12 +1,19 @@
 /**
  * INSTANT BOOKING UTILITIES
  *
+ * LEGACY OVERLAP NOTE:
+ * This predates MVP Smart Queue v1. New job assignment should not instantly assign
+ * or assume payment; it should use backend pricing evidence, Open-to-Work sessions,
+ * same-area-first matching, worker offer TTL, and direct COD/worker-UPI MVP copy.
+ * Keep this utility for existing tests/screens until the backend queue replaces it.
+ *
  * Handles the "available worker → instant book" flow:
  *  1. Workers set a fixed daily rate (₹ per day)
  *  2. Users see nearby available workers with their fixed rates
  *  3. One-tap booking: view worker details (no phone) → pay → track
  */
 
+import { DEFAULT_PRICING_SETTINGS } from '../config/pricingSettings';
 import { calculateFinalPrice } from './pricing';
 
 /**
@@ -32,7 +39,7 @@ export function buildWorkerAvailability({
   area = '',
   lat = null,
   lng = null,
-}) {
+}, pricingSettings = DEFAULT_PRICING_SETTINGS) {
   if (!workerId) throw new Error('workerId is required');
   if (!workerName) throw new Error('workerName is required');
   if (!serviceType) throw new Error('serviceType is required');
@@ -40,7 +47,7 @@ export function buildWorkerAvailability({
   const rate = Number(fixedRate);
   if (isNaN(rate) || rate <= 0) throw new Error('fixedRate must be a positive number');
 
-  const pricing = calculateFinalPrice(rate);
+  const pricing = calculateFinalPrice(rate, pricingSettings);
 
   return {
     workerId,
@@ -124,7 +131,7 @@ export function createInstantBooking({
   userAddress,
   userCity,
   worker,
-}) {
+}, pricingSettings = DEFAULT_PRICING_SETTINGS) {
   if (!userId) throw new Error('userId is required');
   if (!worker) throw new Error('worker is required');
   if (!worker.workerId || !worker.workerName) {
@@ -136,7 +143,7 @@ export function createInstantBooking({
     throw new Error('worker must have a valid fixedRate');
   }
 
-  const pricing = calculateFinalPrice(rate);
+  const pricing = calculateFinalPrice(rate, pricingSettings);
 
   return {
     userId,
@@ -188,10 +195,10 @@ export function buildNotificationText(worker) {
  * @param {object} worker – availability record
  * @returns {object} safe display data
  */
-export function getWorkerDisplayInfo(worker) {
+export function getWorkerDisplayInfo(worker, pricingSettings = DEFAULT_PRICING_SETTINGS) {
   if (!worker) return null;
 
-  const pricing = calculateFinalPrice(worker.fixedRate);
+  const pricing = calculateFinalPrice(worker.fixedRate, pricingSettings);
 
   return {
     workerName: worker.workerName,

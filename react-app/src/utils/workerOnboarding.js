@@ -28,7 +28,7 @@ export const WORKER_FIRST_TEN_MINUTE_STEPS = [
   {
     id: 'proof',
     title: 'Add previous platform proof',
-    detail: 'UC, Pivot, or similar ID can unlock one-year free access after review.',
+    detail: 'UC, Pivot, or similar ID can unlock launch free access after review.',
     phase: 'verification',
   },
   {
@@ -50,9 +50,9 @@ export const WORKER_FIRST_TEN_MINUTE_STEPS = [
     phase: 'trust',
   },
   {
-    id: 'socio_score',
-    title: 'Understand SocioScore speedometer',
-    detail: 'Workers start at 500. The first 5 jobs and Phoenix path will be explained before work starts.',
+    id: 'gig_score',
+    title: 'Understand GigScore speedometer',
+    detail: 'Workers start at 450 and become ready at 500 after required profile proof. Recovery and streak paths are explained before work starts.',
     phase: 'trust',
   },
   {
@@ -71,14 +71,14 @@ export const WORKER_FIRST_TEN_MINUTE_STEPS = [
 
 const stepDoneRules = {
   language: ({ language }) => Boolean(language),
-  auth: ({ hasLogin, phone, email }) => Boolean(hasLogin || phone || email),
+  auth: ({ hasLogin, phone, email }) => Boolean(hasLogin && (phone || email)),
   services: ({ serviceTypes = [] }) => serviceTypes.length > 0,
   area: ({ serviceArea }) => Boolean(serviceArea),
   proof: ({ hasExternalPlatformProof }) => Boolean(hasExternalPlatformProof),
   photo: ({ hasProfilePhoto }) => Boolean(hasProfilePhoto),
   pricing: ({ hasStartingPrice }) => Boolean(hasStartingPrice),
   promise: ({ acceptedLaunchTerms }) => Boolean(acceptedLaunchTerms),
-  socio_score: ({ sawSocioScoreIntro }) => Boolean(sawSocioScoreIntro),
+  gig_score: ({ sawGigScoreIntro, sawSocioScoreIntro }) => Boolean(sawGigScoreIntro || sawSocioScoreIntro),
   bank: ({ bankSetupChoice }) => Boolean(bankSetupChoice),
   first_action: ({ approvalStatus, availabilityEnabled }) =>
     approvalStatus === 'approved' || Boolean(availabilityEnabled),
@@ -111,7 +111,7 @@ export function getWorkerOnboardingPromise({ hasVerifiedExternalPlatform = false
     access,
     freedomPromise: WORKER_FREEDOM_PROMISE,
     summary: hasVerifiedExternalPlatform
-      ? 'Verified previous-platform workers can unlock one-year free access and keep using other apps.'
+      ? 'Verified previous-platform workers can unlock launch free access, aim for 600 GigScore, and keep using other apps.'
       : 'New workers get first 30 days free during launch, keep job earnings, and can continue using other apps.',
   };
 }

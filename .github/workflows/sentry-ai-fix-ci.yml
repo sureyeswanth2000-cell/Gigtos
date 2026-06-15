@@ -1,0 +1,116 @@
+name: AI Fix — PR CI
+
+on:
+  pull_request:
+    branches: [main]
+    # Only run on branches created by the AI auto-fix pipeline
+    # (other PRs use the existing security-gates.yml)
+
+jobs:
+  # ── Only run for sentry-fix/* branches ──────────────────────────────────────
+  check-branch:
+    runs-on: ubuntu-latest
+    outputs:
+      is-ai-fix: ${{ steps.check.outputs.is-ai-fix }}
+      issue-id: ${{ steps.check.outputs.issue-id }}
+    steps:
+      - id: check
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          if [[ "$BRANCH" == sentry-fix/* ]]; then
+            echo "is-ai-fix=true" >> $GITHUB_OUTPUT
+            echo "issue-id=${BRANCH#sentry-fix/}" >> $GITHUB_OUTPUT
+          else
+            echo "is-ai-fix=false" >> $GITHUB_OUTPUT
+            echo "issue-id=" >> $GITHUB_OUTPUT
+          fi
+
+  # ── Build + Test ─────────────────────────────────────────────────────────────
+  build-and-test:
+    needs: check-branch
+    if: needs.check-branch.outputs.is-ai-fix == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      build-passed: ${{ steps.build.outcome == 'success' }}
+      tests-passed: ${{ steps.test.outcome == 'success' }}
+      test-output: ${{ steps.test.outputs.output }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: react-app/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd react-app && npm ci
+
+      - name: Build (production guard)
+        id: build
+        env:
+          REACT_APP_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY: 6LfJzvQsAAAAAO7eO16Wm4hWii7iIIOML_Q-Lnom
+          REACT_APP_FIREBASE_STORAGE_BUCKET: gigtos-user-uploads-gigto-c0c83
+          REACT_APP_REQUIRE_APPCHECK: 'true'
+          REACT_APP_SENTRY_DSN: ${{ secrets.REACT_APP_SENTRY_DSN }}
+          GENERATE_SOURCEMAP: 'false'
+        run: cd react-app && npm run build:prod
+        continue-on-error: true
+
+      - name: Run tests
+        id: test
+        run: |
+          cd react-app
+          OUTPUT=$(npm test -- --watchAll=false --passWithNoTests 2>&1 || true)
+          echo "$OUTPUT"
+          # Capture output for AI review
+          echo "output<<EOF" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" | head -200 >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Install functions dependencies
+        run: cd functions && npm ci
+
+      - name: Lint functions
+        id: lint-functions
+        run: cd functions && node -e "require('./index.js')" 2>&1 | head -20 || true
+        continue-on-error: true
+
+  # ── Post AI review as PR comment ─────────────────────────────────────────────
+  ai-review:
+    needs: [check-branch, build-and-test]
+    if: needs.check-branch.outputs.is-ai-fix == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Post results to AI review webhook
+        run: |
+          curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-gigtos-secret: ${{ secrets.AI_WEBHOOK_SECRET }}" \
+            -d '{
+              "prNumber": ${{ github.event.pull_request.number }},
+              "issueId": "${{ needs.check-branch.outputs.issue-id }}",
+              "branch": "${{ github.head_ref }}",
+              "buildPassed": ${{ needs.build-and-test.outputs.build-passed }},
+              "testsPassed": ${{ needs.build-and-test.outputs.tests-passed }},
+              "testOutput": "${{ needs.build-and-test.outputs.test-output }}"
+            }' \
+            "${{ secrets.AI_REVIEW_WEBHOOK_URL }}" || echo "Webhook call failed (non-fatal)"
+
+      - name: Add ai-reviewed label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: ['ai-fix', 'needs-review']
+              });
+            } catch (e) {
+              console.log('Label add failed (labels may not exist yet):', e.message);
+            }

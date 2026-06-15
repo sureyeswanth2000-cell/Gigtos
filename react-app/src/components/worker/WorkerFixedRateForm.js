@@ -4,11 +4,18 @@
  * Displayed in the Worker Dashboard. Workers enter their per-day charge
  * (e.g. ₹500, ₹600) and save it to Firestore worker_availability collection.
  * This rate is shown to users when matching nearby workers.
+ *
+ * LEGACY OVERLAP NOTE:
+ * This writes the old `worker_availability` fixed-rate model directly from the
+ * client. MVP Jobs v1 should move worker Open-to-Work and demand-aware pricing to
+ * backend callables with min/peak caps, session expiry, heartbeats, and audit logs.
+ * Keep this component for current UI compatibility until the new flow replaces it.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { auth, db } from '../../firebase';
 import { doc, getDoc, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { calculateFinalPrice } from '../../utils/pricing';
+import { usePricingSettings } from '../../utils/usePricingSettings';
 
 export default function WorkerFixedRateForm({ workerData }) {
   const [rate, setRate] = useState('');
@@ -17,7 +24,9 @@ export default function WorkerFixedRateForm({ workerData }) {
   const [toast, setToast] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const toastTimeoutRef = useRef(null);
-  const pricePreview = rate && Number(rate) >= 100 ? calculateFinalPrice(Number(rate)) : null;
+  const pricingSettings = usePricingSettings();
+  const pricePreview = rate && Number(rate) >= 100 ? calculateFinalPrice(Number(rate), pricingSettings) : null;
+  const savedRatePreview = savedRate ? calculateFinalPrice(savedRate, pricingSettings) : null;
 
   // Load existing rate on mount
   useEffect(() => {
@@ -57,11 +66,15 @@ export default function WorkerFixedRateForm({ workerData }) {
 
     setSaving(true);
     try {
+      const pricing = calculateFinalPrice(numericRate, pricingSettings);
       await setDoc(doc(db, 'worker_availability', uid), {
         workerId: uid,
         workerName: workerData?.name || 'Worker',
         serviceType: workerData?.gigType || 'General',
         fixedRate: numericRate,
+        finalPrice: pricing.finalTotal,
+        platformFee: pricing.platformFee,
+        pricing,
         rating: workerData?.rating || 0,
         area: workerData?.area || '',
         lat: workerData?.locationLat || null,
@@ -78,7 +91,7 @@ export default function WorkerFixedRateForm({ workerData }) {
     } finally {
       setSaving(false);
     }
-  }, [rate, workerData]);
+  }, [rate, workerData, pricingSettings]);
 
   const handleRemoveRate = useCallback(async () => {
     const uid = auth.currentUser?.uid;
@@ -109,7 +122,7 @@ export default function WorkerFixedRateForm({ workerData }) {
               ₹{savedRate.toLocaleString('en-IN')}<span style={{ fontSize: 14, fontWeight: 500, color: '#6B7280' }}>/day</span>
             </div>
             <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
-              Customers see this rate when you're active
+              Customers pay ₹{savedRatePreview.finalTotal.toLocaleString('en-IN')} including Gigtos fee
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -178,7 +191,7 @@ export default function WorkerFixedRateForm({ workerData }) {
             Customer pays: ₹{pricePreview.finalTotal.toLocaleString('en-IN')}
           </div>
           <div style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>
-            Your rate ₹{rate} + Gigtos booking fee ₹{pricePreview.platformFee.toLocaleString('en-IN')}
+            Your rate ₹{rate} + Gigtos fee ₹{pricePreview.platformFee.toLocaleString('en-IN')} + gateway fee ₹{pricePreview.paymentCharge.toLocaleString('en-IN')}
           </div>
         </div>
       )}

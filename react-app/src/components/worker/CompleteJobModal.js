@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import ImageUpload from '../ImageUpload';
-import { db, storage } from '../../firebase';
+import { auth, storage, functionsInstance } from '../../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
 /**
  * CompleteJobModal – Modal for workers to mark a job as complete with after photo upload.
@@ -27,15 +27,17 @@ export default function CompleteJobModal({ job, onClose, onCompleted }) {
     try {
       const urls = [];
       for (const file of files) {
-        const storageRef = ref(storage, `bookings/${job.id}/afterPhotos/${file.name}`);
-        await uploadBytes(storageRef, file);
+        const uid = auth.currentUser?.uid;
+        if (!uid) throw new Error('Login required for completion photo upload.');
+        const storageRef = ref(storage, `bookings/${job.id}/afterPhotos/${uid}/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file, { contentType: file.type });
         const url = await getDownloadURL(storageRef);
         urls.push(url);
       }
-      await updateDoc(doc(db, 'bookings', job.id), {
-        afterPhotos: arrayUnion(...urls),
-        status: 'awaiting_confirmation',
-        statusUpdatedAt: new Date(),
+      await httpsCallable(functionsInstance, 'updateBookingStatus')({
+        bookingId: job.id,
+        action: 'worker_mark_finished',
+        extraArgs: { afterPhotos: urls },
       });
       if (onCompleted) onCompleted();
     } catch (e) {

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { auth, db } from '../firebase';
+import { auth, db, functionsInstance } from '../firebase';
 import { doc, setDoc, updateDoc, deleteDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
 const WorkerLocationContext = createContext(null);
 
@@ -11,8 +12,16 @@ const PROXIMITY_RADIUS_M = 200;
 
 /**
  * Interval for persisting location updates to Firestore (ms).
+ * Active bookings update faster because the consumer is watching ETA live.
  */
-const PERSIST_INTERVAL_MS = 60_000;
+const ACTIVE_BOOKING_PERSIST_INTERVAL_MS = 5_000;
+const OPEN_WORK_PERSIST_INTERVAL_MS = 30_000;
+const EXACT_LOCATION_RETENTION_MS = 4 * 60 * 60 * 1000;
+const updateWorkerTravelLocation = httpsCallable(functionsInstance, 'updateWorkerTravelLocation');
+
+function exactLocationExpiresAt() {
+  return new Date(Date.now() + EXACT_LOCATION_RETENTION_MS);
+}
 
 /**
  * Calculate distance between two lat/lng points using the Haversine formula.
@@ -56,6 +65,23 @@ export function WorkerLocationProvider({ children }) {
   const persistIntervalRef = useRef(null);
   const wasAtLocationRef = useRef(false);
   const trackingUidRef = useRef(null);
+  const bookingIdRef = useRef(null);
+  const lastPositionMetaRef = useRef({});
+  const trackingRef = useRef(false);
+  const sessionIdRef = useRef(null);
+  const reachTimeRef = useRef(null);
+  const leftTimeRef = useRef(null);
+  const locationStatusRef = useRef('idle');
+  const currentPositionRef = useRef(null);
+  const workLocationRef = useRef(null);
+
+  useEffect(() => { trackingRef.current = tracking; }, [tracking]);
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+  useEffect(() => { reachTimeRef.current = reachTime; }, [reachTime]);
+  useEffect(() => { leftTimeRef.current = leftTime; }, [leftTime]);
+  useEffect(() => { locationStatusRef.current = locationStatus; }, [locationStatus]);
+  useEffect(() => { currentPositionRef.current = currentPosition; }, [currentPosition]);
+  useEffect(() => { workLocationRef.current = workLocation; }, [workLocation]);
 
   /**
    * Start continuous GPS tracking for the worker.
@@ -75,25 +101,35 @@ export function WorkerLocationProvider({ children }) {
     }
 
     setWorkLocation(workLoc || null);
+    workLocationRef.current = workLoc || null;
     setTracking(true);
+    trackingRef.current = true;
     setLocationStatus('tracking');
+    locationStatusRef.current = 'tracking';
     setReachTime(null);
+    reachTimeRef.current = null;
     setLeftTime(null);
+    leftTimeRef.current = null;
+    setSessionId(null);
+    sessionIdRef.current = null;
+    setCurrentPosition(null);
+    currentPositionRef.current = null;
     setIsAtWorkLocation(false);
     wasAtLocationRef.current = false;
     trackingUidRef.current = uid;
+    bookingIdRef.current = bookingId || null;
     setError(null);
 
     // Create a new session document in Firestore
     const sessionData = {
       workerId: uid,
       bookingId: bookingId || null,
-      workLocationLat: workLoc?.lat || null,
-      workLocationLng: workLoc?.lng || null,
       reachTime: null,
       leftTime: null,
       durationMinutes: null,
       locationStatus: 'tracking',
+      retentionClass: 'summary_only',
+      lastLocationAt: null,
       startedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -101,6 +137,7 @@ export function WorkerLocationProvider({ children }) {
     addDoc(collection(db, 'worker_location_sessions'), sessionData)
       .then((docRef) => {
         setSessionId(docRef.id);
+        sessionIdRef.current = docRef.id;
       })
       .catch(() => {
         // Firestore write failed — continue tracking locally
@@ -112,26 +149,72 @@ export function WorkerLocationProvider({ children }) {
       lat: null,
       lng: null,
       isActive: true,
+      bookingId: bookingId || null,
+      locationStatus: 'tracking',
+      retentionClass: 'active_live_location',
+      expiresAt: exactLocationExpiresAt(),
       activeSince: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }).catch(() => { /* noop */ });
+
+    if (bookingId) {
+      setDoc(doc(db, 'booking_live_tracking', bookingId), {
+        bookingId,
+        workerId: uid,
+        lat: null,
+        lng: null,
+        accuracyM: null,
+        speedMps: null,
+        heading: null,
+        distanceRemainingKm: null,
+        etaMinutes: null,
+        etaSource: 'waiting_for_location',
+        routeStatus: 'tracking',
+        locationStatus: 'tracking',
+        isActive: true,
+        retentionClass: 'active_job_exact_location',
+        exactLocationExpiresAt: exactLocationExpiresAt(),
+        startedAt: serverTimestamp(),
+        lastLocationAt: null,
+        updatedAt: serverTimestamp(),
+      }, { merge: true }).catch(() => { /* noop */ });
+    }
 
     // Start watching position
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        setCurrentPosition({ lat, lng });
+        lastPositionMetaRef.current = {
+          accuracyM: Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null,
+          speedMps: Number.isFinite(pos.coords.speed) ? Number(pos.coords.speed) : null,
+          heading: Number.isFinite(pos.coords.heading) ? Number(pos.coords.heading) : null,
+          timestampMs: pos.timestamp || Date.now(),
+        };
+        const nextPosition = { lat, lng };
+        currentPositionRef.current = nextPosition;
+        setCurrentPosition(nextPosition);
       },
       (err) => {
         // Worker denied or lost location access
         setLocationStatus('closed');
+        locationStatusRef.current = 'closed';
         setError('Location sharing stopped.');
         setTracking(false);
+        trackingRef.current = false;
         // Clean up live location on location error
         const currentUid = auth.currentUser?.uid;
         if (currentUid) {
           deleteDoc(doc(db, 'worker_live_locations', currentUid)).catch(() => {});
+          const activeBookingId = bookingIdRef.current;
+          if (activeBookingId) {
+            setDoc(doc(db, 'booking_live_tracking', activeBookingId), {
+              locationStatus: 'closed',
+              routeStatus: 'location_closed',
+              isActive: false,
+              updatedAt: serverTimestamp(),
+            }, { merge: true }).catch(() => {});
+          }
         }
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
@@ -143,7 +226,8 @@ export function WorkerLocationProvider({ children }) {
    * Deletes live location data (worker_live_locations) but preserves
    * work history sessions (worker_location_sessions) for historical records.
    */
-  const stopTracking = useCallback(() => {
+  const stopTracking = useCallback((options = {}) => {
+    const { updateState = true } = options;
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
@@ -153,43 +237,70 @@ export function WorkerLocationProvider({ children }) {
       persistIntervalRef.current = null;
     }
 
-    // If worker was at location and hadn't left yet, record left time now
-    if (wasAtLocationRef.current && !leftTime) {
-      const now = new Date();
-      setLeftTime(now);
-      setLocationStatus('left_location');
+    const activeSessionId = sessionIdRef.current;
+    const activeReachTime = reachTimeRef.current;
+    const activeLeftTime = leftTimeRef.current;
+    const activeLocationStatus = locationStatusRef.current;
 
-      if (sessionId) {
-        const durationMs = reachTime ? now.getTime() - reachTime.getTime() : 0;
-        updateDoc(doc(db, 'worker_location_sessions', sessionId), {
+    // If worker was at location and hadn't left yet, record left time now
+    if (wasAtLocationRef.current && !activeLeftTime) {
+      const now = new Date();
+      leftTimeRef.current = now;
+      locationStatusRef.current = 'left_location';
+      if (updateState) {
+        setLeftTime(now);
+        setLocationStatus('left_location');
+      }
+
+      if (activeSessionId) {
+        const durationMs = activeReachTime ? now.getTime() - activeReachTime.getTime() : 0;
+        updateDoc(doc(db, 'worker_location_sessions', activeSessionId), {
           leftTime: now,
           durationMinutes: Math.round(durationMs / 60000),
           locationStatus: 'left_location',
           updatedAt: serverTimestamp(),
         }).catch(() => { /* noop */ });
       }
-    } else if (sessionId) {
+    } else if (activeSessionId) {
       // Worker stopped without reaching — mark as closed
-      updateDoc(doc(db, 'worker_location_sessions', sessionId), {
-        locationStatus: locationStatus === 'closed' ? 'closed' : 'stopped',
+      updateDoc(doc(db, 'worker_location_sessions', activeSessionId), {
+        locationStatus: activeLocationStatus === 'closed' ? 'closed' : 'stopped',
         updatedAt: serverTimestamp(),
       }).catch(() => { /* noop */ });
     }
 
     // Delete live location data — only keep work history sessions
-    const uid = auth.currentUser?.uid;
+    const uid = trackingUidRef.current || auth.currentUser?.uid;
     if (uid) {
       deleteDoc(doc(db, 'worker_live_locations', uid)).catch(() => { /* noop */ });
     }
-
-    setTracking(false);
-    if (locationStatus !== 'closed' && locationStatus !== 'left_location') {
-      setLocationStatus('idle');
+    const activeBookingId = bookingIdRef.current;
+    if (activeBookingId) {
+      setDoc(doc(db, 'booking_live_tracking', activeBookingId), {
+        locationStatus: activeLocationStatus === 'closed' ? 'closed' : 'stopped',
+        routeStatus: activeLocationStatus === 'closed' ? 'location_closed' : 'stopped',
+        isActive: false,
+        stoppedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true }).catch(() => { /* noop */ });
     }
-    setWorkLocation(null);
-    setCurrentPosition(null);
-    setSessionId(null);
-  }, [leftTime, reachTime, sessionId, locationStatus]);
+
+    trackingRef.current = false;
+    sessionIdRef.current = null;
+    currentPositionRef.current = null;
+    workLocationRef.current = null;
+    bookingIdRef.current = null;
+    if (updateState) {
+      setTracking(false);
+      if (activeLocationStatus !== 'closed' && activeLocationStatus !== 'left_location') {
+        setLocationStatus('idle');
+        locationStatusRef.current = 'idle';
+      }
+      setWorkLocation(null);
+      setCurrentPosition(null);
+      setSessionId(null);
+    }
+  }, []);
 
   // Proximity check: detect reach/leave events
   useEffect(() => {
@@ -208,7 +319,9 @@ export function WorkerLocationProvider({ children }) {
       wasAtLocationRef.current = true;
       setIsAtWorkLocation(true);
       setReachTime(now);
+      reachTimeRef.current = now;
       setLocationStatus('at_location');
+      locationStatusRef.current = 'at_location';
 
       if (sessionId) {
         updateDoc(doc(db, 'worker_location_sessions', sessionId), {
@@ -217,13 +330,24 @@ export function WorkerLocationProvider({ children }) {
           updatedAt: serverTimestamp(),
         }).catch(() => { /* noop */ });
       }
+      const activeBookingId = bookingIdRef.current;
+      if (activeBookingId) {
+        setDoc(doc(db, 'booking_live_tracking', activeBookingId), {
+          locationStatus: 'at_location',
+          routeStatus: 'arrived',
+          reachedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true }).catch(() => { /* noop */ });
+      }
     } else if (!withinRadius && wasAtLocationRef.current) {
       // Worker just left
       const now = new Date();
       wasAtLocationRef.current = false;
       setIsAtWorkLocation(false);
       setLeftTime(now);
+      leftTimeRef.current = now;
       setLocationStatus('left_location');
+      locationStatusRef.current = 'left_location';
 
       if (sessionId) {
         const durationMs = reachTime ? now.getTime() - reachTime.getTime() : 0;
@@ -234,20 +358,47 @@ export function WorkerLocationProvider({ children }) {
           updatedAt: serverTimestamp(),
         }).catch(() => { /* noop */ });
       }
+      const activeBookingId = bookingIdRef.current;
+      if (activeBookingId) {
+        setDoc(doc(db, 'booking_live_tracking', activeBookingId), {
+          locationStatus: 'left_location',
+          routeStatus: 'left_location',
+          leftAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true }).catch(() => { /* noop */ });
+      }
     }
   }, [currentPosition, tracking, workLocation, sessionId, reachTime]);
 
   // Periodic persist of current position to session and live location
   useEffect(() => {
     if (!tracking) return;
+    const persistIntervalMs = bookingIdRef.current
+      ? ACTIVE_BOOKING_PERSIST_INTERVAL_MS
+      : OPEN_WORK_PERSIST_INTERVAL_MS;
     persistIntervalRef.current = setInterval(() => {
-      if (currentPosition) {
+      const latestPosition = currentPositionRef.current;
+      const latestWorkLocation = workLocationRef.current;
+      const latestLocationStatus = locationStatusRef.current;
+      if (latestPosition) {
         const uid = auth.currentUser?.uid;
+        const activeBookingId = bookingIdRef.current;
+        const meta = lastPositionMetaRef.current || {};
+        const distanceRemainingKm = latestWorkLocation
+          ? Math.round((haversineDistance(
+              latestPosition.lat,
+              latestPosition.lng,
+              latestWorkLocation.lat,
+              latestWorkLocation.lng
+            ) / 1000) * 10) / 10
+          : null;
+        const etaMinutes = distanceRemainingKm !== null
+          ? Math.max(1, Math.round((distanceRemainingKm / 25) * 60))
+          : null;
         // Update session document
         if (sessionId) {
           updateDoc(doc(db, 'worker_location_sessions', sessionId), {
-            lastLat: currentPosition.lat,
-            lastLng: currentPosition.lng,
+            lastLocationAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           }).catch(() => { /* noop */ });
         }
@@ -255,14 +406,54 @@ export function WorkerLocationProvider({ children }) {
         if (uid) {
           setDoc(doc(db, 'worker_live_locations', uid), {
             workerId: uid,
-            lat: currentPosition.lat,
-            lng: currentPosition.lng,
+            lat: latestPosition.lat,
+            lng: latestPosition.lng,
             isActive: true,
+            bookingId: activeBookingId || null,
+            locationStatus: latestLocationStatus,
+            accuracyM: meta.accuracyM ?? null,
+            speedMps: meta.speedMps ?? null,
+            heading: meta.heading ?? null,
+            timestampMs: meta.timestampMs || Date.now(),
+            retentionClass: 'active_live_location',
+            expiresAt: exactLocationExpiresAt(),
+            lastLocationAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           }, { merge: true }).catch(() => { /* noop */ });
         }
+        if (activeBookingId) {
+          updateWorkerTravelLocation({
+            bookingId: activeBookingId,
+            lat: latestPosition.lat,
+            lng: latestPosition.lng,
+            accuracyM: meta.accuracyM ?? null,
+            speedMps: meta.speedMps ?? null,
+            heading: meta.heading ?? null,
+            timestampMs: meta.timestampMs || Date.now(),
+            locationStatus: latestLocationStatus,
+          }).catch(() => setDoc(doc(db, 'booking_live_tracking', activeBookingId), {
+            bookingId: activeBookingId,
+            workerId: uid,
+            lat: latestPosition.lat,
+            lng: latestPosition.lng,
+            accuracyM: meta.accuracyM ?? null,
+            speedMps: meta.speedMps ?? null,
+            heading: meta.heading ?? null,
+            distanceRemainingKm,
+            etaMinutes,
+            etaSource: distanceRemainingKm !== null ? 'haversine_fallback' : 'waiting_for_destination',
+            routeStatus: distanceRemainingKm !== null && distanceRemainingKm <= 0.2 ? 'arrived' : 'en_route',
+            locationStatus: latestLocationStatus,
+            isActive: true,
+            timestampMs: meta.timestampMs || Date.now(),
+            retentionClass: 'active_job_exact_location',
+            exactLocationExpiresAt: exactLocationExpiresAt(),
+            lastLocationAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }, { merge: true })).catch(() => { /* noop */ });
+        }
       }
-    }, PERSIST_INTERVAL_MS);
+    }, persistIntervalMs);
 
     return () => {
       if (persistIntervalRef.current) {
@@ -270,24 +461,14 @@ export function WorkerLocationProvider({ children }) {
         persistIntervalRef.current = null;
       }
     };
-  }, [tracking, sessionId, currentPosition]);
+  }, [tracking, sessionId]);
 
   // Cleanup on unmount — delete live location to avoid stale data
   useEffect(() => {
     return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-      if (persistIntervalRef.current) {
-        clearInterval(persistIntervalRef.current);
-      }
-      // Delete live location on unmount if was tracking (use captured UID)
-      const uid = trackingUidRef.current;
-      if (uid) {
-        deleteDoc(doc(db, 'worker_live_locations', uid)).catch(() => {});
-      }
+      stopTracking({ updateState: false });
     };
-  }, []);
+  }, [stopTracking]);
 
   return (
     <WorkerLocationContext.Provider

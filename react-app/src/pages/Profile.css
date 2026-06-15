@@ -146,6 +146,42 @@
   gap: 12px;
 }
 
+.profile-photo-panel,
+.profile-photo-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-card);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.profile-photo-preview {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--primary-purple);
+  color: #fff;
+  font-weight: 900;
+  font-size: 28px;
+}
+
+.profile-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-photo-input {
+  flex: 1;
+}
+
 .profile-field {
   display: grid;
   gap: 7px;
@@ -195,7 +231,7 @@
 
 .profile-location-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
   gap: 10px;
 }
 
@@ -274,6 +310,10 @@
 }
 
 .profile-wallet-card {
+  margin-top: 16px;
+}
+
+.profile-gigscore-section {
   margin-top: 16px;
 }
 

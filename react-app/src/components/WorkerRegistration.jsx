@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { storage } from '../firebase';
+import { auth, storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SERVICE_CATALOG } from '../utils/aiAssistant';
 import { SPECIAL_JOBS } from '../config/specialJobs';
@@ -92,8 +92,10 @@ export default function WorkerRegistration({ onSubmit }) {
     setLicenseUploading(true);
     setLicenseError('');
     try {
-      const fileRef = ref(storage, `workerLicenses/${licenseFile.name}`);
-      await uploadBytes(fileRef, licenseFile);
+      const uid = auth.currentUser?.uid;
+      if (!uid) throw new Error('Login required for license upload.');
+      const fileRef = ref(storage, `workerLicenses/${uid}/${Date.now()}_${licenseFile.name}`);
+      await uploadBytes(fileRef, licenseFile, { contentType: licenseFile.type });
       const url = await getDownloadURL(fileRef);
       setLicenseUrl(url);
     } catch (e) {

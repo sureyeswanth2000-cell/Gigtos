@@ -1,0 +1,21 @@
+{
+  "short_name": "Gigtos",
+  "name": "Gigtos - Verified Home Services",
+  "description": "Book verified home-service workers with transparent launch pricing, Smart Queue matching, and worker-first no-commission launch rules.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#7c3aed",
+  "categories": ["business", "lifestyle", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

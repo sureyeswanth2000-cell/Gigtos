@@ -8811,10 +8811,16 @@ async function getRecentAiOpsDocs(collectionName, limit = AI_RELEASE_PACKET_RECE
 function classifyReleasePacketRisk({ settings = {}, recent = {} }) {
   const blockers = [];
   const warnings = [];
+  const evidenceIds = [];
+
   const gatewayStatus = settings.ai_model_gateway_health?.status;
   const sentryStatus = settings.sentry_issue_ingest?.status;
   const freshnessStatus = settings.ai_orchestration_freshness?.status;
   const weeklyEvalStatus = settings.ai_orchestration_weekly_eval?.status;
+
+  Object.keys(settings).forEach(key => {
+    evidenceIds.push(`platform_settings/${key}`);
+  });
 
   if (gatewayStatus && !['ok', 'healthy'].includes(gatewayStatus)) blockers.push('AI model gateway is not healthy.');
   if (sentryStatus && !['ok', 'healthy'].includes(sentryStatus)) warnings.push('Sentry ingest needs attention.');
@@ -8822,23 +8828,54 @@ function classifyReleasePacketRisk({ settings = {}, recent = {} }) {
   if (weeklyEvalStatus && !['ok', 'healthy'].includes(weeklyEvalStatus)) warnings.push('Weekly AI replay evaluation needs attention.');
 
   const blockedFixes = (recent.sentry_auto_fixes || []).filter(item => {
+    if (item.path) evidenceIds.push(item.path);
     const status = (item.data?.status || '').toString();
     return ['verifier_blocked', 'tests_fail', 'failed', 'too_many_changes'].includes(status);
   });
   if (blockedFixes.length) blockers.push(`${blockedFixes.length} AI fix draft(s) are blocked or failing.`);
 
+  (recent.jira_issue_handoffs || []).forEach(item => {
+    if (item.path) evidenceIds.push(item.path);
+  });
+
   const openRecurrences = (recent.ai_recurrence_checks || []).filter(item => {
+    if (item.path) evidenceIds.push(item.path);
     const status = (item.data?.status || '').toString();
     return status && !['stable_archived', 'resolved'].includes(status);
   });
   if (openRecurrences.length) warnings.push(`${openRecurrences.length} recurring issue check(s) still need review.`);
 
+  (recent.ai_model_governance_reviews || []).forEach(item => {
+    if (item.path) evidenceIds.push(item.path);
+  });
+
   const risk = blockers.length ? 'blocked' : (warnings.length ? 'needs_review' : 'ready_for_human_review');
+  
+  let riskScore = 0;
+  if (risk === 'blocked') {
+    riskScore = 80 + blockers.length * 5;
+  } else if (risk === 'needs_review') {
+    riskScore = 30 + warnings.length * 10;
+  } else {
+    riskScore = 10;
+  }
+  riskScore = Math.min(100, Math.max(0, riskScore));
+
+  const rollbackPlan = [
+    '1. Identify target release commit or Pull Request on GitHub.',
+    '2. Revert the commit and merge the revert branch to main.',
+    '3. Execute standard CI/CD deployment or manually trigger rollback redeploy on Firebase Hosting/Functions.',
+    '4. Set AI_AUTO_FIX_ENABLED=false in GCP secrets or Functions config if the failure was caused by autonomous AI actions.',
+  ].join('\n');
+
   return {
     risk,
     releaseDecision: risk === 'ready_for_human_review' ? 'human_review_required' : 'do_not_deploy_until_reviewed',
     blockers,
     warnings,
+    riskScore,
+    rollbackPlan,
+    evidenceIds,
   };
 }
 
@@ -8867,8 +8904,10 @@ async function prepareAiReleaseManagerPacket({ source = 'manual', requestedBy = 
   const risk = classifyReleasePacketRisk({ settings, recent });
   const prompt = [
     'Summarize this Gigtos AI release-manager packet for a human SuperAdmin reviewer.',
-    'Do not approve deployment. Do not claim production is safe. Mention blockers and evidence paths.',
-    `Risk: ${risk.risk}`,
+    'Mandatory Output Contract: Every release recommendation MUST reference active blockers, warnings, and the rollback plan. Do not recommend direct production deployment or progressive rollout without explicit human approval.',
+    `Risk classification: ${risk.risk}`,
+    `Risk Score (0-100): ${risk.riskScore}`,
+    `Rollback Plan:\n${risk.rollbackPlan}`,
     `Blockers: ${risk.blockers.join('; ') || 'none'}`,
     `Warnings: ${risk.warnings.join('; ') || 'none'}`,
     `Gateway status: ${settings.ai_model_gateway_health?.status || 'missing'}`,

@@ -121,9 +121,9 @@ describe('dev-auth UI smoke', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Review and book/i }));
     expect(await screen.findByText(/Locked price:/i)).toBeInTheDocument();
-    expect(screen.getByText(/Worker receives full amount:/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Worker receives:/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Why this price\?/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Worker receives the full customer price during launch/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Platform fee:/i).length).toBeGreaterThan(0);
   });
 
   it('opens the public service catalog with launch and recruitable services', async () => {

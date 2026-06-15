@@ -950,7 +950,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 
 ## GigScore Future Pending - Not Blocking Current Foundation
 
-- [ ] Build full superadmin editable GigScore settings UI from the rule helper defaults: thresholds, score deltas, tip caps, recurring caps, same-pair limits, dampening, freeze thresholds, and Elite/Diamond controls.
+- [x] Build full superadmin editable GigScore settings UI from the rule helper defaults: thresholds, score deltas, tip caps, recurring caps, same-pair limits, dampening, freeze thresholds, and Elite/Diamond controls.
 - [x] Connect AI before/after photo quality signals into GigScore only after human-review guardrails are ready; AI alone must stay pending and cannot directly punish users.
   - done: AI photo scoring is locked behind the human-review contract; no current client/backend path lets AI directly punish users.
   - done: worker after-photo upload automatically creates backend-owned `ai_photo_quality_reviews` evidence when photos first arrive.
@@ -991,7 +991,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
   - done: SuperAdmin sensitive action framework supports reason capture/audit; subscription/free-access extension remains product workflow polish.
 - [x] Store external platform ID proof safely: platform name, masked ID/card display, verification status, reviewed by, reviewed at, free-access-until, and audit log.
 - [x] Consumer price display must be truthful and all-inclusive. Worker/admin settlement views should show worker earnings, consumer booking fee, gateway fee, taxes if any, and payout status clearly.
-- [ ] Always show consumer platform fee line item even when it is `INR 0`; superadmin can edit fee rules from UI later.
+- [x] Always show consumer platform fee line item even when it is `INR 0`; superadmin can edit fee rules from UI later.
 - [ ] Add booking-time-only bargain/offer feature: consumer may ask for a small worker-price reduction only before booking confirmation; hide/lock bargain after booking is confirmed or work starts so post-work pressure is avoided.
 - [ ] Discuss and design Gigtos Community Support Program for launch funding:
   - users can support/donate to Gigtos during launch, but donation must not buy core GigScore or worker ranking

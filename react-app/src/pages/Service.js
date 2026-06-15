@@ -547,7 +547,7 @@ export default function Service() {
               <strong>{lockedQuote ? 'Backend price locked' : 'Backend price required before booking'}</strong>
               <span>
                 {lockedQuote
-                  ? `${getDemandLabel(lockedQuote)}. Worker receives full amount during launch: ${formatInr(lockedQuote.workerReceivable)}.`
+                  ? `${getDemandLabel(lockedQuote)}. Platform fee: ${formatInr(lockedQuote.platformFee || 0)}. Worker receives: ${formatInr(lockedQuote.workerReceivable || (lockedQuote.finalConsumerPrice - (lockedQuote.platformFee || 0)))}.`
                   : 'Final booking price will come from Firebase backend rules, not this screen.'}
               </span>
               {lockedQuote && (
@@ -669,7 +669,8 @@ export default function Service() {
               <span>Address: {address}</span>
               <span>Time: {scheduleText}</span>
               <span>Locked price: {formatInr(lockedQuote?.finalConsumerPrice)}</span>
-              <span>Worker receives full amount: {formatInr(lockedQuote?.workerReceivable)}</span>
+              <span>Platform fee: {formatInr(lockedQuote?.platformFee || 0)}</span>
+              <span>Worker receives: {formatInr(lockedQuote?.workerReceivable || (lockedQuote?.finalConsumerPrice - (lockedQuote?.platformFee || 0)))}</span>
               <span>Price reason: {getDemandLabel(lockedQuote)}</span>
               <span>Price lock: {lockedQuote?.priceLockedUntil ? new Date(lockedQuote.priceLockedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Missing'}</span>
             </div>

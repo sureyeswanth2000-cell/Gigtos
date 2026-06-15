@@ -43,7 +43,6 @@ exports.telegramWebhookHandler = async (req, res) => {
   }
 };
 
-// 2. Pub/Sub Worker: Runs the agent logic asynchronously
 exports.processTelegramPrompt = async (message) => {
   const { chatId, prompt } = message.json;
   const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -59,6 +58,21 @@ exports.processTelegramPrompt = async (message) => {
     snapshot.forEach(doc => historyRecords.push(doc.data()));
     historyRecords.reverse();
 
+    // Fetch Mem0 Memories if API key is provided
+    let mem0UserPreferences = '';
+    if (process.env.MEM0_API_KEY) {
+      try {
+        const { MemoryClient } = await import('mem0ai');
+        const mem0Client = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
+        const memories = await mem0Client.getAll({ userId: chatId });
+        if (memories && Array.isArray(memories)) {
+          mem0UserPreferences = memories.map(m => m.memory || m.text).filter(Boolean).join('\n');
+        }
+      } catch (err) {
+        console.error("Failed to fetch mem0 memories:", err);
+      }
+    }
+
     // Fetch TODO.md if repository is cloned
     let todoContent = 'Repository not cloned yet. If you need to edit code, use executeTerminalCommand to git clone it into /tmp/workspace using your GitHub PAT.';
     try {
@@ -68,11 +82,25 @@ exports.processTelegramPrompt = async (message) => {
     }
 
     // Execute Agent
-    const finalAnswer = await runAgentPrompt(prompt, todoContent, historyRecords);
+    const finalAnswer = await runAgentPrompt(prompt, todoContent, historyRecords, mem0UserPreferences);
 
-    // Save Memory
+    // Save Local Firestore Memory
     await db.collection('agent_memory').add({ chat_id: chatId, role: 'user', text: prompt, timestamp: admin.firestore.FieldValue.serverTimestamp() });
     await db.collection('agent_memory').add({ chat_id: chatId, role: 'model', text: finalAnswer, timestamp: admin.firestore.FieldValue.serverTimestamp() });
+
+    // Save to Mem0 Memory
+    if (process.env.MEM0_API_KEY) {
+      try {
+        const { MemoryClient } = await import('mem0ai');
+        const mem0Client = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
+        await mem0Client.add([
+          { role: 'user', content: prompt },
+          { role: 'assistant', content: finalAnswer }
+        ], { userId: chatId });
+      } catch (err) {
+        console.error("Failed to write mem0 memory:", err);
+      }
+    }
 
     // Send Response
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -196,7 +224,7 @@ const functionsMap = {
   createPullRequest: async (args) => createPullRequest(args)
 };
 
-async function runAgentPrompt(prompt, anchorContext, historyRecords) {
+async function runAgentPrompt(prompt, anchorContext, historyRecords, mem0UserPreferences) {
   if (!ai) {
     const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT_ID || process.env.VERTEX_AI_PROJECT_ID;
     if (process.env.GEMINI_API_KEY) {
@@ -212,7 +240,7 @@ async function runAgentPrompt(prompt, anchorContext, historyRecords) {
     }
   }
 
-  const systemInstruction = `You are "Gito AI", a cooperative multi-agent coding and monitoring system running inside a Firebase Cloud Function.
+  let systemInstruction = `You are "Gito AI", a cooperative multi-agent coding and monitoring system running inside a Firebase Cloud Function.
 You operate entirely in a serverless environment. Your local filesystem is ephemeral and read-only except for /tmp.
 You control the workspace at ${PROJECT_PATH}.
 If the workspace is empty, ask the user for their GitHub PAT to clone the repository, or use it if they have already provided it.
@@ -231,6 +259,10 @@ You act as a team of specialized agents:
 
 Current Task Backlog (Anchor Context):
 ${anchorContext}`;
+
+  if (mem0UserPreferences) {
+    systemInstruction += `\n\nUser Profile & Memory (Mem0):\n${mem0UserPreferences}`;
+  }
 
   const history = historyRecords.map(h => ({
     role: h.role,

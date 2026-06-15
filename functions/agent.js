@@ -137,6 +137,14 @@ const tools = [{
         },
         required: ['title', 'headBranch']
       }
+    },
+    {
+      name: 'getSentryIssues',
+      description: 'Queries active unresolved issues and bugs from Sentry',
+      parameters: {
+        type: 'OBJECT',
+        properties: {}
+      }
     }
   ]
 }];
@@ -201,6 +209,49 @@ async function createPullRequest(args) {
   }
 }
 
+async function getSentryIssues() {
+  const org = process.env.SENTRY_ORG;
+  const projects = (process.env.SENTRY_PROJECTS || '').split(',').map(p => p.trim()).filter(Boolean);
+  const token = process.env.SENTRY_AUTH_TOKEN;
+  const baseUrl = (process.env.SENTRY_API_BASE_URL || 'https://sentry.io/api/0').replace(/\/$/, '');
+
+  if (!org || !token || projects.length === 0) {
+    return { error: 'Sentry credentials (SENTRY_ORG, SENTRY_AUTH_TOKEN, SENTRY_PROJECTS) are not fully configured in the environment.' };
+  }
+
+  try {
+    const project = projects[0]; // Query first project by default
+    const response = await fetch(`${baseUrl}/projects/${org}/${project}/issues/?query=is:unresolved`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      return { error: `Sentry API returned status ${response.status}: ${body}` };
+    }
+
+    const issues = await response.json();
+    if (!Array.isArray(issues)) {
+      return { error: 'Invalid response format from Sentry API' };
+    }
+
+    return issues.map(issue => ({
+      id: issue.id,
+      title: issue.title,
+      culprit: issue.culprit,
+      permalink: issue.permalink,
+      shortId: issue.shortId,
+      firstSeen: issue.firstSeen,
+      lastSeen: issue.lastSeen
+    }));
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
 const functionsMap = {
   readFile: async (args) => {
     try {
@@ -221,7 +272,8 @@ const functionsMap = {
     }
   },
   executeTerminalCommand: async (args) => executeTerminalCommand(args.command),
-  createPullRequest: async (args) => createPullRequest(args)
+  createPullRequest: async (args) => createPullRequest(args),
+  getSentryIssues: async () => getSentryIssues()
 };
 
 async function runAgentPrompt(prompt, anchorContext, historyRecords, mem0UserPreferences) {

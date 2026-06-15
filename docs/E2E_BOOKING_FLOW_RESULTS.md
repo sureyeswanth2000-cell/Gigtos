@@ -1,7 +1,7 @@
 # E2E Booking Flow Execution Results
 
-- Time: 2026-06-15T10:37:53.917Z
-- Target: https://gigto.in
+- Time: 2026-06-15T16:30:09.197Z
+- Target: http://127.0.0.1:49746/Gigtos
 - Status: PASS
 - Dev-auth role flows: disabled for production build
 - Page/console errors: 0
@@ -11,22 +11,22 @@
 
 ### 1. PASS Consumer service catalog renders launch services
 
-- Duration: 1137 ms
+- Duration: 3584 ms
 - Detail: ok
 
 ### 2. PASS Protected booking route redirects to auth in production build
 
-- Duration: 132 ms
+- Duration: 148 ms
 - Detail: ok
 
 ### 3. PASS Protected worker dashboard redirects to auth in production build
 
-- Duration: 39 ms
+- Duration: 30 ms
 - Detail: ok
 
 ### 4. PASS Privacy and PWA public launch surfaces render
 
-- Duration: 240 ms
+- Duration: 34 ms
 - Detail: privacy + manifest ok
 
 ## Monitoring Warnings

@@ -67,7 +67,7 @@ This is the current planning backlog for Gigtos. The target is no longer a simpl
 - [x] **App Store Description**: Write compelling short and long descriptions — ← PENDING
 - [x] **Privacy Policy URL**: Host a public Privacy Policy page at `https://gigto.in/#/privacy` and link it from the footer/sitemap.
 - [ ] **App Store Connect Account Setup**: Create/verify Apple Developer account and Google Play Console account if not already done.
-- [ ] **Android Keystore**: Generate and securely store a production Android signing keystore before first Play Store submission.
+- [x] **Android Keystore**: Generate and securely store a production Android signing keystore before first Play Store submission.
 - [ ] **iOS Certificates**: Set up iOS distribution certificate and provisioning profile in Apple Developer account.
 - [x] **PWA Manifest Review**: Verify `public/manifest.json` has app name, theme color, icon, start URL, scope, and standalone display; live smoke checks `/manifest.json`.
 

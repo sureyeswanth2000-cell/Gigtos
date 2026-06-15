@@ -7311,23 +7311,26 @@ async function enrichSmartQueueCandidatesWithGoogleMaps(candidates = [], { quote
     origins: candidatesWithCoords.map(candidate => candidate.workerLocation),
     destination,
   });
-  if (!['ok', 'ok_cached'].includes(routeResult.status)) {
-    return candidates.map(candidate => ({
-      ...candidate,
-      routeLookupStatus: routeResult.status,
-      routeLookupReason: routeResult.reason || null,
-    }));
-  }
 
+  const routesArray = Array.isArray(routeResult.routes) ? routeResult.routes : [];
   const routeByWorkerId = new Map();
   candidatesWithCoords.forEach((candidate, index) => {
-    const route = routeResult.routes[index];
+    const route = routesArray[index];
     if (route) routeByWorkerId.set(candidate.worker.id, route);
   });
 
   return candidates.map(candidate => {
     const route = routeByWorkerId.get(candidate.worker.id);
-    if (!route) return candidate;
+    if (!route) {
+      if (!['ok', 'ok_cached'].includes(routeResult.status)) {
+        return {
+          ...candidate,
+          routeLookupStatus: routeResult.status,
+          routeLookupReason: routeResult.reason || 'Google Maps lookup failed',
+        };
+      }
+      return candidate;
+    }
     const enhanced = {
       ...candidate,
       distanceKm: route.distanceKm,

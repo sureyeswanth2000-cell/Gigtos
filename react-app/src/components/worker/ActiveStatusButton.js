@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { httpsCallable } from 'firebase/functions';
 import { functionsInstance } from '../../firebase';
 import { useWorkerLocation } from '../../context/WorkerLocationContext';
+import { buildAreaId } from '../../utils/backendContracts';
 
 const ACTIVE_DURATION = 90 * 60 * 1000;
 const HEARTBEAT_INTERVAL = 4 * 60 * 1000;
@@ -77,7 +78,7 @@ function formatOpenSessionError(error) {
 function buildOpenSessionPayload(workerData = {}) {
   const city = workerData.locationCity || workerData.city || workerData.workCity || 'Bangalore';
   const areaName = workerData.locationArea || workerData.area || workerData.areaName || 'central';
-  const areaIds = uniqueList(workerData.areaIds || [`${slugify(city)}_${slugify(areaName)}`]);
+  const areaIds = uniqueList(workerData.areaIds || [buildAreaId({ city, areaName })]);
   const serviceSource = workerData.serviceIds ||
     workerData.serviceTypes ||
     workerData.gigTypes ||

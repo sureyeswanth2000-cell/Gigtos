@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { functionsInstance } from '../firebase';
+import { buildAreaId } from './backendContracts';
 
 export const MVP_SERVICE_ID_BY_CATALOG_ID = {
   'home-helper': 'maid_hourly_basic_help',
@@ -37,7 +38,7 @@ export function inferCityAndArea({ address = '', profileCity = '', profileArea =
   return {
     city,
     areaName: area,
-    areaId: `${slugifyAreaPart(city)}_${slugifyAreaPart(area)}`,
+    areaId: buildAreaId({ city, areaName: area }),
   };
 }
 

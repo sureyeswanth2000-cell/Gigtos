@@ -43,11 +43,40 @@ exports.telegramWebhookHandler = async (req, res) => {
   }
 };
 
+async function ensureWorkspaceCloned() {
+  const PAT = process.env.GITHUB_PAT || process.env.GITHUB_TOKEN;
+  if (!PAT) {
+    console.warn("No GITHUB_PAT env variable set. Auto-clone skipped.");
+    return;
+  }
+
+  try {
+    const gitDir = path.join(PROJECT_PATH, '.git');
+    const exists = await fs.access(gitDir).then(() => true).catch(() => false);
+    if (!exists) {
+      console.log("Workspace .git not found. Cloning repository...");
+      await fs.mkdir(PROJECT_PATH, { recursive: true });
+      
+      const cloneCmd = `git clone https://x-access-token:${PAT}@github.com/sureyeswanth2000-cell/Gigtos.git .`;
+      await executeTerminalCommand(cloneCmd);
+      
+      await executeTerminalCommand('git config user.name "Gito AI"');
+      await executeTerminalCommand('git config user.email "gito-ai@gigtos.app"');
+      console.log("Repository cloned successfully into /tmp/workspace");
+    }
+  } catch (error) {
+    console.error("Failed to ensure workspace is cloned:", error);
+  }
+}
+
 exports.processTelegramPrompt = async (message) => {
   const { chatId, prompt } = message.json;
   const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
   
   try {
+    // Ensure workspace is cloned first
+    await ensureWorkspaceCloned();
+
     // Fetch History
     const memoryRef = db.collection('agent_memory')
         .where('chat_id', '==', chatId)

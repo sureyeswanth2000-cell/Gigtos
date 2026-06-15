@@ -202,6 +202,12 @@ export default function WorkerDashboard() {
   const [pushStatus, setPushStatus] = useState('idle');
   const [withdrawing, setWithdrawing] = useState(false);
   const [sendingSos, setSendingSos] = useState(false);
+  const [trainingVideo1Watched, setTrainingVideo1Watched] = useState(false);
+  const [trainingVideo2Watched, setTrainingVideo2Watched] = useState(false);
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [quizAnswers, setQuizAnswers] = useState({ q1: '', q2: '', q3: '' });
+  const [quizSubmitting, setQuizSubmitting] = useState(false);
+  const [quizFeedback, setQuizFeedback] = useState('');
   const { addToast } = useToast();
   const navigate = useNavigate();
   const devWorker = useMemo(
@@ -565,6 +571,48 @@ export default function WorkerDashboard() {
     showToast('Work started with arrival proof. Keep location sharing on.', 'success');
   }, [showToast]);
 
+  const handleQuizSubmit = useCallback(async (e) => {
+    if (e) e.preventDefault();
+    setQuizSubmitting(true);
+    setQuizFeedback('');
+    try {
+      if (devWorker?.uid) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const isQ1Correct = quizAnswers.q1 === 'always_active';
+        const isQ2Correct = quizAnswers.q2 === 'never_only_before';
+        const isQ3Correct = quizAnswers.q3 === 'arrival_selfie';
+        const score = (isQ1Correct ? 1 : 0) + (isQ2Correct ? 1 : 0) + (isQ3Correct ? 1 : 0);
+        const passed = score === 3;
+        if (passed) {
+          setWorker(prev => ({
+            ...prev,
+            trainingCompleted: true,
+            trainingQuizPassed: true,
+            trainingQuizScore: score,
+            gigScoreStatus: (prev?.gigScore ?? 500) >= 400 ? 'active' : 'recovery',
+          }));
+          showToast('Congratulations! You passed the Gigtos Platform Recovery Quiz (Dev).', 'success');
+          setShowQuizModal(false);
+        } else {
+          setQuizFeedback('Some answers were incorrect. Please review the safety/ethics instructions and try again. (Dev)');
+        }
+      } else {
+        const result = await httpsCallable(functionsInstance, 'submitWorkerTrainingQuiz')({ answers: quizAnswers });
+        if (result.data?.success) {
+          showToast(result.data.message || 'Quiz passed successfully!', 'success');
+          setShowQuizModal(false);
+        } else {
+          setQuizFeedback(result.data?.message || 'Some answers were incorrect. Please try again.');
+        }
+      }
+    } catch (err) {
+      setQuizFeedback(err.message || 'Quiz submission failed. Please try again.');
+    } finally {
+      setQuizSubmitting(false);
+    }
+  }, [devWorker?.uid, quizAnswers, showToast]);
+
+
   if (loading) {
     return (
       <div className="worker-page">
@@ -690,6 +738,110 @@ export default function WorkerDashboard() {
           guildScore={worker?.guildScore || null}
           events={worker?.gigScoreEvents || worker?.scoreEvents || []}
         />
+
+        {worker?.gigScoreStatus === 'recovery' && (
+          <section className="worker-wallet-card" style={{ border: '2px dashed var(--primary-purple)', position: 'relative' }} aria-label="GigScore Recovery Training">
+            <div className="worker-wallet-head">
+              <div>
+                <span className="worker-wallet-kicker">Account Status: Recovery Mode</span>
+                <h2>GigScore Recovery Training</h2>
+              </div>
+              <span className={`worker-wallet-status ${worker?.trainingQuizPassed ? 'clear' : 'due'}`}>
+                {worker?.trainingQuizPassed ? 'Passed' : 'Action Required'}
+              </span>
+            </div>
+
+            <p style={{ fontSize: 13, color: 'var(--text-sub)', marginBottom: 16 }}>
+              Your account is currently in <strong>Recovery Mode</strong>. To restore your status to <strong>Active</strong>:
+              <br />
+              1. Complete the 2 video training modules below.
+              <br />
+              2. Pass the Safety & Ethics Quiz (3/3 correct answers).
+              <br />
+              3. Raise your GigScore to <strong>400</strong> or higher.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+              {/* Video Module 1 */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 12px',
+                border: '1.5px solid var(--border-color)',
+                borderRadius: 10,
+                background: trainingVideo1Watched ? 'var(--green-light)' : 'var(--worker-bg)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={trainingVideo1Watched}
+                    onChange={(e) => setTrainingVideo1Watched(e.target.checked)}
+                    id="video1"
+                    style={{ width: 18, height: 18, cursor: 'pointer' }}
+                  />
+                  <label htmlFor="video1" style={{ fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                    📹 Module 1: Safe Driving & Communication
+                  </label>
+                </div>
+                {trainingVideo1Watched && <span style={{ color: 'var(--green-active)', fontWeight: 'bold' }}>✓ Done</span>}
+              </div>
+
+              {/* Video Module 2 */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 12px',
+                border: '1.5px solid var(--border-color)',
+                borderRadius: 10,
+                background: trainingVideo2Watched ? 'var(--green-light)' : 'var(--worker-bg)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={trainingVideo2Watched}
+                    onChange={(e) => setTrainingVideo2Watched(e.target.checked)}
+                    id="video2"
+                    style={{ width: 18, height: 18, cursor: 'pointer' }}
+                  />
+                  <label htmlFor="video2" style={{ fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                    📹 Module 2: Platform Ethics & Professional Conduct
+                  </label>
+                </div>
+                {trainingVideo2Watched && <span style={{ color: 'var(--green-active)', fontWeight: 'bold' }}>✓ Done</span>}
+              </div>
+            </div>
+
+            {worker?.trainingQuizPassed ? (
+              <div style={{
+                background: 'var(--green-light)',
+                border: '1px solid var(--green-active)',
+                color: 'var(--green-active)',
+                borderRadius: 10,
+                padding: 12,
+                textAlign: 'center',
+                fontWeight: 700,
+                fontSize: 14
+              }}>
+                ✓ Safety & Ethics Quiz Passed! {((worker?.gigScore ?? 500) < 400) && 'Please complete more clean jobs to raise your GigScore back to 400.'}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setQuizAnswers({ q1: '', q2: '', q3: '' });
+                  setQuizFeedback('');
+                  setShowQuizModal(true);
+                }}
+                disabled={!trainingVideo1Watched || !trainingVideo2Watched}
+              >
+                📝 Take Safety & Ethics Quiz
+              </button>
+            )}
+          </section>
+        )}
 
         <section className="worker-wallet-card" aria-label="GigScore free access">
           <div className="worker-wallet-head">
@@ -1103,6 +1255,175 @@ export default function WorkerDashboard() {
             showToast('Completion photo uploaded. Waiting for consumer confirmation.', 'success');
           }}
         />
+      )}
+
+      {showQuizModal && (
+        <div className="modal-overlay" onClick={() => setShowQuizModal(false)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()} style={{ padding: '24px 20px' }}>
+            <div className="modal-title" style={{ fontSize: 19, fontWeight: 800, marginBottom: 8 }}>
+              Safety & Ethics Quiz
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-sub)', marginBottom: 20 }}>
+              Answer all 3 questions correctly to pass and unlock active status.
+            </p>
+
+            <form onSubmit={handleQuizSubmit}>
+              {/* Question 1 */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: 8 }}>
+                  Q1: When should location sharing be active?
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="q1"
+                      value="always_active"
+                      checked={quizAnswers.q1 === 'always_active'}
+                      onChange={e => setQuizAnswers(prev => ({ ...prev, q1: e.target.value }))}
+                      required
+                    />
+                    <span>Always active while on duty (Online)</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="q1"
+                      value="only_assigned"
+                      checked={quizAnswers.q1 === 'only_assigned'}
+                      onChange={e => setQuizAnswers(prev => ({ ...prev, q1: e.target.value }))}
+                    />
+                    <span>Only when a job is assigned</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="q1"
+                      value="never_share"
+                      checked={quizAnswers.q1 === 'never_share'}
+                      onChange={e => setQuizAnswers(prev => ({ ...prev, q1: e.target.value }))}
+                    />
+                    <span>Never share location</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Question 2 */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: 8 }}>
+                  Q2: When can you negotiate pricing with a customer?
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="q2"
+                      value="never_only_before"
+                      checked={quizAnswers.q2 === 'never_only_before'}
+                      onChange={e => setQuizAnswers(prev => ({ ...prev, q2: e.target.value }))}
+                      required
+                    />
+                    <span>Never after starting work; only before starting or during quoting</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="q2"
+                      value="anytime_needed"
+                      checked={quizAnswers.q2 === 'anytime_needed'}
+                      onChange={e => setQuizAnswers(prev => ({ ...prev, q2: e.target.value }))}
+                    />
+                    <span>Anytime if you feel you deserve more pay</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="q2"
+                      value="after_work_completed"
+                      checked={quizAnswers.q2 === 'after_work_completed'}
+                      onChange={e => setQuizAnswers(prev => ({ ...prev, q2: e.target.value }))}
+                    />
+                    <span>After work is completed only</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Question 3 */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: 8 }}>
+                  Q3: What is required to prove you arrived at the job site?
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="q3"
+                      value="arrival_selfie"
+                      checked={quizAnswers.q3 === 'arrival_selfie'}
+                      onChange={e => setQuizAnswers(prev => ({ ...prev, q3: e.target.value }))}
+                      required
+                    />
+                    <span>Taking a selfie at the location when starting work</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="q3"
+                      value="calling_support"
+                      checked={quizAnswers.q3 === 'calling_support'}
+                      onChange={e => setQuizAnswers(prev => ({ ...prev, q3: e.target.value }))}
+                    />
+                    <span>Calling platform support</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="q3"
+                      value="verbal_confirmation"
+                      checked={quizAnswers.q3 === 'verbal_confirmation'}
+                      onChange={e => setQuizAnswers(prev => ({ ...prev, q3: e.target.value }))}
+                    />
+                    <span>Verbal confirmation from the customer</span>
+                  </label>
+                </div>
+              </div>
+
+              {quizFeedback && (
+                <div style={{
+                  background: '#FEF2F2',
+                  border: '1px solid #FCA5A5',
+                  color: '#B91C1C',
+                  borderRadius: 10,
+                  padding: 10,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  marginBottom: 16,
+                }}>
+                  {quizFeedback}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ flex: 1 }}
+                  onClick={() => setShowQuizModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  style={{ flex: 1 }}
+                  disabled={quizSubmitting || !quizAnswers.q1 || !quizAnswers.q2 || !quizAnswers.q3}
+                >
+                  {quizSubmitting ? 'Submitting...' : 'Submit Answers'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       <WorkerBottomNav />

@@ -3172,15 +3172,17 @@ async function getActorGigScore(actorRole, actorId) {
         collectionName,
         currentScore: clampGigScore(publicData.gigScore ?? publicData.socioScore ?? fallback),
         gigScoreStatus: publicData.gigScoreStatus || GIG_SCORE_ACCOUNT_STATUS.ACTIVE,
+        trainingQuizPassed: Boolean(publicData.trainingQuizPassed),
       };
     }
   }
-  if (!actorDoc.exists) return { collectionName, currentScore: fallback, gigScoreStatus: GIG_SCORE_ACCOUNT_STATUS.ACTIVE };
+  if (!actorDoc.exists) return { collectionName, currentScore: fallback, gigScoreStatus: GIG_SCORE_ACCOUNT_STATUS.ACTIVE, trainingQuizPassed: false };
   const data = actorDoc.data() || {};
   return {
     collectionName,
     currentScore: clampGigScore(data.gigScore ?? data.socioScore ?? fallback),
     gigScoreStatus: data.gigScoreStatus || GIG_SCORE_ACCOUNT_STATUS.ACTIVE,
+    trainingQuizPassed: Boolean(data.trainingQuizPassed),
   };
 }
 
@@ -3197,7 +3199,7 @@ async function writeGigScoreEventAndProfile({
   pairKey = null,
 }) {
   if (!actorId || !bookingId) return null;
-  const { collectionName, currentScore, gigScoreStatus } = await getActorGigScore(actorRole, actorId);
+  const { collectionName, currentScore, gigScoreStatus, trainingQuizPassed } = await getActorGigScore(actorRole, actorId);
   let effectiveDelta = Number(delta) || 0;
   let effectiveStatus = status;
   let capState = null;
@@ -3236,7 +3238,9 @@ async function writeGigScoreEventAndProfile({
     let nextStatus = gigScoreStatus;
     if (actorRole === 'worker' && event.newScore < 300) nextStatus = GIG_SCORE_ACCOUNT_STATUS.WORK_FROZEN;
     else if (actorRole === 'worker' && event.newScore < 400) nextStatus = 'recovery';
-    else if (gigScoreStatus === 'recovery' && event.newScore >= 400) nextStatus = GIG_SCORE_ACCOUNT_STATUS.ACTIVE;
+    else if (gigScoreStatus === 'recovery' && event.newScore >= 400) {
+      nextStatus = trainingQuizPassed ? GIG_SCORE_ACCOUNT_STATUS.ACTIVE : 'recovery';
+    }
 
     const update = {
       gigScore: event.newScore,
@@ -11321,6 +11325,67 @@ exports.getMvpDemandQuote = appCheckOnCall(async (data, context) => {
     unitPrice: quote.unitPrice,
     priceLockedUntil: quote.priceLockedUntil.toISOString(),
     reasonCodes: quote.reasonCodes,
+  };
+});
+
+/**
+ * Callable: submitWorkerTrainingQuiz
+ * Validates the safety and platform ethics quiz for recovery workers.
+ */
+exports.submitWorkerTrainingQuiz = appCheckOnCall(async (data, context) => {
+  verifyAuth(context);
+  const workerId = context.auth.uid;
+  const answers = data?.answers || {};
+
+  const isQ1Correct = answers.q1 === 'always_active';
+  const isQ2Correct = answers.q2 === 'never_only_before';
+  const isQ3Correct = answers.q3 === 'arrival_selfie';
+  const score = (isQ1Correct ? 1 : 0) + (isQ2Correct ? 1 : 0) + (isQ3Correct ? 1 : 0);
+  const passed = score === 3;
+
+  if (!passed) {
+    return {
+      success: false,
+      score,
+      passed,
+      message: 'Some answers were incorrect. Please review the safety/ethics instructions and try again.',
+    };
+  }
+
+  const workerRef = db.collection('worker_auth').doc(workerId);
+  const publicRef = db.collection('gig_workers').doc(workerId);
+
+  await db.runTransaction(async (transaction) => {
+    const workerSnap = await transaction.get(workerRef);
+    if (!workerSnap.exists) {
+      throw new functions.https.HttpsError('not-found', 'Worker profile not found.');
+    }
+    const workerData = workerSnap.data() || {};
+    const currentScore = Number(workerData.gigScore ?? workerData.socioScore ?? 500);
+    const currentStatus = workerData.gigScoreStatus || 'active';
+
+    let nextStatus = currentStatus;
+    if (currentStatus === 'recovery' && currentScore >= 400) {
+      nextStatus = 'active';
+    }
+
+    const updates = {
+      trainingCompleted: true,
+      trainingQuizPassed: true,
+      trainingQuizScore: score,
+      trainingCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+      gigScoreStatus: nextStatus,
+    };
+
+    transaction.set(workerRef, updates, { merge: true });
+    transaction.set(publicRef, updates, { merge: true });
+  });
+
+  return {
+    success: true,
+    score,
+    passed,
+    message: 'Congratulations! You passed the Gigtos Platform Recovery Quiz. Your profile is now eligible for active matching.',
   };
 });
 

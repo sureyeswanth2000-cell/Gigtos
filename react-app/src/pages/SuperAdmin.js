@@ -1348,6 +1348,32 @@ export default function SuperAdmin() {
                                                 <span>Status <strong>{row.worker?.approvalStatus || 'pending'}</strong></span>
                                             </div>
 
+                                            {row.worker && (
+                                                <div style={{
+                                                    background: 'var(--bg-soft)',
+                                                    border: '1px solid var(--border-light)',
+                                                    borderRadius: 10,
+                                                    padding: 10,
+                                                    marginTop: 10,
+                                                    fontSize: 12,
+                                                }}>
+                                                    <strong>Recovery Training Status:</strong>{' '}
+                                                    {row.worker.trainingQuizPassed ? (
+                                                        <span style={{ color: 'var(--success)' }}>
+                                                            ✓ Passed ({row.worker.trainingQuizScore}/3)
+                                                            {row.worker.trainingCompletedAt && ` on ${formatTimestamp(row.worker.trainingCompletedAt)}`}
+                                                        </span>
+                                                    ) : row.worker.gigScoreStatus === 'recovery' ? (
+                                                        <span style={{ color: 'var(--error)' }}>
+                                                            ✗ Pending Quiz (Completed: {row.worker.trainingCompleted ? 'Yes' : 'No'})
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ color: 'var(--text-muted)' }}>Not in recovery</span>
+                                                    )}
+                                                </div>
+                                            )}
+
+
                                             {Array.isArray(row.documents) && row.documents.length > 0 && (
                                                 <div className="superadmin-area-intel-tags">
                                                     {row.documents.map((doc, index) => (

@@ -9125,6 +9125,46 @@ exports.superadminAction = appCheckOnCall(async (data, context) => {
       return { success: true, settings };
     }
 
+    case 'save_gigscore_controls': {
+      const settings = payload.settings || {};
+      const reason = requireNonEmptyString(payload.reason || '', 'Reason', 300);
+      
+      const sanitized = {
+        copperThreshold: Math.max(0, Math.min(1000, Number(settings.copperThreshold ?? 450))),
+        recoveryDiscountPercent: Math.max(0, Math.min(100, Number(settings.recoveryDiscountPercent ?? 10))),
+        workerFreezeBelow: Math.max(0, Math.min(1000, Number(settings.workerFreezeBelow ?? 300))),
+        workerRecoveryBelow: Math.max(0, Math.min(1000, Number(settings.workerRecoveryBelow ?? 400))),
+        inactivityFloor: Math.max(0, Math.min(1000, Number(settings.inactivityFloor ?? 450))),
+        inactivityDecayAfterDays: Math.max(1, Math.min(365, Number(settings.inactivityDecayAfterDays ?? 10))),
+        workerInactivityDecay: Math.max(-100, Math.min(0, Number(settings.workerInactivityDecay ?? -5))),
+        consumerInactivityDecay: Math.max(-100, Math.min(0, Number(settings.consumerInactivityDecay ?? -2))),
+        diamondWorkerOptionalPriceIncreasePercent: Math.max(0, Math.min(100, Number(settings.diamondWorkerOptionalPriceIncreasePercent ?? 10))),
+        eliteConsumerMinimumRealConsumers: Math.max(1, Number(settings.eliteConsumerMinimumRealConsumers ?? 3000)),
+        eliteConsumerDiscountPercent: Math.max(0, Math.min(100, Number(settings.eliteConsumerDiscountPercent ?? 25))),
+        eliteConsumerMonthlyBookingLimit: Math.max(1, Math.min(100, Number(settings.eliteConsumerMonthlyBookingLimit ?? 8))),
+        guildMinMembers: Math.max(1, Math.min(100, Number(settings.guildMinMembers ?? 3))),
+        guildMaxMembers: Math.max(1, Math.min(100, Number(settings.guildMaxMembers ?? 6))),
+        guildDiamondShieldDays: Math.max(0, Math.min(365, Number(settings.guildDiamondShieldDays ?? 7))),
+      };
+
+      await db.collection('platform_settings').doc('gigscore_controls').set({
+        ...sanitized,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: adminUser.uid,
+        updateReason: reason,
+      });
+
+      await writeSecurityAudit({
+        actorId: adminUser.uid,
+        action,
+        targetId: 'gigscore_controls',
+        targetType: 'platform_settings',
+        extra: { settings: sanitized, reason },
+      });
+
+      return { success: true, settings: sanitized };
+    }
+
     case 'run_ai_model_gateway_health_check': {
       const health = await runAiModelGatewayHealthCheck({ source: 'superadmin_manual_refresh' });
       await writeSecurityAudit({

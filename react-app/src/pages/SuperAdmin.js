@@ -106,6 +106,23 @@ export default function SuperAdmin() {
         scoreDropSensitivity: 60,
         cityEnabled: true,
     });
+    const [gigscoreSettings, setGigscoreSettings] = useState({
+        copperThreshold: 450,
+        recoveryDiscountPercent: 10,
+        workerFreezeBelow: 300,
+        workerRecoveryBelow: 400,
+        inactivityFloor: 450,
+        inactivityDecayAfterDays: 10,
+        workerInactivityDecay: -5,
+        consumerInactivityDecay: -2,
+        diamondWorkerOptionalPriceIncreasePercent: 10,
+        eliteConsumerMinimumRealConsumers: 3000,
+        eliteConsumerDiscountPercent: 25,
+        eliteConsumerMonthlyBookingLimit: 8,
+        guildMinMembers: 3,
+        guildMaxMembers: 6,
+        guildDiamondShieldDays: 7,
+    });
     const [pricingSettings, setPricingSettings] = useState(DEFAULT_PRICING_SETTINGS);
     const [savedPricingSettings, setSavedPricingSettings] = useState(DEFAULT_PRICING_SETTINGS);
     const [priceRuleForm, setPriceRuleForm] = useState(createDefaultPriceRuleForm);
@@ -356,6 +373,18 @@ export default function SuperAdmin() {
     }, []);
 
     useEffect(() => {
+        const unsub = onSnapshot(doc(db, 'platform_settings', 'gigscore_controls'), snap => {
+            if (snap.exists()) {
+                setGigscoreSettings(prev => ({
+                    ...prev,
+                    ...snap.data()
+                }));
+            }
+        }, () => {});
+        return unsub;
+    }, []);
+
+    useEffect(() => {
         const unsub = onSnapshot(
             doc(db, 'platform_settings', 'ai_model_gateway_health'),
             snap => setAiModelGatewayHealth(snap.exists() ? { id: snap.id, ...snap.data() } : null),
@@ -548,6 +577,18 @@ export default function SuperAdmin() {
             setPricingSettings(settings);
             setSavedPricingSettings(settings);
             addToast('Pricing controls saved.', 'success');
+        } catch (err) {
+            addToast('Error: ' + err.message, 'error');
+        }
+    };
+
+    const saveGigscoreSettings = async () => {
+        try {
+            if (!await requireRecentSuperadminAuth('save GigScore controls')) return;
+            const reason = window.prompt('Reason for changing the GigScore control parameters?', 'Adjusting thresholds for platform balancing.');
+            if (!reason) return;
+            await callSuperadminAction('save_gigscore_controls', { settings: gigscoreSettings, reason });
+            addToast('GigScore controls saved.', 'success');
         } catch (err) {
             addToast('Error: ' + err.message, 'error');
         }
@@ -2057,6 +2098,186 @@ export default function SuperAdmin() {
                                     ))}
                                 </div>
                             )}
+
+                            {/* GigScore Controls Settings Editor */}
+                            <div style={{ marginTop: 40, paddingTop: 32, borderTop: '1px solid var(--border-light)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20, marginBottom: 28 }}>
+                                    <div>
+                                        <h3 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 900 }}>GigScore Platform Controls</h3>
+                                        <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                                            Configure platform-wide rules, inactivity decay rates, Elite/Diamond thresholds, and Guild boundaries.
+                                        </p>
+                                    </div>
+                                    <button onClick={saveGigscoreSettings} className="btn-primary" style={{ padding: '12px 20px', whiteSpace: 'nowrap' }}>
+                                        Save GigScore Controls
+                                    </button>
+                                </div>
+
+                                <div style={{ display: 'grid', gap: 24 }}>
+                                    {/* Section 1: Core Thresholds & Recovery */}
+                                    <div>
+                                        <h4 style={{ margin: '0 0 14px 0', fontSize: 16, fontWeight: 800, color: 'var(--primary-purple)' }}>Core Thresholds & Recovery</h4>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Copper score threshold
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.copperThreshold}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, copperThreshold: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Recovery discount %
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.recoveryDiscountPercent}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, recoveryDiscountPercent: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Worker Freeze score
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.workerFreezeBelow}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, workerFreezeBelow: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Worker Recovery threshold
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.workerRecoveryBelow}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, workerRecoveryBelow: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {/* Section 2: Inactivity Decay Rules */}
+                                    <div>
+                                        <h4 style={{ margin: '0 0 14px 0', fontSize: 16, fontWeight: 800, color: 'var(--primary-purple)' }}>Inactivity Decay Rules</h4>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Inactivity Floor
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.inactivityFloor}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, inactivityFloor: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Decay delay (days)
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.inactivityDecayAfterDays}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, inactivityDecayAfterDays: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Worker decay delta
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.workerInactivityDecay}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, workerInactivityDecay: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Consumer decay delta
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.consumerInactivityDecay}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, consumerInactivityDecay: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {/* Section 3: Elite & Diamond Tiers */}
+                                    <div>
+                                        <h4 style={{ margin: '0 0 14px 0', fontSize: 16, fontWeight: 800, color: 'var(--primary-purple)' }}>Elite & Diamond Tiers</h4>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Diamond Worker price premium %
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.diamondWorkerOptionalPriceIncreasePercent}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, diamondWorkerOptionalPriceIncreasePercent: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Elite Consumer min real consumers
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.eliteConsumerMinimumRealConsumers}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, eliteConsumerMinimumRealConsumers: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Elite Consumer discount %
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.eliteConsumerDiscountPercent}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, eliteConsumerDiscountPercent: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Elite Consumer monthly booking limit
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.eliteConsumerMonthlyBookingLimit}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, eliteConsumerMonthlyBookingLimit: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {/* Section 4: Guild Boundaries */}
+                                    <div>
+                                        <h4 style={{ margin: '0 0 14px 0', fontSize: 16, fontWeight: 800, color: 'var(--primary-purple)' }}>Guild Boundaries</h4>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Min Guild Members
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.guildMinMembers}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, guildMinMembers: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Max Guild Members
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.guildMaxMembers}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, guildMaxMembers: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+                                                Guild Diamond Shield Days
+                                                <input
+                                                    type="number"
+                                                    className="input-field"
+                                                    value={gigscoreSettings.guildDiamondShieldDays}
+                                                    onChange={e => setGigscoreSettings({ ...gigscoreSettings, guildDiamondShieldDays: Number(e.target.value) })}
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
 

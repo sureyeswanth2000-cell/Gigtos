@@ -13530,4 +13530,7 @@ exports.sendTestAlertEmail = functions.https.onCall(async (data, context) => {
 // --- Gigto Core Agent Integration ---
 const agent = require('./agent');
 exports.telegramWebhook = functions.https.onRequest(agent.telegramWebhookHandler);
-exports.processTelegramPrompt = functions.pubsub.topic('gigto-agent-prompt').onPublish(agent.processTelegramPrompt);
+exports.processTelegramPrompt = functions
+  .runWith({ timeoutSeconds: 300, memory: '1GB' })
+  .pubsub.topic('gigto-agent-prompt')
+  .onPublish(agent.processTelegramPrompt);

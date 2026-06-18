@@ -16,7 +16,7 @@
     "firebase-admin": "^13.8.0",
     "firebase-functions": "^7.2.5",
     "google-auth-library": "^10.6.2",
-    "langchain": "^1.4.2",
+    "langchain": "^1.4.5",
     "mem0ai": "^3.0.5",
     "nodemailer": "^8.0.7",
     "razorpay": "^2.9.6"

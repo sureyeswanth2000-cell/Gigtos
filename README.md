@@ -2,6 +2,8 @@
 
 Home services app (Plumbing, Electrical, and more) across all of India — with customer booking, geo-filtering by city/town/village, worker dashboard, admin management, and a React front-end.
 
+> 📄 **Full Business Model & Technical Architecture:** See [`GIGTOS_ARCHITECTURE.md`](./GIGTOS_ARCHITECTURE.md) for the comprehensive platform document covering all roles, flows, dashboards, payment/escrow design, security framework, and implementation roadmap.
+
 ---
 
 ## ✅ Fully Implemented

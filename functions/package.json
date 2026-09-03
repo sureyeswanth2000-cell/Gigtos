@@ -14,7 +14,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "firebase-admin": "^13.8.0",
-    "firebase-functions": "^7.2.5",
+    "firebase-functions": "^7.3.2",
     "google-auth-library": "^10.6.2",
     "langchain": "^1.4.2",
     "mem0ai": "^3.0.5",
